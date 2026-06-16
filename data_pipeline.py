@@ -19,7 +19,7 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import pandas_ta as ta
+import ta
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
@@ -81,24 +81,24 @@ def engineer_features(df):
     print("Engineering features...")
     df = df.copy()
 
-    df["SMA_7"]  = ta.sma(df["Close"], length=7)
-    df["SMA_21"] = ta.sma(df["Close"], length=21)
-    df["EMA_12"] = ta.ema(df["Close"], length=12)
-    df["EMA_26"] = ta.ema(df["Close"], length=26)
-    df["RSI_14"] = ta.rsi(df["Close"], length=14)
+    df["SMA_7"]  = ta.trend.sma_indicator(df["Close"], window=7)
+    df["SMA_21"] = ta.trend.sma_indicator(df["Close"], window=21)
+    df["EMA_12"] = ta.trend.ema_indicator(df["Close"], window=12)
+    df["EMA_26"] = ta.trend.ema_indicator(df["Close"], window=26)
+    df["RSI_14"] = ta.momentum.rsi(df["Close"], window=14)
 
-    macd = ta.macd(df["Close"], fast=12, slow=26, signal=9)
-    df["MACD"]        = macd["MACD_12_26_9"]
-    df["MACD_Signal"] = macd["MACDs_12_26_9"]
-    df["MACD_Hist"]   = macd["MACDh_12_26_9"]
+    macd_obj = ta.trend.MACD(df["Close"], window_fast=12, window_slow=26, window_sign=9)
+    df["MACD"]        = macd_obj.macd()
+    df["MACD_Signal"] = macd_obj.macd_signal()
+    df["MACD_Hist"]   = macd_obj.macd_diff()
 
-    bb = ta.bbands(df["Close"], length=20, std=2)
-    df["BB_Upper"] = bb[[c for c in bb.columns if c.startswith("BBU")][0]]
-    df["BB_Lower"] = bb[[c for c in bb.columns if c.startswith("BBL")][0]]
-    df["BB_Mid"]   = bb[[c for c in bb.columns if c.startswith("BBM")][0]]
+    bb_obj = ta.volatility.BollingerBands(df["Close"], window=20, window_dev=2)
+    df["BB_Upper"] = bb_obj.bollinger_hband()
+    df["BB_Lower"] = bb_obj.bollinger_lband()
+    df["BB_Mid"]   = bb_obj.bollinger_mavg()
     df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / df["BB_Mid"]
 
-    df["Volume_SMA_10"] = ta.sma(df["Volume"], length=10)
+    df["Volume_SMA_10"] = ta.trend.sma_indicator(df["Volume"], window=10)
     df["Daily_Return"]  = df["Close"].pct_change() * 100
     df["Direction"]     = (df["Close"].shift(-1) > df["Close"]).astype(int)
 
