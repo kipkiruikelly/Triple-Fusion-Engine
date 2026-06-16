@@ -4,339 +4,686 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Stock Market Predictor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --navy:   #1F4E79;
-      --blue:   #2E75B6;
-      --light:  #EBF3FB;
-      --white:  #FFFFFF;
-      --text:   #1A1A2E;
-      --muted:  #6B7280;
-      --border: #D1E3F5;
-      --red:    #DC2626;
+      --bg:        #0F1217;
+      --surface:   #1A1F2E;
+      --surface2:  #222840;
+      --border:    #2A3150;
+      --text:      #E2E8F0;
+      --muted:     #7A8499;
+      --accent:    #FF6B35;
+      --green:     #00C076;
+      --red:       #FF4D4D;
+      --blue:      #3B82F6;
+      --white:     #FFFFFF;
     }
 
     body {
-      font-family: 'Montserrat', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 11pt;
-      background: #F0F6FC;
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
-    header {
-      background: var(--navy);
-      padding: 16px 32px;
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    header .brand {
-      font-size: 13pt;
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .logo {
+      font-size: 15pt;
       font-weight: 700;
       color: var(--white);
+      letter-spacing: -0.5px;
     }
 
-    header .brand span { color: #7EC8E3; }
+    .logo span { color: var(--accent); }
 
-    .hero {
-      background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
-      padding: 60px 32px 80px;
-      text-align: center;
+    .nav-links {
+      display: flex;
+      gap: 4px;
     }
 
-    .hero h1 {
-      font-size: 22pt;
-      font-weight: 700;
-      color: var(--white);
-      margin-bottom: 12px;
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 10pt;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
     }
 
-    .hero p {
-      font-size: 11pt;
-      color: rgba(255,255,255,0.75);
-      max-width: 500px;
-      margin: 0 auto 36px;
-      line-height: 1.7;
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+    .nav-links a.active { color: var(--white); background: var(--surface2); }
+
+    /* ── Market ticker strip ── */
+    .ticker-strip {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      overflow: hidden;
     }
 
-    .search-card {
-      background: var(--white);
-      border-radius: 12px;
-      padding: 30px;
-      max-width: 520px;
-      margin: 0 auto;
-      box-shadow: 0 16px 48px rgba(0,0,0,0.16);
-    }
-
-    .search-card label {
-      display: block;
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
       font-size: 9.5pt;
+    }
+
+    .ticker-item .name { color: var(--muted); font-weight: 500; }
+    .ticker-item .price { color: var(--text); font-weight: 600; }
+    .ticker-item .change { font-weight: 600; }
+    .ticker-item .change.up { color: var(--green); }
+    .ticker-item .change.down { color: var(--red); }
+
+    /* ── Main layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px 0;
+      flex-shrink: 0;
+    }
+
+    .sidebar-section {
+      padding: 0 16px;
+      margin-bottom: 24px;
+    }
+
+    .sidebar-label {
+      font-size: 8.5pt;
       font-weight: 700;
-      color: var(--navy);
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
       margin-bottom: 8px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 10pt;
+      color: var(--muted);
+      font-weight: 500;
+      transition: all 0.15s;
+      margin-bottom: 2px;
+    }
+
+    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-item.active { background: var(--surface2); color: var(--white); }
+
+    .sidebar-item .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .sidebar-item.active .dot { background: var(--accent); }
+
+    /* ── Content ── */
+    .content {
+      flex: 1;
+      padding: 28px 32px;
+      overflow-y: auto;
+    }
+
+    .page-title {
+      font-size: 16pt;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 4px;
+    }
+
+    .page-subtitle {
+      font-size: 10pt;
+      color: var(--muted);
+      margin-bottom: 28px;
+    }
+
+    /* ── Search section ── */
+    .search-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+
+    .search-label {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
+      margin-bottom: 10px;
     }
 
-    .input-row {
+    .search-row {
       display: flex;
       gap: 10px;
     }
 
-    .search-card input[type="text"] {
+    .search-input {
       flex: 1;
-      padding: 12px 14px;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      font-family: 'Montserrat', sans-serif;
-      font-size: 11pt;
-      font-weight: 600;
-      color: var(--navy);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 11px 14px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: 1.5px;
       text-transform: uppercase;
-      letter-spacing: 1px;
       outline: none;
       transition: border-color 0.2s;
     }
 
-    .search-card input:focus { border-color: var(--blue); }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { text-transform: none; font-weight: 400; letter-spacing: 0; color: var(--muted); font-size: 10pt; }
 
-    .search-card input::placeholder {
-      text-transform: none;
-      font-weight: 400;
-      letter-spacing: 0;
-      color: #9CA3AF;
-    }
-
-    .btn {
-      padding: 12px 22px;
-      background: var(--navy);
+    .btn-predict {
+      padding: 11px 28px;
+      background: var(--accent);
       color: var(--white);
       border: none;
-      border-radius: 8px;
-      font-family: 'Montserrat', sans-serif;
-      font-size: 11pt;
-      font-weight: 600;
+      border-radius: 6px;
+      font-family: 'Inter', sans-serif;
+      font-size: 10.5pt;
+      font-weight: 700;
       cursor: pointer;
-      transition: background 0.2s;
-      white-space: nowrap;
+      transition: opacity 0.15s;
+      letter-spacing: 0.2px;
     }
 
-    .btn:hover { background: var(--blue); }
+    .btn-predict:hover { opacity: 0.88; }
 
-    .examples {
-      margin-top: 12px;
+    .quick-picks {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .quick-label { font-size: 9.5pt; color: var(--muted); }
+
+    .quick-tag {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
       font-size: 9.5pt;
-      color: var(--muted);
-    }
-
-    .examples span {
       font-weight: 600;
-      color: var(--navy);
+      padding: 3px 10px;
+      border-radius: 4px;
       cursor: pointer;
-      margin: 0 4px;
-      text-decoration: underline;
-      text-underline-offset: 2px;
+      transition: border-color 0.15s, color 0.15s;
+      letter-spacing: 0.3px;
     }
 
-    .examples span:hover { color: var(--blue); }
+    .quick-tag:hover { border-color: var(--accent); color: var(--accent); }
 
     .error-box {
-      background: #FEF2F2;
-      border: 1.5px solid #FECACA;
-      border-radius: 8px;
-      padding: 11px 14px;
-      margin-top: 14px;
+      background: rgba(255,77,77,0.1);
+      border: 1px solid rgba(255,77,77,0.3);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-top: 12px;
       font-size: 10pt;
       color: var(--red);
-      font-weight: 500;
     }
 
-    main {
-      max-width: 960px;
-      margin: -24px auto 48px;
-      padding: 0 24px;
-      width: 100%;
-    }
-
-    .features {
+    /* ── Stats row ── */
+    .stats-row {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 16px;
-      margin-top: 44px;
-    }
-
-    .feature-card {
-      background: var(--white);
-      border-radius: 10px;
-      padding: 22px;
-      border: 1.5px solid var(--border);
-    }
-
-    .feature-card h3 {
-      font-size: 11pt;
-      font-weight: 700;
-      color: var(--navy);
-      margin-bottom: 8px;
-    }
-
-    .feature-card p {
-      font-size: 10pt;
-      color: var(--muted);
-      line-height: 1.6;
-    }
-
-    .section {
-      background: var(--white);
-      border-radius: 10px;
-      padding: 26px;
-      border: 1.5px solid var(--border);
-      margin-top: 16px;
-    }
-
-    .section h2 {
-      font-size: 12pt;
-      font-weight: 700;
-      color: var(--navy);
-      margin-bottom: 16px;
-    }
-
-    .model-row {
-      display: flex;
-      align-items: flex-start;
+      grid-template-columns: repeat(4, 1fr);
       gap: 14px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
     }
 
-    .model-row:last-child { border-bottom: none; }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
 
-    .model-tag {
-      background: var(--light);
-      color: var(--navy);
+    .stat-label {
       font-size: 9pt;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 20px;
-      white-space: nowrap;
-      margin-top: 2px;
-    }
-
-    .model-row p {
-      font-size: 10pt;
       color: var(--muted);
-      line-height: 1.5;
+      font-weight: 500;
+      margin-bottom: 6px;
     }
 
-    .disclaimer {
-      background: #FFFBEB;
-      border: 1.5px solid #FDE68A;
+    .stat-value {
+      font-size: 16pt;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: -0.5px;
+    }
+
+    .stat-sub {
+      font-size: 9pt;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    /* ── Info table ── */
+    .info-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 14px 18px;
-      margin-top: 16px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .info-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .info-table { width: 100%; border-collapse: collapse; }
+
+    .info-table tr { border-bottom: 1px solid var(--border); }
+    .info-table tr:last-child { border-bottom: none; }
+
+    .info-table td {
+      padding: 11px 20px;
+      font-size: 10pt;
+    }
+
+    .info-table td:first-child { color: var(--muted); width: 50%; }
+    .info-table td:last-child { color: var(--text); font-weight: 600; text-align: right; }
+
+    /* ── Model cards ── */
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .model-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      transition: border-color 0.2s;
+    }
+
+    .model-card:hover { border-color: var(--accent); }
+
+    .model-card .model-type {
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .model-card .model-name {
+      font-size: 11.5pt;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 10px;
+    }
+
+    .model-card .model-desc {
       font-size: 9.5pt;
-      color: #92400E;
+      color: var(--muted);
       line-height: 1.6;
     }
 
+    .model-badge {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 8.5pt;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+    }
+
+    .badge-lr   { background: rgba(59,130,246,0.15); color: #60A5FA; }
+    .badge-rf   { background: rgba(234,179,8,0.15);  color: #FBBF24; }
+    .badge-lstm { background: rgba(0,192,118,0.15);  color: var(--green); }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      background: rgba(255,107,53,0.07);
+      border: 1px solid rgba(255,107,53,0.2);
+      border-radius: 8px;
+      padding: 13px 18px;
+      font-size: 9.5pt;
+      color: #FFB89A;
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
     footer {
-      margin-top: auto;
-      background: var(--navy);
-      color: rgba(255,255,255,0.5);
-      text-align: center;
-      padding: 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
       font-size: 9pt;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .models-grid { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 600px) {
-      .hero h1 { font-size: 16pt; }
-      .input-row { flex-direction: column; }
-      .btn { width: 100%; }
+      .ticker-strip { display: none; }
+      .nav-links { display: none; }
+      .stats-row { grid-template-columns: 1fr; }
+      .search-row { flex-direction: column; }
+      .content { padding: 16px; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="brand">Stock Market <span>Predictor</span></div>
-</header>
-
-<div class="hero">
-  <h1>What will the market do tomorrow?</h1>
-  <p>Enter any stock ticker to get a machine learning-based next-day price prediction using Linear Regression, Random Forest, and LSTM models.</p>
-
-  <div class="search-card">
-    <form action="/predict" method="POST">
-      <label for="ticker">Stock Ticker Symbol</label>
-      <div class="input-row">
-        <input
-          type="text"
-          id="ticker"
-          name="ticker"
-          placeholder="e.g. AAPL, TSLA, MSFT"
-          maxlength="10"
-          autocomplete="off"
-          autofocus
-        />
-        <button type="submit" class="btn">Predict</button>
-      </div>
-      <div class="examples">
-        Try:
-        <span onclick="document.getElementById('ticker').value='AAPL'">AAPL</span>
-        <span onclick="document.getElementById('ticker').value='TSLA'">TSLA</span>
-        <span onclick="document.getElementById('ticker').value='MSFT'">MSFT</span>
-        <span onclick="document.getElementById('ticker').value='GOOGL'">GOOGL</span>
-      </div>
-      {% if error %}
-      <div class="error-box">{{ error }}</div>
-      {% endif %}
-    </form>
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">Market<span>Predict</span></div>
+    <nav class="nav-links">
+      <a href="/" class="active">Predictor</a>
+      <a href="#">Markets</a>
+      <a href="#">Analysis</a>
+      <a href="#">About</a>
+    </nav>
   </div>
 </div>
 
-<main>
-  <div class="features">
-    <div class="feature-card">
-      <h3>Next-Day Price Prediction</h3>
-      <p>Predicts the next trading day's closing price using six months of historical OHLCV data and 25 engineered technical features.</p>
-    </div>
-    <div class="feature-card">
-      <h3>Three ML Models</h3>
-      <p>Linear Regression, Random Forest, and LSTM are trained and compared, giving multiple perspectives on the same prediction task.</p>
-    </div>
-    <div class="feature-card">
-      <h3>Technical Indicators</h3>
-      <p>RSI, MACD, Bollinger Bands, and moving averages are computed automatically from live market data and displayed with each prediction.</p>
-    </div>
+<!-- Market ticker -->
+<div class="ticker-strip">
+  <div class="ticker-item">
+    <span class="name">S&P 500</span>
+    <span class="price">5,308.15</span>
+    <span class="change up">+0.51%</span>
   </div>
+  <div class="ticker-item">
+    <span class="name">NASDAQ</span>
+    <span class="price">16,742.39</span>
+    <span class="change up">+0.78%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">DOW</span>
+    <span class="price">38,996.39</span>
+    <span class="change down">-0.12%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">AAPL</span>
+    <span class="price">189.30</span>
+    <span class="change up">+1.24%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">TSLA</span>
+    <span class="price">177.46</span>
+    <span class="change down">-2.31%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">MSFT</span>
+    <span class="price">415.32</span>
+    <span class="change up">+0.64%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">NVDA</span>
+    <span class="price">875.40</span>
+    <span class="change up">+3.12%</span>
+  </div>
+</div>
 
-  <div class="section">
-    <h2>How the System Works</h2>
-    <div class="model-row">
-      <span class="model-tag">Linear Regression</span>
-      <p>A statistical baseline that models the linear relationship between technical indicators and the next day's closing price.</p>
-    </div>
-    <div class="model-row">
-      <span class="model-tag">Random Forest</span>
-      <p>An ensemble of 300 decision trees trained on technical indicators and five-day lag features, capturing non-linear price patterns.</p>
-    </div>
-    <div class="model-row">
-      <span class="model-tag">LSTM</span>
-      <p>A deep learning model that learns from 60-day sequential price data. Designed specifically for time-series forecasting tasks.</p>
-    </div>
-  </div>
+<!-- Main layout -->
+<div class="layout">
 
-  <div class="disclaimer">
-    <strong>Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only. They do not constitute financial advice. Always conduct independent research and consult a registered financial adviser before making investment decisions.
-  </div>
-</main>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navigation</div>
+      <div class="sidebar-item active">
+        <div class="dot"></div>
+        Price Predictor
+      </div>
+      <div class="sidebar-item">
+        <div class="dot"></div>
+        Market Overview
+      </div>
+      <div class="sidebar-item">
+        <div class="dot"></div>
+        Top Movers
+      </div>
+      <div class="sidebar-item">
+        <div class="dot"></div>
+        Watchlist
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Popular Tickers</div>
+      <div class="sidebar-item" onclick="setTicker('AAPL')">
+        <div class="dot"></div>
+        AAPL
+      </div>
+      <div class="sidebar-item" onclick="setTicker('TSLA')">
+        <div class="dot"></div>
+        TSLA
+      </div>
+      <div class="sidebar-item" onclick="setTicker('MSFT')">
+        <div class="dot"></div>
+        MSFT
+      </div>
+      <div class="sidebar-item" onclick="setTicker('GOOGL')">
+        <div class="dot"></div>
+        GOOGL
+      </div>
+      <div class="sidebar-item" onclick="setTicker('NVDA')">
+        <div class="dot"></div>
+        NVDA
+      </div>
+      <div class="sidebar-item" onclick="setTicker('META')">
+        <div class="dot"></div>
+        META
+      </div>
+      <div class="sidebar-item" onclick="setTicker('AMZN')">
+        <div class="dot"></div>
+        AMZN
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Models</div>
+      <div class="sidebar-item">
+        <div class="dot"></div>
+        Linear Regression
+      </div>
+      <div class="sidebar-item">
+        <div class="dot"></div>
+        Random Forest
+      </div>
+      <div class="sidebar-item">
+        <div class="dot"></div>
+        LSTM Network
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+    <div class="page-title">Stock Price Predictor</div>
+    <div class="page-subtitle">Machine learning-based next-day price prediction using technical indicators and historical OHLCV data</div>
+
+    <!-- Search -->
+    <div class="search-section">
+      <div class="search-label">Enter Ticker Symbol</div>
+      <form action="/predict" method="POST">
+        <div class="search-row">
+          <input
+            class="search-input"
+            type="text"
+            id="ticker"
+            name="ticker"
+            placeholder="e.g. AAPL, TSLA, MSFT, GOOGL"
+            maxlength="10"
+            autocomplete="off"
+            autofocus
+          />
+          <button type="submit" class="btn-predict">Get Prediction</button>
+        </div>
+        <div class="quick-picks">
+          <span class="quick-label">Quick pick:</span>
+          <span class="quick-tag" onclick="setTicker('AAPL')">AAPL</span>
+          <span class="quick-tag" onclick="setTicker('TSLA')">TSLA</span>
+          <span class="quick-tag" onclick="setTicker('MSFT')">MSFT</span>
+          <span class="quick-tag" onclick="setTicker('GOOGL')">GOOGL</span>
+          <span class="quick-tag" onclick="setTicker('NVDA')">NVDA</span>
+          <span class="quick-tag" onclick="setTicker('META')">META</span>
+        </div>
+        {% if error %}
+        <div class="error-box">{{ error }}</div>
+        {% endif %}
+      </form>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Models Trained</div>
+        <div class="stat-value">3</div>
+        <div class="stat-sub">LR · RF · LSTM</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Training Data</div>
+        <div class="stat-value">5yr</div>
+        <div class="stat-sub">2019 – 2024</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Features Used</div>
+        <div class="stat-value">25</div>
+        <div class="stat-sub">Technical indicators + lags</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Best Model MAE</div>
+        <div class="stat-value">$1.64</div>
+        <div class="stat-sub">Linear Regression on AAPL</div>
+      </div>
+    </div>
+
+    <!-- Models -->
+    <div class="models-grid">
+      <div class="model-card">
+        <div class="model-type">Baseline</div>
+        <div class="model-name">Linear Regression</div>
+        <div class="model-desc">Models the linear relationship between technical indicators and the next day's closing price. Fast, interpretable, and strong on trending assets.</div>
+        <span class="model-badge badge-lr">MAE $1.64 · Dir. 50.4%</span>
+      </div>
+      <div class="model-card">
+        <div class="model-type">Ensemble</div>
+        <div class="model-name">Random Forest</div>
+        <div class="model-desc">300 decision trees trained on technical indicators and five-day lag features. Captures non-linear patterns in price behaviour.</div>
+        <span class="model-badge badge-rf">MAE $9.50 · Dir. 52.1%</span>
+      </div>
+      <div class="model-card">
+        <div class="model-type">Deep Learning</div>
+        <div class="model-name">LSTM Network</div>
+        <div class="model-desc">Recurrent neural network trained on 60-day price sequences. Designed specifically for sequential time-series forecasting tasks.</div>
+        <span class="model-badge badge-lstm">MAE $5.99 · Dir. 48.4%</span>
+      </div>
+    </div>
+
+    <!-- How it works table -->
+    <div class="info-section" style="margin-bottom: 20px;">
+      <div class="info-header">Technical Features Used</div>
+      <table class="info-table">
+        <tr>
+          <td>Trend Indicators</td>
+          <td>SMA 7, SMA 21, EMA 12, EMA 26</td>
+        </tr>
+        <tr>
+          <td>Momentum Indicators</td>
+          <td>RSI (14), MACD, MACD Signal, MACD Histogram</td>
+        </tr>
+        <tr>
+          <td>Volatility Indicators</td>
+          <td>Bollinger Bands Upper/Lower/Mid, BB Width</td>
+        </tr>
+        <tr>
+          <td>Volume Indicators</td>
+          <td>Volume SMA (10), Raw Volume</td>
+        </tr>
+        <tr>
+          <td>Lag Features</td>
+          <td>Close price lag 1–5, Return lag 1–3</td>
+        </tr>
+        <tr>
+          <td>Data Source</td>
+          <td>Yahoo Finance via yfinance API (6 months)</td>
+        </tr>
+      </table>
+    </div>
+
+    <div class="disclaimer">
+      <strong>Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only. They do not constitute financial advice. Always conduct independent research and consult a registered financial adviser before making investment decisions.
+    </div>
+  </main>
+</div>
 
 <footer>
-  Stock Market Predictor &nbsp;&middot;&nbsp; Kelvin Kipkirui &nbsp;&middot;&nbsp; DAC-01-0010/2025 &nbsp;&middot;&nbsp; Zetech University &nbsp;&middot;&nbsp; 2025
+  MarketPredict &nbsp;&middot;&nbsp; Kelvin Kipkirui &nbsp;&middot;&nbsp; DAC-01-0010/2025 &nbsp;&middot;&nbsp; Zetech University &nbsp;&middot;&nbsp; 2025
 </footer>
+
+<script>
+  function setTicker(symbol) {
+    document.getElementById('ticker').value = symbol;
+  }
+</script>
 
 </body>
 </html>

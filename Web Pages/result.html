@@ -3,206 +3,406 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{ ticker }} Prediction — Stock Market Predictor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <title>{{ ticker }} — MarketPredict</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --navy:   #1F4E79;
-      --blue:   #2E75B6;
-      --light:  #EBF3FB;
-      --white:  #FFFFFF;
-      --text:   #1A1A2E;
-      --muted:  #6B7280;
-      --green:  #16A34A;
-      --red:    #DC2626;
-      --border: #D1E3F5;
+      --bg:        #0F1217;
+      --surface:   #1A1F2E;
+      --surface2:  #222840;
+      --border:    #2A3150;
+      --text:      #E2E8F0;
+      --muted:     #7A8499;
+      --accent:    #FF6B35;
+      --green:     #00C076;
+      --red:       #FF4D4D;
+      --blue:      #3B82F6;
+      --white:     #FFFFFF;
     }
 
     body {
-      font-family: 'Montserrat', sans-serif;
+      font-family: 'Inter', sans-serif;
       font-size: 11pt;
-      background: #F0F6FC;
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
     }
 
-    header {
-      background: var(--navy);
-      padding: 16px 32px;
+    /* ── Top bar ── */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 52px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    .brand { font-size: 13pt; font-weight: 700; color: var(--white); }
-    .brand span { color: #7EC8E3; }
-    header a { color: rgba(255,255,255,0.65); text-decoration: none; font-size: 10pt; font-weight: 500; }
-    header a:hover { color: var(--white); }
+    .topbar-left { display: flex; align-items: center; gap: 32px; }
 
-    .result-banner {
-      background: {% if direction == 'Up' %}linear-gradient(135deg, #064E3B, #16A34A){% else %}linear-gradient(135deg, #7F1D1D, #DC2626){% endif %};
-      padding: 40px 32px;
-      text-align: center;
-      color: var(--white);
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+
+    .topbar-right a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 10pt;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      transition: all 0.15s;
     }
 
-    .result-banner .subtitle {
-      font-size: 9.5pt;
-      font-weight: 600;
-      opacity: 0.75;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
+    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
+
+    /* ── Ticker strip ── */
+    .ticker-strip {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      overflow: hidden;
     }
 
-    .result-banner .direction {
-      font-size: 34pt;
+    .ticker-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 9.5pt; }
+    .ticker-item .name { color: var(--muted); font-weight: 500; }
+    .ticker-item .price { color: var(--text); font-weight: 600; }
+    .ticker-item .change { font-weight: 600; }
+    .ticker-item .change.up { color: var(--green); }
+    .ticker-item .change.down { color: var(--red); }
+
+    /* ── Layout ── */
+    .layout { display: flex; flex: 1; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px 0;
+      flex-shrink: 0;
+    }
+
+    .sidebar-section { padding: 0 16px; margin-bottom: 24px; }
+
+    .sidebar-label {
+      font-size: 8.5pt;
       font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 8px;
+    }
+
+    .sidebar-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 10pt;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 2px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-item.active { background: var(--surface2); color: var(--white); }
+
+    .sidebar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .sidebar-item.active .sidebar-dot { background: var(--accent); }
+
+    .sidebar-price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 2px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .sidebar-price-row:hover { background: var(--surface2); }
+    .sidebar-price-row .sym { font-size: 10pt; font-weight: 600; color: var(--text); }
+    .sidebar-price-row .chg { font-size: 9.5pt; font-weight: 600; }
+    .sidebar-price-row .chg.up { color: var(--green); }
+    .sidebar-price-row .chg.down { color: var(--red); }
+
+    /* ── Main content ── */
+    .content { flex: 1; padding: 24px 28px; overflow-y: auto; }
+
+    /* ── Stock header ── */
+    .stock-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .stock-header-left .ticker-name {
+      font-size: 22pt;
+      font-weight: 700;
+      color: var(--white);
       letter-spacing: -1px;
-      margin-bottom: 6px;
     }
 
-    .result-banner .price-line {
+    .stock-header-left .company-label {
+      font-size: 10pt;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .stock-header-right { text-align: right; }
+
+    .current-price {
+      font-size: 26pt;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: -1px;
+    }
+
+    .price-change {
       font-size: 12pt;
-      opacity: 0.9;
-      margin-bottom: 18px;
+      font-weight: 600;
+      margin-top: 2px;
     }
 
-    .confidence-wrap { max-width: 260px; margin: 0 auto; }
+    .price-change.up { color: var(--green); }
+    .price-change.down { color: var(--red); }
 
-    .confidence-label {
+    .as-of { font-size: 9pt; color: var(--muted); margin-top: 4px; }
+
+    /* ── Prediction banner ── */
+    .prediction-banner {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .pred-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pred-card.primary {
+      border-color: {% if direction == 'Up' %}rgba(0,192,118,0.4){% else %}rgba(255,77,77,0.4){% endif %};
+      background: {% if direction == 'Up' %}rgba(0,192,118,0.06){% else %}rgba(255,77,77,0.06){% endif %};
+    }
+
+    .pred-card .pred-label {
+      font-size: 8.5pt;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .pred-card .pred-value {
+      font-size: 20pt;
+      font-weight: 700;
+      color: var(--white);
+      letter-spacing: -0.5px;
+    }
+
+    .pred-card .pred-direction {
+      font-size: 12pt;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+
+    .pred-card .pred-direction.up { color: var(--green); }
+    .pred-card .pred-direction.down { color: var(--red); }
+
+    .pred-card .pred-sub {
       font-size: 9.5pt;
-      opacity: 0.75;
-      margin-bottom: 6px;
+      color: var(--muted);
+      margin-top: 4px;
     }
 
     .confidence-bar {
-      background: rgba(255,255,255,0.2);
+      margin-top: 10px;
+      background: var(--border);
       border-radius: 20px;
-      height: 7px;
+      height: 5px;
       overflow: hidden;
     }
 
     .confidence-fill {
-      background: var(--white);
       height: 100%;
       border-radius: 20px;
       width: {{ confidence }}%;
+      background: {% if direction == 'Up' %}var(--green){% else %}var(--red){% endif %};
     }
 
-    main {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 26px 24px 48px;
-      width: 100%;
+    /* ── Chart ── */
+    .chart-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0;
+      margin-bottom: 16px;
+      overflow: hidden;
     }
 
-    .meta { font-size: 9.5pt; color: var(--muted); text-align: right; margin-bottom: 14px; }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+    }
 
-    .grid-2 {
+    .chart-title { font-size: 10.5pt; font-weight: 700; color: var(--white); }
+
+    .chart-tabs { display: flex; gap: 4px; }
+
+    .chart-tab {
+      font-size: 9pt;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+
+    .chart-tab.active { background: var(--surface2); color: var(--white); }
+    .chart-tab:hover { color: var(--text); }
+
+    #chart { width: 100%; height: 280px; }
+
+    /* ── Data grid ── */
+    .data-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
+      gap: 14px;
       margin-bottom: 16px;
     }
 
-    .card {
-      background: var(--white);
-      border-radius: 10px;
-      padding: 20px;
-      border: 1.5px solid var(--border);
+    .data-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
     }
 
-    .card h3 {
-      font-size: 9.5pt;
+    .data-section-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10pt;
       font-weight: 700;
-      color: var(--navy);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 14px;
-      padding-bottom: 10px;
-      border-bottom: 1.5px solid var(--border);
+      color: var(--white);
     }
 
-    .price-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 9px 0;
-      border-bottom: 1px solid #F3F4F6;
+    .data-table { width: 100%; border-collapse: collapse; }
+
+    .data-table tr { border-bottom: 1px solid var(--border); }
+    .data-table tr:last-child { border-bottom: none; }
+
+    .data-table td {
+      padding: 10px 16px;
       font-size: 10pt;
     }
 
-    .price-row:last-child { border-bottom: none; }
-    .price-row .label { color: var(--muted); font-weight: 500; }
-    .price-row .value { font-weight: 700; color: var(--navy); }
-    .price-row .value.up   { color: var(--green); }
-    .price-row .value.down { color: var(--red); }
+    .data-table td:first-child { color: var(--muted); }
+    .data-table td:last-child { color: var(--text); font-weight: 600; text-align: right; }
 
-    .model-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid #F3F4F6;
-      font-size: 10pt;
+    .val-up   { color: var(--green) !important; }
+    .val-down { color: var(--red) !important; }
+
+    /* ── Model comparison table ── */
+    .model-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
     }
 
-    .model-row:last-child { border-bottom: none; }
+    .model-section-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--white);
+    }
 
-    .model-info { display: flex; align-items: center; gap: 8px; }
-    .model-name { font-weight: 600; }
+    .model-table { width: 100%; border-collapse: collapse; }
 
-    .tag {
-      font-size: 8.5pt;
+    .model-table th {
+      padding: 9px 16px;
+      font-size: 9pt;
       font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 20px;
-    }
-
-    .tag-lr   { background: #EFF6FF; color: #1D4ED8; }
-    .tag-rf   { background: #FFF7ED; color: #C2410C; }
-    .tag-lstm { background: #F0FDF4; color: #15803D; }
-    .tag-na   { background: #F3F4F6; color: #6B7280; }
-
-    .model-price { font-size: 12pt; font-weight: 700; color: var(--navy); }
-
-    .chart-card {
-      background: var(--white);
-      border-radius: 10px;
-      padding: 20px;
-      border: 1.5px solid var(--border);
-      margin-bottom: 16px;
-    }
-
-    .chart-card h3 {
-      font-size: 9.5pt;
-      font-weight: 700;
-      color: var(--navy);
+      color: var(--muted);
+      text-align: left;
+      border-bottom: 1px solid var(--border);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 14px;
-      padding-bottom: 10px;
-      border-bottom: 1.5px solid var(--border);
+      letter-spacing: 0.3px;
     }
 
-    #chart { width: 100%; height: 300px; }
+    .model-table td {
+      padding: 11px 16px;
+      font-size: 10pt;
+      border-bottom: 1px solid var(--border);
+    }
 
+    .model-table tr:last-child td { border-bottom: none; }
+    .model-table td:first-child { color: var(--text); font-weight: 600; }
+    .model-table td:not(:first-child) { color: var(--muted); text-align: right; }
+    .model-table td.highlight { color: var(--white); font-size: 12pt; font-weight: 700; }
+
+    .model-tag {
+      display: inline-block;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 3px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    .tag-lr   { background: rgba(59,130,246,0.15); color: #60A5FA; }
+    .tag-rf   { background: rgba(234,179,8,0.15);  color: #FBBF24; }
+    .tag-lstm { background: rgba(0,192,118,0.15);  color: var(--green); }
+    .tag-na   { background: rgba(122,132,153,0.15); color: var(--muted); }
+
+    /* ── Indicators ── */
     .indicators-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(4, 1fr);
       gap: 12px;
+      margin-bottom: 16px;
     }
 
-    .ind-item {
-      background: var(--light);
+    .ind-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 14px;
+      padding: 14px 16px;
     }
 
     .ind-label {
@@ -211,187 +411,340 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.3px;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
 
-    .ind-value { font-size: 14pt; font-weight: 700; color: var(--navy); }
-
-    .ind-signal { font-size: 9pt; font-weight: 600; margin-top: 3px; }
-    .sig-bullish  { color: var(--green); }
-    .sig-bearish  { color: var(--red); }
-    .sig-neutral  { color: var(--muted); }
-
-    .disclaimer {
-      background: #FFFBEB;
-      border: 1.5px solid #FDE68A;
-      border-radius: 10px;
-      padding: 14px 18px;
-      margin-top: 16px;
-      font-size: 9.5pt;
-      color: #92400E;
-      line-height: 1.6;
-    }
-
-    .btn-back {
-      display: inline-block;
-      margin-top: 18px;
-      padding: 10px 20px;
-      background: var(--navy);
+    .ind-value {
+      font-size: 16pt;
+      font-weight: 700;
       color: var(--white);
-      border-radius: 8px;
-      text-decoration: none;
-      font-size: 10pt;
-      font-weight: 600;
-      transition: background 0.2s;
+      letter-spacing: -0.5px;
     }
 
-    .btn-back:hover { background: var(--blue); }
-
-    footer {
-      margin-top: auto;
-      background: var(--navy);
-      color: rgba(255,255,255,0.5);
-      text-align: center;
-      padding: 16px;
+    .ind-signal {
       font-size: 9pt;
+      font-weight: 600;
+      margin-top: 3px;
     }
 
-    @media (max-width: 640px) {
-      .grid-2 { grid-template-columns: 1fr; }
-      .indicators-grid { grid-template-columns: 1fr; }
-      .result-banner .direction { font-size: 24pt; }
+    .sig-bull { color: var(--green); }
+    .sig-bear { color: var(--red); }
+    .sig-neut { color: var(--muted); }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      background: rgba(255,107,53,0.07);
+      border: 1px solid rgba(255,107,53,0.2);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 9.5pt;
+      color: #FFB89A;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 14px 24px;
+      font-size: 9pt;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .prediction-banner { grid-template-columns: 1fr; }
+      .data-grid { grid-template-columns: 1fr; }
+      .indicators-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 600px) {
+      .ticker-strip { display: none; }
+      .stock-header { flex-direction: column; gap: 12px; }
+      .stock-header-right { text-align: left; }
+      .indicators-grid { grid-template-columns: 1fr 1fr; }
+      .content { padding: 16px; }
     }
   </style>
 </head>
 <body>
 
-<header>
-  <div class="brand">Stock Market <span>Predictor</span></div>
-  <a href="/">New prediction</a>
-</header>
-
-<div class="result-banner">
-  <div class="subtitle">{{ ticker }} &middot; As of {{ as_of }}</div>
-  <div class="direction">
-    {% if direction == 'Up' %}&#8593;{% else %}&#8595;{% endif %}
-    {{ direction }}
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">Market<span>Predict</span></div>
   </div>
-  <div class="price-line">
-    Predicted close: <strong>${{ primary_pred }}</strong>
-    &nbsp;&nbsp;
-    ({% if price_change >= 0 %}+{% endif %}${{ price_change }} / {% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
-  </div>
-  <div class="confidence-wrap">
-    <div class="confidence-label">Confidence: {{ confidence }}%</div>
-    <div class="confidence-bar">
-      <div class="confidence-fill"></div>
-    </div>
+  <div class="topbar-right">
+    <a href="/">New prediction</a>
   </div>
 </div>
 
-<main>
-  <div class="meta">Current price as of {{ as_of }} &middot; Prediction applies to the next trading day</div>
-
-  <div class="chart-card">
-    <h3>Price History — Last 90 Trading Days</h3>
-    <div id="chart"></div>
+<!-- Ticker strip -->
+<div class="ticker-strip">
+  <div class="ticker-item">
+    <span class="name">S&P 500</span>
+    <span class="price">5,308.15</span>
+    <span class="change up">+0.51%</span>
   </div>
+  <div class="ticker-item">
+    <span class="name">NASDAQ</span>
+    <span class="price">16,742.39</span>
+    <span class="change up">+0.78%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">DOW</span>
+    <span class="price">38,996.39</span>
+    <span class="change down">-0.12%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">AAPL</span>
+    <span class="price">189.30</span>
+    <span class="change up">+1.24%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">TSLA</span>
+    <span class="price">177.46</span>
+    <span class="change down">-2.31%</span>
+  </div>
+  <div class="ticker-item">
+    <span class="name">MSFT</span>
+    <span class="price">415.32</span>
+    <span class="change up">+0.64%</span>
+  </div>
+</div>
 
-  <div class="grid-2">
-    <div class="card">
-      <h3>Price Summary</h3>
-      <div class="price-row">
-        <span class="label">Current Price</span>
-        <span class="value">${{ current_price }}</span>
+<!-- Layout -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navigation</div>
+      <div class="sidebar-item" onclick="window.location='/'">
+        <div class="sidebar-dot"></div>
+        Price Predictor
       </div>
-      <div class="price-row">
-        <span class="label">Predicted Price</span>
-        <span class="value {% if direction == 'Up' %}up{% else %}down{% endif %}">${{ primary_pred }}</span>
+      <div class="sidebar-item active">
+        <div class="sidebar-dot"></div>
+        {{ ticker }} Analysis
       </div>
-      <div class="price-row">
-        <span class="label">Expected Change</span>
-        <span class="value {% if price_change >= 0 %}up{% else %}down{% endif %}">
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Popular Tickers</div>
+      {% for sym, chg, up in [('AAPL','+1.24%',True),('TSLA','-2.31%',False),('MSFT','+0.64%',True),('GOOGL','+0.91%',True),('NVDA','+3.12%',True),('META','+1.55%',True)] %}
+      <div class="sidebar-price-row" onclick="window.location='/predict?ticker={{ sym }}'">
+        <span class="sym">{{ sym }}</span>
+        <span class="chg {% if up %}up{% else %}down{% endif %}">{{ chg }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <!-- Content -->
+  <main class="content">
+
+    <!-- Stock header -->
+    <div class="stock-header">
+      <div class="stock-header-left">
+        <div class="ticker-name">{{ ticker }}</div>
+        <div class="company-label">As of {{ as_of }} &nbsp;&middot;&nbsp; Next-Day Prediction</div>
+      </div>
+      <div class="stock-header-right">
+        <div class="current-price">${{ current_price }}</div>
+        <div class="price-change {% if direction == 'Up' %}up{% else %}down{% endif %}">
           {% if price_change >= 0 %}+{% endif %}${{ price_change }}
-          ({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
-        </span>
-      </div>
-      <div class="price-row">
-        <span class="label">Bollinger Upper</span>
-        <span class="value">${{ bb_upper }}</span>
-      </div>
-      <div class="price-row">
-        <span class="label">Bollinger Lower</span>
-        <span class="value">${{ bb_lower }}</span>
+          &nbsp;({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
+        </div>
+        <div class="as-of">Predicted next-day close</div>
       </div>
     </div>
 
-    <div class="card">
-      <h3>All Model Predictions</h3>
-      <div class="model-row">
-        <div class="model-info">
-          <span class="model-name">Linear Regression</span>
-          <span class="tag tag-lr">Baseline</span>
+    <!-- Prediction cards -->
+    <div class="prediction-banner">
+      <div class="pred-card primary">
+        <div class="pred-label">ML Prediction Signal</div>
+        <div class="pred-value">${{ primary_pred }}</div>
+        <div class="pred-direction {% if direction == 'Up' %}up{% else %}down{% endif %}">
+          {% if direction == 'Up' %}&#8593; Bullish{% else %}&#8595; Bearish{% endif %}
         </div>
-        <span class="model-price">${{ lr_pred }}</span>
+        <div class="confidence-bar">
+          <div class="confidence-fill"></div>
+        </div>
+        <div class="pred-sub" style="margin-top: 6px;">{{ confidence }}% confidence</div>
       </div>
-      <div class="model-row">
-        <div class="model-info">
-          <span class="model-name">Random Forest</span>
-          <span class="tag tag-rf">Ensemble</span>
+      <div class="pred-card">
+        <div class="pred-label">Expected Move</div>
+        <div class="pred-value {% if price_change >= 0 %}{% else %}{% endif %}" style="color: {% if price_change >= 0 %}var(--green){% else %}var(--red){% endif %}">
+          {% if price_change >= 0 %}+{% endif %}${{ price_change }}
         </div>
-        <span class="model-price">${{ rf_pred }}</span>
+        <div class="pred-direction {% if direction == 'Up' %}up{% else %}down{% endif %}">
+          {% if price_change >= 0 %}+{% endif %}{{ change_pct }}%
+        </div>
+        <div class="pred-sub">from current ${{ current_price }}</div>
       </div>
-      <div class="model-row">
-        <div class="model-info">
-          <span class="model-name">LSTM</span>
-          <span class="tag {% if lstm_pred != 'N/A' %}tag-lstm{% else %}tag-na{% endif %}">Deep Learning</span>
+      <div class="pred-card">
+        <div class="pred-label">RSI Signal</div>
+        <div class="pred-value">{{ rsi }}</div>
+        <div class="pred-direction {% if rsi_signal == 'Oversold' %}up{% elif rsi_signal == 'Overbought' %}down{% else %}{% endif %}" style="{% if rsi_signal == 'Neutral' %}color: var(--muted){% endif %}">
+          {{ rsi_signal }}
         </div>
-        <span class="model-price">{% if lstm_pred != 'N/A' %}${{ lstm_pred }}{% else %}N/A{% endif %}</span>
+        <div class="pred-sub">MACD: {{ macd_signal }}</div>
       </div>
     </div>
-  </div>
 
-  <div class="card" style="margin-bottom: 16px;">
-    <h3>Technical Indicators</h3>
+    <!-- Chart -->
+    <div class="chart-section">
+      <div class="chart-header">
+        <div class="chart-title">{{ ticker }} — Price History & Moving Averages</div>
+        <div class="chart-tabs">
+          <div class="chart-tab active">90D</div>
+          <div class="chart-tab">SMA 7</div>
+          <div class="chart-tab">SMA 21</div>
+        </div>
+      </div>
+      <div id="chart"></div>
+    </div>
+
+    <!-- Data grid -->
+    <div class="data-grid">
+      <div class="data-section">
+        <div class="data-section-header">Price Data</div>
+        <table class="data-table">
+          <tr>
+            <td>Current Price</td>
+            <td>${{ current_price }}</td>
+          </tr>
+          <tr>
+            <td>Predicted Price</td>
+            <td class="{% if direction == 'Up' %}val-up{% else %}val-down{% endif %}">${{ primary_pred }}</td>
+          </tr>
+          <tr>
+            <td>Expected Change</td>
+            <td class="{% if price_change >= 0 %}val-up{% else %}val-down{% endif %}">
+              {% if price_change >= 0 %}+{% endif %}${{ price_change }} ({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
+            </td>
+          </tr>
+          <tr>
+            <td>Bollinger Upper</td>
+            <td>${{ bb_upper }}</td>
+          </tr>
+          <tr>
+            <td>Bollinger Lower</td>
+            <td>${{ bb_lower }}</td>
+          </tr>
+          <tr>
+            <td>As of</td>
+            <td>{{ as_of }}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="data-section">
+        <div class="data-section-header">Technical Signals</div>
+        <table class="data-table">
+          <tr>
+            <td>RSI (14)</td>
+            <td class="{% if rsi_signal == 'Overbought' %}val-down{% elif rsi_signal == 'Oversold' %}val-up{% endif %}">
+              {{ rsi }} — {{ rsi_signal }}
+            </td>
+          </tr>
+          <tr>
+            <td>MACD</td>
+            <td class="{% if macd_signal == 'Bullish' %}val-up{% else %}val-down{% endif %}">
+              {{ macd }} — {{ macd_signal }}
+            </td>
+          </tr>
+          <tr>
+            <td>Direction Signal</td>
+            <td class="{% if direction == 'Up' %}val-up{% else %}val-down{% endif %}">{{ direction }}</td>
+          </tr>
+          <tr>
+            <td>Confidence</td>
+            <td>{{ confidence }}%</td>
+          </tr>
+          <tr>
+            <td>Ticker</td>
+            <td>{{ ticker }}</td>
+          </tr>
+          <tr>
+            <td>Data Source</td>
+            <td>Yahoo Finance</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Model comparison -->
+    <div class="model-section">
+      <div class="model-section-header">All Model Predictions</div>
+      <table class="model-table">
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th style="text-align:right;">Predicted Price</th>
+            <th style="text-align:right;">Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Linear Regression <span class="model-tag tag-lr">Baseline</span></td>
+            <td class="highlight" style="text-align:right;">${{ lr_pred }}</td>
+            <td style="text-align:right;">Regression</td>
+          </tr>
+          <tr>
+            <td>Random Forest <span class="model-tag tag-rf">Ensemble</span></td>
+            <td class="highlight" style="text-align:right;">${{ rf_pred }}</td>
+            <td style="text-align:right;">Regression</td>
+          </tr>
+          <tr>
+            <td>LSTM Network <span class="model-tag {% if lstm_pred != 'N/A' %}tag-lstm{% else %}tag-na{% endif %}">Deep Learning</span></td>
+            <td class="highlight" style="text-align:right;">{% if lstm_pred != 'N/A' %}${{ lstm_pred }}{% else %}N/A{% endif %}</td>
+            <td style="text-align:right;">Sequential</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Indicators -->
     <div class="indicators-grid">
-      <div class="ind-item">
+      <div class="ind-card">
         <div class="ind-label">RSI (14)</div>
         <div class="ind-value">{{ rsi }}</div>
-        <div class="ind-signal {% if rsi_signal == 'Overbought' %}sig-bearish{% elif rsi_signal == 'Oversold' %}sig-bullish{% else %}sig-neutral{% endif %}">
+        <div class="ind-signal {% if rsi_signal == 'Overbought' %}sig-bear{% elif rsi_signal == 'Oversold' %}sig-bull{% else %}sig-neut{% endif %}">
           {{ rsi_signal }}
         </div>
       </div>
-      <div class="ind-item">
+      <div class="ind-card">
         <div class="ind-label">MACD</div>
         <div class="ind-value">{{ macd }}</div>
-        <div class="ind-signal {% if macd_signal == 'Bullish' %}sig-bullish{% else %}sig-bearish{% endif %}">
+        <div class="ind-signal {% if macd_signal == 'Bullish' %}sig-bull{% else %}sig-bear{% endif %}">
           {{ macd_signal }}
         </div>
       </div>
-      <div class="ind-item">
-        <div class="ind-label">Direction Signal</div>
-        <div class="ind-value">{{ direction }}</div>
-        <div class="ind-signal {% if direction == 'Up' %}sig-bullish{% else %}sig-bearish{% endif %}">
-          {{ confidence }}% confidence
-        </div>
+      <div class="ind-card">
+        <div class="ind-label">BB Upper</div>
+        <div class="ind-value">${{ bb_upper }}</div>
+        <div class="ind-signal sig-neut">Resistance level</div>
       </div>
-      <div class="ind-item">
-        <div class="ind-label">Ticker</div>
-        <div class="ind-value">{{ ticker }}</div>
-        <div class="ind-signal sig-neutral">As of {{ as_of }}</div>
+      <div class="ind-card">
+        <div class="ind-label">BB Lower</div>
+        <div class="ind-value">${{ bb_lower }}</div>
+        <div class="ind-signal sig-neut">Support level</div>
       </div>
     </div>
-  </div>
 
-  <div class="disclaimer">
-    <strong>Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only. They do not constitute financial advice. Always conduct independent research and consult a registered financial adviser before making investment decisions.
-  </div>
+    <div class="disclaimer">
+      <strong>Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only and do not constitute financial advice. Always conduct independent research and consult a registered financial adviser before making investment decisions.
+    </div>
 
-  <a href="/" class="btn-back">Make another prediction</a>
-</main>
+  </main>
+</div>
 
 <footer>
-  Stock Market Predictor &nbsp;&middot;&nbsp; Kelvin Kipkirui &nbsp;&middot;&nbsp; DAC-01-0010/2025 &nbsp;&middot;&nbsp; Zetech University &nbsp;&middot;&nbsp; 2025
+  MarketPredict &nbsp;&middot;&nbsp; Kelvin Kipkirui &nbsp;&middot;&nbsp; DAC-01-0010/2025 &nbsp;&middot;&nbsp; Zetech University &nbsp;&middot;&nbsp; 2025
 </footer>
 
 <script>
@@ -402,27 +755,53 @@
 
   Plotly.newPlot("chart", [
     {
-      x: dates, y: prices, type: "scatter", mode: "lines",
+      x: dates, y: prices,
+      type: "scatter", mode: "lines",
       name: "Close Price",
-      line: { color: "#1F4E79", width: 2 },
-      fill: "tozeroy", fillcolor: "rgba(31,78,121,0.05)"
+      line: { color: "#3B82F6", width: 2 },
+      fill: "tozeroy",
+      fillcolor: "rgba(59,130,246,0.06)"
     },
     {
-      x: dates, y: sma7, type: "scatter", mode: "lines",
-      name: "SMA 7", line: { color: "#F39C12", width: 1.5, dash: "dot" }
+      x: dates, y: sma7,
+      type: "scatter", mode: "lines",
+      name: "SMA 7",
+      line: { color: "#FF6B35", width: 1.5, dash: "dot" }
     },
     {
-      x: dates, y: sma21, type: "scatter", mode: "lines",
-      name: "SMA 21", line: { color: "#27AE60", width: 1.5, dash: "dot" }
+      x: dates, y: sma21,
+      type: "scatter", mode: "lines",
+      name: "SMA 21",
+      line: { color: "#00C076", width: 1.5, dash: "dot" }
     }
   ], {
-    margin: { t: 10, r: 10, b: 40, l: 60 },
-    paper_bgcolor: "white", plot_bgcolor: "white",
-    font: { family: "Montserrat, sans-serif", size: 10 },
-    xaxis: { showgrid: true, gridcolor: "#F3F4F6", tickfont: { size: 9 } },
-    yaxis: { showgrid: true, gridcolor: "#F3F4F6", tickprefix: "$", tickfont: { size: 9 } },
-    legend: { orientation: "h", y: -0.15 },
-    hovermode: "x unified"
+    margin: { t: 10, r: 16, b: 40, l: 60 },
+    paper_bgcolor: "#1A1F2E",
+    plot_bgcolor:  "#1A1F2E",
+    font: { family: "Inter, sans-serif", size: 10, color: "#7A8499" },
+    xaxis: {
+      showgrid: true,
+      gridcolor: "#2A3150",
+      tickfont: { size: 9, color: "#7A8499" },
+      linecolor: "#2A3150"
+    },
+    yaxis: {
+      showgrid: true,
+      gridcolor: "#2A3150",
+      tickprefix: "$",
+      tickfont: { size: 9, color: "#7A8499" },
+      linecolor: "#2A3150"
+    },
+    legend: {
+      orientation: "h", y: -0.18,
+      font: { color: "#7A8499", size: 9 }
+    },
+    hovermode: "x unified",
+    hoverlabel: {
+      bgcolor: "#222840",
+      bordercolor: "#2A3150",
+      font: { color: "#E2E8F0", size: 10 }
+    }
   }, { responsive: true, displayModeBar: false });
 </script>
 
