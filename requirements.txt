@@ -1,12 +1,13 @@
-yfinance==0.2.54
-pandas==2.1.4
-pandas-ta==0.3.14b0
-numpy==1.26.4
-scikit-learn==1.4.2
-tensorflow==2.15.0
-joblib==1.3.2
-matplotlib==3.8.4
-seaborn==0.13.2
-plotly==5.22.0
-flask==3.0.3
-gunicorn==22.0.0
+Flask @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_c5fr3f66m2/croot/flask_1756453130186/work
+gunicorn==26.0.0
+joblib @ file:///opt/miniconda3/conda-bld/joblib_1757926354564/work
+matplotlib==3.10.6
+matplotlib-inline @ file:///opt/miniconda3/conda-bld/matplotlib-inline_1762779171616/work
+numpy==2.2.6
+numpydoc @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_aazhuhybib/croot/numpydoc_1750958634459/work
+pandas @ file:///opt/miniconda3/conda-bld/pandas_1762332179809/work/dist/pandas-2.3.3-cp313-cp313-macosx_12_0_arm64.whl#sha256=e15ab5e76dfcac9817c2633549d6e4cb87e6a735ade38ff7afbfa488f280b9ba
+pandas-ta==0.4.71b0
+plotly @ file:///private/var/folders/k1/30mswbxs7r1g6zwn8y4fyt500000gp/T/abs_1e1bdkjh6p/croot/plotly_1756454817361/work
+scikit-learn @ file:///opt/miniconda3/conda-bld/scikit-learn_1758620844345/work
+seaborn @ file:///private/var/folders/nz/j6p8yfhx1mv_0grj5xl4650h0000gp/T/abs_74n8m1zz4r/croot/seaborn_1749110344248/work
+yfinance==1.4.1
