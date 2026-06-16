@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ ticker }} Prediction — Stock Market Predictor</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --navy:   #1F4E79;
+      --blue:   #2E75B6;
+      --light:  #EBF3FB;
+      --white:  #FFFFFF;
+      --text:   #1A1A2E;
+      --muted:  #6B7280;
+      --green:  #16A34A;
+      --red:    #DC2626;
+      --border: #D1E3F5;
+    }
+
+    body {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11pt;
+      background: #F0F6FC;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--navy);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header .logo {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    header .logo span { color: #7EC8E3; }
+
+    header a {
+      color: rgba(255,255,255,0.7);
+      text-decoration: none;
+      font-size: 10pt;
+      font-weight: 500;
+    }
+
+    header a:hover { color: var(--white); }
+
+    /* ── Result Banner ── */
+    .result-banner {
+      background: {% if direction == 'Up' %}linear-gradient(135deg, #064E3B, #16A34A){% else %}linear-gradient(135deg, #7F1D1D, #DC2626){% endif %};
+      padding: 40px 32px;
+      text-align: center;
+      color: var(--white);
+    }
+
+    .result-banner .ticker-label {
+      font-size: 10pt;
+      font-weight: 600;
+      opacity: 0.8;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .result-banner .direction-signal {
+      font-size: 36pt;
+      font-weight: 700;
+      letter-spacing: -1px;
+      margin-bottom: 4px;
+    }
+
+    .result-banner .direction-arrow {
+      font-size: 28pt;
+      margin-right: 8px;
+    }
+
+    .result-banner .predicted-price {
+      font-size: 14pt;
+      opacity: 0.9;
+      margin-bottom: 6px;
+    }
+
+    .result-banner .confidence-bar-wrap {
+      max-width: 280px;
+      margin: 16px auto 0;
+    }
+
+    .result-banner .confidence-label {
+      font-size: 9.5pt;
+      opacity: 0.8;
+      margin-bottom: 6px;
+    }
+
+    .confidence-bar {
+      background: rgba(255,255,255,0.2);
+      border-radius: 20px;
+      height: 8px;
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      background: var(--white);
+      height: 100%;
+      border-radius: 20px;
+      width: {{ confidence }}%;
+      transition: width 1s ease;
+    }
+
+    /* ── Main ── */
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px 24px 48px;
+      width: 100%;
+    }
+
+    /* ── Grid ── */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 22px;
+      border: 1.5px solid var(--border);
+    }
+
+    .card h3 {
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1.5px solid var(--border);
+    }
+
+    /* ── Price summary card ── */
+    .price-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+
+    .price-row:last-child { border-bottom: none; }
+
+    .price-row .label {
+      font-size: 10pt;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .price-row .value {
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .price-row .value.up   { color: var(--green); }
+    .price-row .value.down { color: var(--red); }
+
+    /* ── Model comparison ── */
+    .model-pred-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+
+    .model-pred-row:last-child { border-bottom: none; }
+
+    .model-name {
+      font-size: 10pt;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .model-tag {
+      font-size: 8.5pt;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      margin-left: 8px;
+    }
+
+    .tag-lr   { background: #EFF6FF; color: #1D4ED8; }
+    .tag-rf   { background: #FFF7ED; color: #C2410C; }
+    .tag-lstm { background: #F0FDF4; color: #15803D; }
+    .tag-na   { background: #F3F4F6; color: #6B7280; }
+
+    .model-price {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    /* ── Technical indicators ── */
+    .indicator-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .indicator-item {
+      background: var(--light);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .indicator-item .ind-label {
+      font-size: 9pt;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      margin-bottom: 4px;
+    }
+
+    .indicator-item .ind-value {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--navy);
+    }
+
+    .indicator-item .ind-signal {
+      font-size: 9pt;
+      font-weight: 600;
+      margin-top: 3px;
+    }
+
+    .signal-bullish  { color: var(--green); }
+    .signal-bearish  { color: var(--red); }
+    .signal-neutral  { color: var(--muted); }
+    .signal-over     { color: var(--red); }
+    .signal-oversold { color: var(--green); }
+
+    /* ── Chart ── */
+    .chart-card {
+      background: var(--white);
+      border-radius: 12px;
+      padding: 22px;
+      border: 1.5px solid var(--border);
+      margin-bottom: 18px;
+    }
+
+    .chart-card h3 {
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1.5px solid var(--border);
+    }
+
+    #priceChart { width: 100%; height: 320px; }
+
+    /* ── Meta info ── */
+    .meta-row {
+      font-size: 9.5pt;
+      color: var(--muted);
+      text-align: right;
+      margin-bottom: 12px;
+    }
+
+    /* ── Disclaimer ── */
+    .disclaimer {
+      background: #FFFBEB;
+      border: 1.5px solid #FDE68A;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-size: 9.5pt;
+      color: #92400E;
+      line-height: 1.6;
+      margin-top: 18px;
+    }
+
+    .disclaimer strong { color: #78350F; }
+
+    /* ── Back button ── */
+    .btn-back {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 11px 22px;
+      background: var(--navy);
+      color: var(--white);
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 10pt;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .btn-back:hover { background: var(--blue); }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: auto;
+      background: var(--navy);
+      color: rgba(255,255,255,0.5);
+      text-align: center;
+      padding: 18px;
+      font-size: 9pt;
+    }
+
+    @media (max-width: 640px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+      .result-banner .direction-signal { font-size: 24pt; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Stock Market <span>Predictor</span></div>
+  <a href="/">← New Prediction</a>
+</header>
+
+<!-- Result Banner -->
+<div class="result-banner">
+  <div class="ticker-label">{{ ticker }} &nbsp;·&nbsp; As of {{ as_of }}</div>
+  <div class="direction-signal">
+    <span class="direction-arrow">{% if direction == 'Up' %}↑{% else %}↓{% endif %}</span>
+    {{ direction }}
+  </div>
+  <div class="predicted-price">
+    Predicted next-day close: <strong>${{ primary_pred }}</strong>
+    &nbsp;
+    ({% if price_change >= 0 %}+{% endif %}${{ price_change }} / {% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
+  </div>
+  <div class="confidence-bar-wrap">
+    <div class="confidence-label">Model confidence: {{ confidence }}%</div>
+    <div class="confidence-bar">
+      <div class="confidence-fill"></div>
+    </div>
+  </div>
+</div>
+
+<main>
+
+  <div class="meta-row">
+    Current price as of {{ as_of }} · Prediction for next trading day
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-card">
+    <h3>Price History — Last 90 Trading Days</h3>
+    <div id="priceChart"></div>
+  </div>
+
+  <div class="grid-2">
+
+    <!-- Price Summary -->
+    <div class="card">
+      <h3>Price Summary</h3>
+      <div class="price-row">
+        <span class="label">Current Price</span>
+        <span class="value">${{ current_price }}</span>
+      </div>
+      <div class="price-row">
+        <span class="label">Predicted Price</span>
+        <span class="value {% if direction == 'Up' %}up{% else %}down{% endif %}">${{ primary_pred }}</span>
+      </div>
+      <div class="price-row">
+        <span class="label">Expected Change</span>
+        <span class="value {% if price_change >= 0 %}up{% else %}down{% endif %}">
+          {% if price_change >= 0 %}+{% endif %}${{ price_change }}
+          ({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
+        </span>
+      </div>
+      <div class="price-row">
+        <span class="label">Bollinger Upper</span>
+        <span class="value">${{ bb_upper }}</span>
+      </div>
+      <div class="price-row">
+        <span class="label">Bollinger Lower</span>
+        <span class="value">${{ bb_lower }}</span>
+      </div>
+    </div>
+
+    <!-- Model Comparison -->
+    <div class="card">
+      <h3>All Model Predictions</h3>
+      <div class="model-pred-row">
+        <div>
+          <span class="model-name">Linear Regression</span>
+          <span class="model-tag tag-lr">Baseline</span>
+        </div>
+        <span class="model-price">${{ lr_pred }}</span>
+      </div>
+      <div class="model-pred-row">
+        <div>
+          <span class="model-name">Random Forest</span>
+          <span class="model-tag tag-rf">Ensemble</span>
+        </div>
+        <span class="model-price">${{ rf_pred }}</span>
+      </div>
+      <div class="model-pred-row">
+        <div>
+          <span class="model-name">LSTM</span>
+          <span class="model-tag {% if lstm_pred != 'N/A' %}tag-lstm{% else %}tag-na{% endif %}">Deep Learning</span>
+        </div>
+        <span class="model-price">{% if lstm_pred != 'N/A' %}${{ lstm_pred }}{% else %}N/A{% endif %}</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Technical Indicators -->
+  <div class="card" style="margin-bottom: 18px;">
+    <h3>Technical Indicators</h3>
+    <div class="indicator-grid">
+
+      <div class="indicator-item">
+        <div class="ind-label">RSI (14)</div>
+        <div class="ind-value">{{ rsi }}</div>
+        <div class="ind-signal
+          {% if rsi_signal == 'Overbought' %}signal-over
+          {% elif rsi_signal == 'Oversold' %}signal-oversold
+          {% else %}signal-neutral{% endif %}">
+          {{ rsi_signal }}
+        </div>
+      </div>
+
+      <div class="indicator-item">
+        <div class="ind-label">MACD</div>
+        <div class="ind-value">{{ macd }}</div>
+        <div class="ind-signal {% if macd_signal == 'Bullish' %}signal-bullish{% else %}signal-bearish{% endif %}">
+          {{ macd_signal }}
+        </div>
+      </div>
+
+      <div class="indicator-item">
+        <div class="ind-label">Direction Signal</div>
+        <div class="ind-value">{{ direction }}</div>
+        <div class="ind-signal {% if direction == 'Up' %}signal-bullish{% else %}signal-bearish{% endif %}">
+          {{ confidence }}% confidence
+        </div>
+      </div>
+
+      <div class="indicator-item">
+        <div class="ind-label">Ticker</div>
+        <div class="ind-value">{{ ticker }}</div>
+        <div class="ind-signal signal-neutral">As of {{ as_of }}</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    <strong>⚠️ Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only. They do not constitute financial advice. Always conduct your own analysis and consult a registered financial adviser before making any investment decisions. Past performance is not indicative of future results.
+  </div>
+
+  <a href="/" class="btn-back">← Make Another Prediction</a>
+
+</main>
+
+<footer>
+  Stock Market Predictor &nbsp;|&nbsp; Kelvin Kipkirui &nbsp;|&nbsp; DAC-01-0010/2025 &nbsp;|&nbsp; Zetech University &nbsp;|&nbsp; 2025
+</footer>
+
+<!-- Plotly Chart -->
+<script>
+  const dates  = {{ chart_dates | safe }};
+  const prices = {{ chart_prices | safe }};
+  const sma7   = {{ chart_sma7 | safe }};
+  const sma21  = {{ chart_sma21 | safe }};
+
+  const tracePrice = {
+    x: dates, y: prices,
+    type: 'scatter', mode: 'lines',
+    name: 'Close Price',
+    line: { color: '#1F4E79', width: 2 },
+    fill: 'tozeroy',
+    fillcolor: 'rgba(31,78,121,0.06)'
+  };
+
+  const traceSMA7 = {
+    x: dates, y: sma7,
+    type: 'scatter', mode: 'lines',
+    name: 'SMA 7',
+    line: { color: '#F39C12', width: 1.5, dash: 'dot' }
+  };
+
+  const traceSMA21 = {
+    x: dates, y: sma21,
+    type: 'scatter', mode: 'lines',
+    name: 'SMA 21',
+    line: { color: '#27AE60', width: 1.5, dash: 'dot' }
+  };
+
+  const layout = {
+    margin: { t: 10, r: 10, b: 40, l: 60 },
+    paper_bgcolor: 'white',
+    plot_bgcolor:  'white',
+    font: { family: 'Montserrat, sans-serif', size: 10 },
+    xaxis: { showgrid: true, gridcolor: '#F3F4F6', tickfont: { size: 9 } },
+    yaxis: { showgrid: true, gridcolor: '#F3F4F6', tickprefix: '$', tickfont: { size: 9 } },
+    legend: { orientation: 'h', y: -0.15 },
+    hovermode: 'x unified'
+  };
+
+  Plotly.newPlot('priceChart', [tracePrice, traceSMA7, traceSMA21], layout, { responsive: true, displayModeBar: false });
+</script>
+
+</body>
+</html>
