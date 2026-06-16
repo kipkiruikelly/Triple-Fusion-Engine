@@ -15,9 +15,8 @@
       --white:  #FFFFFF;
       --text:   #1A1A2E;
       --muted:  #6B7280;
-      --green:  #16A34A;
-      --red:    #DC2626;
       --border: #D1E3F5;
+      --red:    #DC2626;
     }
 
     body {
@@ -30,51 +29,23 @@
       flex-direction: column;
     }
 
-    /* ── Header ── */
     header {
       background: var(--navy);
-      padding: 18px 32px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      padding: 16px 32px;
     }
 
-    header .logo {
+    header .brand {
       font-size: 13pt;
       font-weight: 700;
       color: var(--white);
-      letter-spacing: -0.3px;
     }
 
-    header .logo span {
-      color: #7EC8E3;
-    }
+    header .brand span { color: #7EC8E3; }
 
-    /* ── Hero ── */
     .hero {
       background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%);
-      padding: 64px 32px 72px;
+      padding: 60px 32px 80px;
       text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -60px; right: -60px;
-      width: 320px; height: 320px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.04);
-    }
-
-    .hero::after {
-      content: '';
-      position: absolute;
-      bottom: -80px; left: -40px;
-      width: 240px; height: 240px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.03);
     }
 
     .hero h1 {
@@ -82,33 +53,29 @@
       font-weight: 700;
       color: var(--white);
       margin-bottom: 12px;
-      letter-spacing: -0.5px;
     }
 
     .hero p {
       font-size: 11pt;
       color: rgba(255,255,255,0.75);
-      max-width: 520px;
+      max-width: 500px;
       margin: 0 auto 36px;
       line-height: 1.7;
     }
 
-    /* ── Search Card ── */
     .search-card {
       background: var(--white);
-      border-radius: 14px;
-      padding: 32px;
-      max-width: 540px;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 520px;
       margin: 0 auto;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.18);
-      position: relative;
-      z-index: 1;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.16);
     }
 
     .search-card label {
       display: block;
-      font-size: 10pt;
-      font-weight: 600;
+      font-size: 9.5pt;
+      font-weight: 700;
       color: var(--navy);
       margin-bottom: 8px;
       text-transform: uppercase;
@@ -122,7 +89,7 @@
 
     .search-card input[type="text"] {
       flex: 1;
-      padding: 13px 16px;
+      padding: 12px 14px;
       border: 2px solid var(--border);
       border-radius: 8px;
       font-family: 'Montserrat', sans-serif;
@@ -135,9 +102,7 @@
       transition: border-color 0.2s;
     }
 
-    .search-card input[type="text"]:focus {
-      border-color: var(--blue);
-    }
+    .search-card input:focus { border-color: var(--blue); }
 
     .search-card input::placeholder {
       text-transform: none;
@@ -146,8 +111,8 @@
       color: #9CA3AF;
     }
 
-    .btn-predict {
-      padding: 13px 24px;
+    .btn {
+      padding: 12px 22px;
       background: var(--navy);
       color: var(--white);
       border: none;
@@ -160,10 +125,10 @@
       white-space: nowrap;
     }
 
-    .btn-predict:hover { background: var(--blue); }
+    .btn:hover { background: var(--blue); }
 
     .examples {
-      margin-top: 14px;
+      margin-top: 12px;
       font-size: 9.5pt;
       color: var(--muted);
     }
@@ -179,52 +144,43 @@
 
     .examples span:hover { color: var(--blue); }
 
-    /* ── Error ── */
     .error-box {
       background: #FEF2F2;
       border: 1.5px solid #FECACA;
       border-radius: 8px;
-      padding: 12px 16px;
-      margin-top: 16px;
+      padding: 11px 14px;
+      margin-top: 14px;
       font-size: 10pt;
       color: var(--red);
       font-weight: 500;
     }
 
-    /* ── Main content ── */
     main {
-      max-width: 980px;
-      margin: -28px auto 48px;
+      max-width: 960px;
+      margin: -24px auto 48px;
       padding: 0 24px;
       width: 100%;
     }
 
-    /* ── Feature cards ── */
     .features {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 18px;
-      margin-top: 48px;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 44px;
     }
 
     .feature-card {
       background: var(--white);
-      border-radius: 12px;
-      padding: 24px;
+      border-radius: 10px;
+      padding: 22px;
       border: 1.5px solid var(--border);
-    }
-
-    .feature-card .icon {
-      font-size: 22pt;
-      margin-bottom: 12px;
-      display: block;
     }
 
     .feature-card h3 {
       font-size: 11pt;
       font-weight: 700;
       color: var(--navy);
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
 
     .feature-card p {
@@ -233,88 +189,84 @@
       line-height: 1.6;
     }
 
-    /* ── Models section ── */
-    .models-section {
+    .section {
       background: var(--white);
-      border-radius: 12px;
-      padding: 28px;
+      border-radius: 10px;
+      padding: 26px;
       border: 1.5px solid var(--border);
-      margin-top: 18px;
+      margin-top: 16px;
     }
 
-    .models-section h2 {
-      font-size: 13pt;
+    .section h2 {
+      font-size: 12pt;
       font-weight: 700;
       color: var(--navy);
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
 
     .model-row {
       display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 14px 0;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 12px 0;
       border-bottom: 1px solid var(--border);
     }
 
     .model-row:last-child { border-bottom: none; }
 
-    .model-badge {
+    .model-tag {
       background: var(--light);
       color: var(--navy);
       font-size: 9pt;
       font-weight: 700;
-      padding: 4px 10px;
+      padding: 3px 10px;
       border-radius: 20px;
       white-space: nowrap;
+      margin-top: 2px;
     }
 
-    .model-desc {
+    .model-row p {
       font-size: 10pt;
       color: var(--muted);
       line-height: 1.5;
     }
 
-    /* ── Disclaimer ── */
     .disclaimer {
       background: #FFFBEB;
       border: 1.5px solid #FDE68A;
       border-radius: 10px;
-      padding: 16px 20px;
-      margin-top: 18px;
+      padding: 14px 18px;
+      margin-top: 16px;
       font-size: 9.5pt;
       color: #92400E;
       line-height: 1.6;
     }
 
-    .disclaimer strong { color: #78350F; }
-
-    /* ── Footer ── */
     footer {
       margin-top: auto;
       background: var(--navy);
       color: rgba(255,255,255,0.5);
       text-align: center;
-      padding: 18px;
+      padding: 16px;
       font-size: 9pt;
     }
 
     @media (max-width: 600px) {
       .hero h1 { font-size: 16pt; }
       .input-row { flex-direction: column; }
-      .btn-predict { width: 100%; }
+      .btn { width: 100%; }
     }
   </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">Stock Market <span>Predictor</span></div>
+  <div class="brand">Stock Market <span>Predictor</span></div>
 </header>
 
 <div class="hero">
   <h1>What will the market do tomorrow?</h1>
-  <p>Enter any stock ticker to get a next-day price prediction powered by machine learning — Linear Regression, Random Forest, and LSTM.</p>
+  <p>Enter any stock ticker to get a machine learning-based next-day price prediction using Linear Regression, Random Forest, and LSTM models.</p>
 
   <div class="search-card">
     <form action="/predict" method="POST">
@@ -329,7 +281,7 @@
           autocomplete="off"
           autofocus
         />
-        <button type="submit" class="btn-predict">Predict →</button>
+        <button type="submit" class="btn">Predict</button>
       </div>
       <div class="examples">
         Try:
@@ -339,7 +291,7 @@
         <span onclick="document.getElementById('ticker').value='GOOGL'">GOOGL</span>
       </div>
       {% if error %}
-      <div class="error-box">⚠️ {{ error }}</div>
+      <div class="error-box">{{ error }}</div>
       {% endif %}
     </form>
   </div>
@@ -348,45 +300,42 @@
 <main>
   <div class="features">
     <div class="feature-card">
-      <span class="icon">📈</span>
       <h3>Next-Day Price Prediction</h3>
-      <p>The system predicts the next trading day's closing price using 6 months of historical data and 25 engineered technical features.</p>
+      <p>Predicts the next trading day's closing price using six months of historical OHLCV data and 25 engineered technical features.</p>
     </div>
     <div class="feature-card">
-      <span class="icon">🤖</span>
       <h3>Three ML Models</h3>
-      <p>Linear Regression, Random Forest, and LSTM are all trained and compared — giving you multiple perspectives on the same prediction.</p>
+      <p>Linear Regression, Random Forest, and LSTM are trained and compared, giving multiple perspectives on the same prediction task.</p>
     </div>
     <div class="feature-card">
-      <span class="icon">📊</span>
       <h3>Technical Indicators</h3>
-      <p>RSI, MACD, Bollinger Bands, and moving averages are computed automatically and displayed alongside the prediction.</p>
+      <p>RSI, MACD, Bollinger Bands, and moving averages are computed automatically from live market data and displayed with each prediction.</p>
     </div>
   </div>
 
-  <div class="models-section">
-    <h2>How the Prediction Works</h2>
+  <div class="section">
+    <h2>How the System Works</h2>
     <div class="model-row">
-      <span class="model-badge">Linear Regression</span>
-      <span class="model-desc">Baseline model. Finds a linear relationship between technical indicators and the next day's price. Fast and interpretable.</span>
+      <span class="model-tag">Linear Regression</span>
+      <p>A statistical baseline that models the linear relationship between technical indicators and the next day's closing price.</p>
     </div>
     <div class="model-row">
-      <span class="model-badge">Random Forest</span>
-      <span class="model-desc">Ensemble of 300 decision trees trained on technical indicators and 5-day lag features. Captures non-linear patterns.</span>
+      <span class="model-tag">Random Forest</span>
+      <p>An ensemble of 300 decision trees trained on technical indicators and five-day lag features, capturing non-linear price patterns.</p>
     </div>
     <div class="model-row">
-      <span class="model-badge">LSTM</span>
-      <span class="model-desc">Deep learning model that learns from 60-day price sequences. Designed specifically for time-series forecasting.</span>
+      <span class="model-tag">LSTM</span>
+      <p>A deep learning model that learns from 60-day sequential price data. Designed specifically for time-series forecasting tasks.</p>
     </div>
   </div>
 
   <div class="disclaimer">
-    <strong>⚠️ Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only. They do not constitute financial advice. Always conduct your own research and consult a registered financial adviser before making any investment decisions. Past performance is not indicative of future results.
+    <strong>Disclaimer:</strong> Predictions generated by this system are for educational and informational purposes only. They do not constitute financial advice. Always conduct independent research and consult a registered financial adviser before making investment decisions.
   </div>
 </main>
 
 <footer>
-  Stock Market Predictor &nbsp;|&nbsp; Kelvin Kipkirui &nbsp;|&nbsp; DAC-01-0010/2025 &nbsp;|&nbsp; Zetech University &nbsp;|&nbsp; 2025
+  Stock Market Predictor &nbsp;&middot;&nbsp; Kelvin Kipkirui &nbsp;&middot;&nbsp; DAC-01-0010/2025 &nbsp;&middot;&nbsp; Zetech University &nbsp;&middot;&nbsp; 2025
 </footer>
 
 </body>
