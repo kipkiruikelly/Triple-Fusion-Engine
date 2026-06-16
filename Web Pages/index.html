@@ -435,9 +435,9 @@
     <div class="logo">Market<span>Predict</span></div>
     <nav class="nav-links">
       <a href="/" class="active">Predictor</a>
-      <a href="#">Markets</a>
-      <a href="#">Analysis</a>
-      <a href="#">About</a>
+      <a href="#markets" onclick="showSection('markets')">Markets</a>
+      <a href="#analysis" onclick="showSection('analysis')">Analysis</a>
+      <a href="#about" onclick="showSection('about')">About</a>
     </nav>
   </div>
 </div>
@@ -488,19 +488,19 @@
   <aside class="sidebar">
     <div class="sidebar-section">
       <div class="sidebar-label">Navigation</div>
-      <div class="sidebar-item active">
+      <div class="sidebar-item active" onclick="window.scrollTo({top:0,behavior:'smooth'})">
         <div class="dot"></div>
         Price Predictor
       </div>
-      <div class="sidebar-item">
+      <div class="sidebar-item" onclick="showSection('markets')">
         <div class="dot"></div>
         Market Overview
       </div>
-      <div class="sidebar-item">
+      <div class="sidebar-item" onclick="showSection('movers')">
         <div class="dot"></div>
         Top Movers
       </div>
-      <div class="sidebar-item">
+      <div class="sidebar-item" onclick="showSection('watchlist')">
         <div class="dot"></div>
         Watchlist
       </div>
@@ -540,15 +540,15 @@
 
     <div class="sidebar-section">
       <div class="sidebar-label">Models</div>
-      <div class="sidebar-item">
+      <div class="sidebar-item" onclick="showSection('lr')">
         <div class="dot"></div>
         Linear Regression
       </div>
-      <div class="sidebar-item">
+      <div class="sidebar-item" onclick="showSection('rf')">
         <div class="dot"></div>
         Random Forest
       </div>
-      <div class="sidebar-item">
+      <div class="sidebar-item" onclick="showSection('lstm')">
         <div class="dot"></div>
         LSTM Network
       </div>
@@ -563,7 +563,7 @@
     <!-- Search -->
     <div class="search-section">
       <div class="search-label">Enter Ticker Symbol</div>
-      <form action="/predict" method="POST">
+      <form id="predictForm" action="/predict" method="POST">
         <div class="search-row">
           <input
             class="search-input"
@@ -682,8 +682,68 @@
 <script>
   function setTicker(symbol) {
     document.getElementById('ticker').value = symbol;
+    document.getElementById('predictForm').submit();
+  }
+
+  function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+  }
+
+  var modalContents = {
+    markets: {
+      title: 'Market Overview',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">Market indices sourced from Yahoo Finance. Use the predictor to analyse any listed stock.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><th style="padding:10px;text-align:left;color:var(--muted);font-size:9.5pt;">Index</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">Price</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">Change</th></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">S&P 500</td><td style="padding:10px;text-align:right;color:var(--text);">5,308.15</td><td style="padding:10px;text-align:right;color:var(--green);">+0.51%</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">NASDAQ</td><td style="padding:10px;text-align:right;color:var(--text);">16,742.39</td><td style="padding:10px;text-align:right;color:var(--green);">+0.78%</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">DOW Jones</td><td style="padding:10px;text-align:right;color:var(--text);">38,996.39</td><td style="padding:10px;text-align:right;color:var(--red);">-0.12%</td></tr><tr><td style="padding:10px;font-weight:600;color:var(--text);">Russell 2000</td><td style="padding:10px;text-align:right;color:var(--text);">2,064.18</td><td style="padding:10px;text-align:right;color:var(--green);">+0.33%</td></tr></table>'
+    },
+    movers: {
+      title: 'Top Movers',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">Top movers by percentage change. Click Predict to run a forecast.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><th style="padding:10px;text-align:left;color:var(--muted);font-size:9.5pt;">Ticker</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">Price</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">Change</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">Action</th></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:700;color:var(--white);">NVDA</td><td style="padding:10px;text-align:right;color:var(--text);">$875.40</td><td style="padding:10px;text-align:right;color:var(--green);">+3.12%</td><td style="padding:10px;text-align:right;"><button onclick="closeModal();setTicker(\'NVDA\')" style="background:var(--accent);color:white;border:none;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:600;cursor:pointer;">Predict</button></td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:700;color:var(--white);">META</td><td style="padding:10px;text-align:right;color:var(--text);">$512.33</td><td style="padding:10px;text-align:right;color:var(--green);">+1.55%</td><td style="padding:10px;text-align:right;"><button onclick="closeModal();setTicker(\'META\')" style="background:var(--accent);color:white;border:none;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:600;cursor:pointer;">Predict</button></td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:700;color:var(--white);">AAPL</td><td style="padding:10px;text-align:right;color:var(--text);">$296.42</td><td style="padding:10px;text-align:right;color:var(--green);">+1.24%</td><td style="padding:10px;text-align:right;"><button onclick="closeModal();setTicker(\'AAPL\')" style="background:var(--accent);color:white;border:none;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:600;cursor:pointer;">Predict</button></td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:700;color:var(--white);">MSFT</td><td style="padding:10px;text-align:right;color:var(--text);">$415.32</td><td style="padding:10px;text-align:right;color:var(--green);">+0.64%</td><td style="padding:10px;text-align:right;"><button onclick="closeModal();setTicker(\'MSFT\')" style="background:var(--accent);color:white;border:none;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:600;cursor:pointer;">Predict</button></td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:700;color:var(--white);">TSLA</td><td style="padding:10px;text-align:right;color:var(--text);">$177.46</td><td style="padding:10px;text-align:right;color:var(--red);">-2.31%</td><td style="padding:10px;text-align:right;"><button onclick="closeModal();setTicker(\'TSLA\')" style="background:var(--accent);color:white;border:none;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:600;cursor:pointer;">Predict</button></td></tr><tr><td style="padding:10px;font-weight:700;color:var(--white);">AMZN</td><td style="padding:10px;text-align:right;color:var(--text);">$185.20</td><td style="padding:10px;text-align:right;color:var(--red);">-0.88%</td><td style="padding:10px;text-align:right;"><button onclick="closeModal();setTicker(\'AMZN\')" style="background:var(--accent);color:white;border:none;padding:4px 12px;border-radius:4px;font-size:9pt;font-weight:600;cursor:pointer;">Predict</button></td></tr></table>'
+    },
+    watchlist: {
+      title: 'Watchlist',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">Click any ticker to run a prediction.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;"><div onclick="closeModal();setTicker(\'AAPL\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-size:14pt;font-weight:700;color:var(--white);">AAPL</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Apple Inc.</div></div><div onclick="closeModal();setTicker(\'TSLA\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-size:14pt;font-weight:700;color:var(--white);">TSLA</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Tesla Inc.</div></div><div onclick="closeModal();setTicker(\'MSFT\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-size:14pt;font-weight:700;color:var(--white);">MSFT</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Microsoft Corp.</div></div><div onclick="closeModal();setTicker(\'GOOGL\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-size:14pt;font-weight:700;color:var(--white);">GOOGL</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Alphabet Inc.</div></div><div onclick="closeModal();setTicker(\'NVDA\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-size:14pt;font-weight:700;color:var(--white);">NVDA</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">NVIDIA Corp.</div></div><div onclick="closeModal();setTicker(\'META\')" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><div style="font-size:14pt;font-weight:700;color:var(--white);">META</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Meta Platforms Inc.</div></div></div>'
+    },
+    analysis: {
+      title: 'Model Performance Analysis',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">Performance on AAPL test dataset (July to December 2023, n=122 trading days).</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><th style="padding:10px;text-align:left;color:var(--muted);font-size:9.5pt;">Model</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">MAE</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">RMSE</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">R&sup2;</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">Dir. Acc.</th></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">Linear Regression</td><td style="padding:10px;text-align:right;color:var(--green);">$1.64</td><td style="padding:10px;text-align:right;color:var(--text);">$2.20</td><td style="padding:10px;text-align:right;color:var(--text);">0.9321</td><td style="padding:10px;text-align:right;color:var(--text);">50.4%</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">Random Forest</td><td style="padding:10px;text-align:right;color:var(--red);">$9.50</td><td style="padding:10px;text-align:right;color:var(--text);">$11.74</td><td style="padding:10px;text-align:right;color:var(--red);">-0.9295</td><td style="padding:10px;text-align:right;color:var(--text);">52.1%</td></tr><tr><td style="padding:10px;font-weight:600;color:var(--text);">LSTM Network</td><td style="padding:10px;text-align:right;color:var(--text);">$5.99</td><td style="padding:10px;text-align:right;color:var(--text);">$6.70</td><td style="padding:10px;text-align:right;color:var(--text);">0.4429</td><td style="padding:10px;text-align:right;color:var(--text);">48.4%</td></tr></table>'
+    },
+    lr: {
+      title: 'Linear Regression',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">A statistical baseline model that fits a linear relationship between technical indicator features and the next day\'s closing price.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Type</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Regression (Baseline)</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">MAE on AAPL test set</td><td style="padding:10px;text-align:right;color:var(--green);font-weight:600;">$1.64</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">RMSE</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">$2.20</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">R&sup2; Score</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">0.9321</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Directional Accuracy</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">50.4%</td></tr><tr><td style="padding:10px;color:var(--muted);">Library</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Scikit-learn</td></tr></table>'
+    },
+    rf: {
+      title: 'Random Forest',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">An ensemble of 300 decision trees trained on technical indicators and 5-day lag features. Each tree votes on the predicted price and the average is taken as the final prediction.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Type</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Ensemble Regression</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Trees</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">300</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Max Depth</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">12</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">MAE on AAPL test set</td><td style="padding:10px;text-align:right;color:var(--red);font-weight:600;">$9.50</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Directional Accuracy</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">52.1%</td></tr><tr><td style="padding:10px;color:var(--muted);">Library</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Scikit-learn</td></tr></table><p style="color:var(--muted);font-size:9.5pt;margin-top:12px;">Note: RF underperforms on the AAPL test period due to a strong uptrend outside its training price range.</p>'
+    },
+    lstm: {
+      title: 'LSTM Neural Network',
+      body: '<p style="color:var(--muted);margin-bottom:16px;">A stacked Long Short-Term Memory network that learns sequential dependencies across 60 trading days of price history. Trained on Google Colab with a T4 GPU.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Architecture</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">LSTM(128) → LSTM(64) → Dense(1)</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Lookback Window</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">60 trading days</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Epochs Trained</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">20 (early stopping)</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">MAE on AAPL test set</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">$5.99</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">R&sup2; Score</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">0.4429</td></tr><tr><td style="padding:10px;color:var(--muted);">Framework</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">TensorFlow / Keras</td></tr></table>'
+    },
+    about: {
+      title: 'About MarketPredict',
+      body: '<div style="line-height:1.8;"><p style="color:var(--muted);margin-bottom:12px;">MarketPredict is a machine learning-based stock price prediction system developed as a diploma project at Zetech University.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Developer</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Kelvin Kipkirui</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Student ID</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">DAC-01-0010/2025</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Programme</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Diploma in AI and Cloud Technologies</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Institution</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Zetech University, Kenya</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Stack</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Python, Flask, Scikit-learn, Keras, Plotly</td></tr><tr><td style="padding:10px;color:var(--muted);">GitHub</td><td style="padding:10px;text-align:right;"><a href="https://github.com/kipkiruikelly/Stock-Market-Predictor" target="_blank" style="color:var(--accent);font-weight:600;">kipkiruikelly/Stock-Market-Predictor</a></td></tr></table></div>'
+    }
+  };
+
+  function showSection(name) {
+    var section = modalContents[name];
+    if (!section) return;
+    document.getElementById('modalTitle').textContent = section.title;
+    document.getElementById('modalBody').innerHTML = section.body;
+    document.getElementById('modal').style.display = 'flex';
   }
 </script>
+
+
+<!-- Modal -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;align-items:center;justify-content:center;padding:24px;" onclick="if(event.target===this)closeModal()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:640px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);">
+      <div id="modalTitle" style="font-size:13pt;font-weight:700;color:var(--white);"></div>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--muted);font-size:18pt;cursor:pointer;line-height:1;">&times;</button>
+    </div>
+    <div id="modalBody" style="padding:22px;overflow-y:auto;"></div>
+  </div>
+</div>
 
 </body>
 </html>
