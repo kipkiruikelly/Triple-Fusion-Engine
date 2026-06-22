@@ -17,11 +17,12 @@ Strategy (both modes):
   - Max 3 open positions, 5% daily loss circuit-breaker
 """
 
+import asyncio
 import time
 import threading
 import logging
 from collections import deque
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 import numpy as np
 import pandas as pd
@@ -44,6 +45,132 @@ except ImportError:
     except ImportError:
         _MT5 = None
         MT5_BACKEND = "paper"
+
+# MetaApi timeframe mapping (MT5 name → MetaApi name)
+_METAAPI_TF = {"M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m",
+               "H1": "1h", "H4": "4h", "D1": "1d"}
+
+
+class MetaApiBackend:
+    """
+    Async MetaApi SDK wrapped for synchronous use inside Flask/threading.
+
+    Runs a dedicated asyncio event loop in a background daemon thread.
+    All public methods are synchronous and block until the coroutine completes.
+    """
+    TIMEOUT = 60  # seconds per API call
+
+    def __init__(self):
+        self._loop   = None
+        self._thread = None
+        self._api    = None
+        self._conn   = None
+        self._acct   = None
+
+    # ── Internal loop management ──────────────────────────────────────────────
+
+    def _start_loop(self):
+        self._loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._thread = threading.Thread(target=self._start_loop, daemon=True,
+                                         name="metaapi-loop")
+        self._thread.start()
+
+    def _run(self, coro):
+        """Submit a coroutine to the MetaApi loop and block until done."""
+        if not self._loop or not self._loop.is_running():
+            raise RuntimeError("MetaApi event loop not running")
+        fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return fut.result(timeout=self.TIMEOUT)
+
+    # ── Connection ────────────────────────────────────────────────────────────
+
+    async def _do_connect(self, token: str, account_id: str):
+        from metaapi_cloud_sdk import MetaApi
+        self._api  = MetaApi(token)
+        self._acct = await self._api.metatrader_account_api.get_account(account_id)
+        if self._acct.state not in ("DEPLOYING", "DEPLOYED"):
+            await self._acct.deploy()
+        await self._acct.wait_connected()
+        self._conn = self._acct.get_rpc_connection()
+        await self._conn.connect()
+        await self._conn.wait_synchronized()
+        return await self._conn.get_account_information()
+
+    def connect(self, token: str, account_id: str):
+        return self._run(self._do_connect(token, account_id))
+
+    async def _do_disconnect(self):
+        if self._conn:
+            await self._conn.close()
+        if self._api:
+            self._api.close()
+        self._conn = self._acct = self._api = None
+
+    def disconnect(self):
+        try:
+            self._run(self._do_disconnect())
+        except Exception:
+            pass
+        if self._loop:
+            self._loop.call_soon_threadsafe(self._loop.stop)
+
+    # ── Market data ───────────────────────────────────────────────────────────
+
+    async def _do_get_candles(self, symbol: str, tf: str, count: int):
+        return await self._conn.get_candles(symbol, tf,
+                                             datetime.now(timezone.utc), count)
+
+    def get_candles(self, symbol: str, tf: str, count: int = 120):
+        return self._run(self._do_get_candles(symbol, tf, count))
+
+    async def _do_get_price(self, symbol: str):
+        return await self._conn.get_symbol_price(symbol)
+
+    def get_price(self, symbol: str):
+        return self._run(self._do_get_price(symbol))
+
+    async def _do_get_account_info(self):
+        return await self._conn.get_account_information()
+
+    def get_account_info(self):
+        return self._run(self._do_get_account_info())
+
+    # ── Trading ───────────────────────────────────────────────────────────────
+
+    async def _do_place(self, symbol, action, lot, sl, tp):
+        opts = {"comment": "MarketPredict algo", "clientId": "mp-algo"}
+        if action == "BUY":
+            return await self._conn.create_market_buy_order(symbol, lot, sl, tp, opts)
+        else:
+            return await self._conn.create_market_sell_order(symbol, lot, sl, tp, opts)
+
+    def place_order(self, symbol, action, lot, sl, tp):
+        return self._run(self._do_place(symbol, action, lot, sl, tp))
+
+    async def _do_get_positions(self, symbol):
+        positions = await self._conn.get_positions()
+        return [p for p in positions if p["symbol"] == symbol]
+
+    def get_positions(self, symbol):
+        return self._run(self._do_get_positions(symbol))
+
+    async def _do_close_all(self, symbol):
+        positions = await self._conn.get_positions()
+        closed = 0
+        for p in positions:
+            if p["symbol"] == symbol:
+                await self._conn.close_position(p["id"])
+                closed += 1
+        return closed
+
+    def close_all(self, symbol):
+        return self._run(self._do_close_all(symbol))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger("mt5_trading")
@@ -229,7 +356,7 @@ class MT5Trader:
         self.backend       = MT5_BACKEND
         self.connected     = False
         self.trading       = False
-        self.use_ml        = True        # ML-driven trading on by default
+        self.use_ml        = True
         self._thread       = None
         self._lock         = threading.Lock()
         self.trade_log     = deque(maxlen=MAX_LOG_ENTRIES)
@@ -239,18 +366,53 @@ class MT5Trader:
         self.last_signal   = {}
         self.last_ml       = {}
         self._mt5_instance = None
-        self._paper        = None   # PaperAccount, set when in paper mode
+        self._paper        = None       # PaperAccount when in paper mode
+        self._mapi         = None       # MetaApiBackend when in metaapi mode
 
     @property
     def is_paper(self):
         return self._paper is not None
 
+    @property
+    def is_metaapi(self):
+        return self._mapi is not None
+
     # ── Connection ───────────────────────────────────────────────────────────
 
     def connect(self, account_num: int, password: str, server: str,
-                host: str = "localhost", port: int = 18812) -> dict:
+                host: str = "localhost", port: int = 18812,
+                metaapi_token: str = "", metaapi_account_id: str = "") -> dict:
 
-        # Paper mode: when account_num == 0 or no MT5 available
+        # ── MetaApi mode ─────────────────────────────────────────────────────
+        if metaapi_token and metaapi_account_id:
+            try:
+                mapi = MetaApiBackend()
+                mapi.start()
+                self._log("INFO", "Connecting to MetaApi — deploying account, please wait…")
+                info = mapi.connect(metaapi_token, metaapi_account_id)
+                self._mapi       = mapi
+                self._paper      = None
+                self._mt5_instance = None
+                self.connected   = True
+                self.account     = {
+                    "login"      : info.get("login", 0),
+                    "name"       : info.get("name", "MetaApi Account"),
+                    "server"     : info.get("server", ""),
+                    "currency"   : info.get("currency", "USD"),
+                    "balance"    : round(info.get("balance", 0), 2),
+                    "equity"     : round(info.get("equity", 0), 2),
+                    "margin"     : round(info.get("margin", 0), 2),
+                    "free_margin": round(info.get("freeMargin", 0), 2),
+                    "leverage"   : info.get("leverage", 100),
+                }
+                self.equity_open = self.account["equity"]
+                self.status_msg  = f"Connected (MetaApi) — {self.account['name']} @ {self.account['server']}"
+                self._log("INFO", f"MetaApi connected: {self.account['name']} balance {self.account['currency']} {self.account['balance']:,.2f}")
+                return {"ok": True, "account": self.account, "mode": "metaapi"}
+            except Exception as e:
+                return {"ok": False, "error": f"MetaApi connection failed: {e}"}
+
+        # ── Paper mode ───────────────────────────────────────────────────────
         if account_num == 0 or self.backend == "paper":
             self._paper      = PaperAccount()
             self.connected   = True
@@ -306,14 +468,21 @@ class MT5Trader:
 
     def disconnect(self):
         self.stop_trading()
-        if self.connected and self._mt5_instance:
-            try:
-                self._mt5_instance.shutdown()
-            except Exception:
-                pass
+        if self.connected:
+            if self._mt5_instance:
+                try:
+                    self._mt5_instance.shutdown()
+                except Exception:
+                    pass
+            if self._mapi:
+                try:
+                    self._mapi.disconnect()
+                except Exception:
+                    pass
         self.connected     = False
         self._paper        = None
         self._mt5_instance = None
+        self._mapi         = None
         self.status_msg    = "Disconnected"
         self._log("INFO", "Disconnected")
 
@@ -322,6 +491,18 @@ class MT5Trader:
             return
         if self.is_paper:
             self.account = self._paper.info()
+            return
+        if self.is_metaapi:
+            try:
+                info = self._mapi.get_account_info()
+                self.account.update({
+                    "balance"     : round(info.get("balance", 0), 2),
+                    "equity"      : round(info.get("equity", 0), 2),
+                    "margin"      : round(info.get("margin", 0), 2),
+                    "free_margin" : round(info.get("freeMargin", 0), 2),
+                })
+            except Exception:
+                pass
             return
         try:
             info = self._mt5_instance.account_info()
@@ -412,9 +593,36 @@ class MT5Trader:
             log.warning(f"yfinance error: {e}")
             return None
 
+    def _get_bars_metaapi(self, symbol: str, timeframe: str, n: int = 120):
+        """Fetch OHLCV bars from MetaApi and return as a DataFrame."""
+        try:
+            tf   = _METAAPI_TF.get(timeframe, "5m")
+            bars = self._mapi.get_candles(symbol, tf, n)
+            if not bars:
+                return None
+            df = pd.DataFrame([{
+                "Close" : c["close"],
+                "High"  : c["high"],
+                "Low"   : c["low"],
+                "Open"  : c["open"],
+                "Volume": c.get("tickVolume", 1),
+            } for c in bars])
+            return df
+        except Exception as e:
+            log.warning(f"MetaApi get_candles error: {e}")
+            return None
+
     def generate_signal(self, symbol: str, timeframe=None) -> dict:
         if self.is_paper:
             df = self._get_bars_paper(symbol)
+            if df is None or len(df) < 60:
+                return {"action": "HOLD", "reason": "Insufficient data", "score": 0,
+                        "rsi": 50, "macd": 0, "atr": 0, "price": 0}
+            closes = df["Close"].values.astype(float)
+            highs  = df["High"].values.astype(float)
+            lows   = df["Low"].values.astype(float)
+        elif self.is_metaapi:
+            df = self._get_bars_metaapi(symbol, timeframe or "M5")
             if df is None or len(df) < 60:
                 return {"action": "HOLD", "reason": "Insufficient data", "score": 0,
                         "rsi": 50, "macd": 0, "atr": 0, "price": 0}
@@ -451,6 +659,11 @@ class MT5Trader:
     def _count_positions(self, symbol: str) -> int:
         if self.is_paper:
             return sum(1 for p in self._paper.positions if p["symbol"] == symbol)
+        if self.is_metaapi:
+            try:
+                return len(self._mapi.get_positions(symbol))
+            except Exception:
+                return 0
         try:
             positions = self._mt5_instance.positions_get(symbol=symbol)
             return len(positions) if positions else 0
@@ -498,7 +711,36 @@ class MT5Trader:
             self._log("PAPER TRADE", f"{action} {lot} {symbol} @ {price:.5f}  SL={sl:.5f}  TP={tp:.5f}")
             return {"ok": True, "trade": trade}
 
-        # Live MT5 order
+        # MetaApi live order
+        if self.is_metaapi:
+            try:
+                tick  = self._mapi.get_price(symbol)
+                price = tick["ask"] if action == "BUY" else tick["bid"]
+                if action == "BUY":
+                    sl = round(price - sl_dist, 5)
+                    tp = round(price + tp_dist, 5)
+                else:
+                    sl = round(price + sl_dist, 5)
+                    tp = round(price - tp_dist, 5)
+                lot    = self._calc_lot(risk_pct, sl_dist, price)
+                result = self._mapi.place_order(symbol, action, lot, sl, tp)
+                ticket = result.get("orderId", "?")
+                trade  = {
+                    "time"  : datetime.now().strftime("%H:%M:%S"),
+                    "action": action,
+                    "symbol": symbol,
+                    "lot"   : lot,
+                    "price" : price,
+                    "sl"    : sl,
+                    "tp"    : tp,
+                    "ticket": ticket,
+                }
+                self._log("TRADE", f"{action} {lot} {symbol} @ {price:.5f}  SL={sl:.5f}  TP={tp:.5f}  #{ticket}")
+                return {"ok": True, "trade": trade}
+            except Exception as e:
+                return {"ok": False, "error": str(e)}
+
+        # Direct MT5 live order
         mt5  = self._mt5_instance
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
@@ -551,6 +793,12 @@ class MT5Trader:
     def close_all(self, symbol: str) -> int:
         if self.is_paper:
             return self._paper.close_all(symbol)
+        if self.is_metaapi:
+            try:
+                return self._mapi.close_all(symbol)
+            except Exception as e:
+                self._log("ERROR", f"close_all: {e}")
+                return 0
         mt5       = self._mt5_instance
         positions = mt5.positions_get(symbol=symbol) or []
         closed    = 0
@@ -649,7 +897,7 @@ class MT5Trader:
             return {"ok": False, "error": "Already trading"}
         self.use_ml     = use_ml and _ML_AVAILABLE
         self.trading    = True
-        mode = "Paper" if self.is_paper else "Live"
+        mode = "Paper" if self.is_paper else ("MetaApi" if self.is_metaapi else "Live")
         ml_tag = "+ML" if self.use_ml else ""
         self.status_msg = f"{mode} Trading{ml_tag} — {symbol} {timeframe}"
         self._thread = threading.Thread(
@@ -683,11 +931,12 @@ class MT5Trader:
         positions = []
         if self.is_paper:
             positions = self._paper.positions
+        mode = "paper" if self.is_paper else ("metaapi" if self.is_metaapi else "live")
         return {
             "connected"   : self.connected,
             "trading"     : self.trading,
             "backend"     : self.backend,
-            "mode"        : "paper" if self.is_paper else "live",
+            "mode"        : mode,
             "use_ml"      : self.use_ml,
             "ml_available": _ML_AVAILABLE,
             "status_msg"  : self.status_msg,

@@ -11,4 +11,5 @@ flask
 flask-login
 flask-sqlalchemy
 mt5linux
+metaapi-cloud-sdk
 gunicorn

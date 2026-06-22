@@ -234,13 +234,16 @@ def mt5_dashboard():
 @app.route("/mt5/connect", methods=["POST"])
 @pro_required
 def mt5_connect():
-    data     = request.get_json()
-    account  = int(data.get("account", 0))
-    password = data.get("password", "")
-    server   = data.get("server", "")
-    host     = data.get("host", "localhost")
-    port     = int(data.get("port", 18812))
-    return jsonify(mt5_trader.connect(account, password, server, host, port))
+    data               = request.get_json()
+    account            = int(data.get("account", 0))
+    password           = data.get("password", "")
+    server             = data.get("server", "")
+    host               = data.get("host", "localhost")
+    port               = int(data.get("port", 18812))
+    metaapi_token      = data.get("metaapi_token", "")
+    metaapi_account_id = data.get("metaapi_account_id", "")
+    return jsonify(mt5_trader.connect(account, password, server, host, port,
+                                      metaapi_token, metaapi_account_id))
 
 
 @app.route("/mt5/disconnect", methods=["POST"])
