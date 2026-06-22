@@ -101,12 +101,14 @@
     .log-table tr:last-child td { border-bottom: none; }
     .log-table .t { color: var(--muted); white-space: nowrap; }
     .log-table .m { color: var(--text); }
-    .lv-TRADE  { color: var(--accent); font-weight: 700; }
-    .lv-INFO   { color: var(--blue); }
-    .lv-SIGNAL { color: var(--yellow); }
-    .lv-WARN   { color: var(--yellow); font-weight: 700; }
-    .lv-ERROR  { color: var(--red); font-weight: 700; }
-    .lv-CLOSE  { color: var(--green); }
+    .lv-TRADE          { color: var(--accent); font-weight: 700; }
+    .lv-INFO           { color: var(--blue); }
+    .lv-SIGNAL         { color: var(--yellow); }
+    .lv-WARN           { color: var(--yellow); font-weight: 700; }
+    .lv-ERROR          { color: var(--red); font-weight: 700; }
+    .lv-CLOSE          { color: var(--green); }
+    .lv-PAPER-TRADE    { color: var(--accent); font-weight: 700; }
+    .lv-PAPER-CLOSE    { color: var(--green); }
 
     .log-wrap { max-height: 320px; overflow-y: auto; }
 
@@ -145,17 +147,30 @@
           Backend: <strong style="color:var(--text);">{{ backend }}</strong><br>
           Status: <span id="statusText">Disconnected</span>
         </div>
+
+        <!-- Paper mode hint -->
+        {% if backend == 'paper' %}
+        <div style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:6px;padding:10px;margin-bottom:12px;font-size:8.5pt;line-height:1.6;color:var(--yellow);">
+          <strong>Paper Trading Mode</strong><br>
+          MT5 bridge unavailable (Wine ucrtbase.dll stub).<br>
+          Use <strong>Account: 0</strong> to trade with $10,000 virtual balance against live market data.
+          <hr style="border-color:rgba(251,191,36,0.2);margin:8px 0;">
+          To enable live MT5:<br>
+          <code style="font-size:7.5pt;">sudo apt install wine-devel</code>
+        </div>
+        {% endif %}
+
         <div class="form-group">
-          <label class="form-label">Account Number</label>
-          <input class="form-input" type="number" id="account" placeholder="12345678" />
+          <label class="form-label">Account Number <span style="color:var(--muted);font-weight:400;">(0 = paper)</span></label>
+          <input class="form-input" type="number" id="account" placeholder="0 (paper) or MT5 login" value="{{ '0' if backend == 'paper' else '' }}" />
         </div>
         <div class="form-group">
-          <label class="form-label">Password</label>
-          <input class="form-input" type="password" id="password" placeholder="••••••••" />
+          <label class="form-label">Password <span style="color:var(--muted);font-weight:400;">(leave blank for paper)</span></label>
+          <input class="form-input" type="password" id="password" placeholder="•••••••• or leave blank" />
         </div>
         <div class="form-group">
-          <label class="form-label">Server</label>
-          <input class="form-input" type="text" id="server" placeholder="ICMarkets-Live" />
+          <label class="form-label">Server <span style="color:var(--muted);font-weight:400;">(leave blank for paper)</span></label>
+          <input class="form-input" type="text" id="server" placeholder="ICMarkets-Live or blank" />
         </div>
         <div class="form-group">
           <label class="form-label">Bridge Host</label>
@@ -167,9 +182,6 @@
         </div>
         <button class="btn btn-connect" id="btnConnect" onclick="connectMT5()">Connect</button>
         <button class="btn btn-logout" onclick="disconnectMT5()">Disconnect</button>
-        <div style="font-size:8.5pt;color:var(--muted);margin-top:8px;line-height:1.5;">
-          Requires the <strong>PythonMT5Bridge</strong> EA running in MT5 (Wine).
-        </div>
       </div>
     </div>
 
@@ -184,8 +196,8 @@
       <div class="panel-header">Algorithm Settings</div>
       <div class="panel-body">
         <div class="form-group">
-          <label class="form-label">Symbol</label>
-          <input class="form-input" type="text" id="symbol" value="EURUSD" />
+          <label class="form-label">Symbol <span style="color:var(--muted);font-weight:400;">{% if backend == 'paper' %}(e.g. AAPL, TSLA){% else %}(e.g. EURUSD){% endif %}</span></label>
+          <input class="form-input" type="text" id="symbol" value="{{ 'AAPL' if backend == 'paper' else 'EURUSD' }}" />
         </div>
         <div class="form-group">
           <label class="form-label">Timeframe</label>
@@ -288,7 +300,7 @@
     .then(r => r.json())
     .then(data => {
       if (data.ok) {
-        setConnected(true);
+        setConnected(true, data.mode);
         updateAccount(data.account);
         startPolling();
       } else {
@@ -356,8 +368,9 @@
   function startPolling() { if (!pollTimer) pollTimer = setInterval(poll, 3000); }
   function stopPolling()  { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-  function setConnected(yes) {
-    document.getElementById('connDot').className = 'status-dot ' + (yes ? 'dot-green' : 'dot-red');
+  function setConnected(yes, mode) {
+    const isPaper = mode === 'paper';
+    document.getElementById('connDot').className = 'status-dot ' + (yes ? (isPaper ? 'dot-yellow' : 'dot-green') : 'dot-red');
     document.getElementById('btnStart').disabled = !yes;
     if (!yes) {
       document.getElementById('btnStop').disabled = true;
@@ -409,14 +422,18 @@
   function updateLog(entries) {
     if (!entries.length) return;
     const body = document.getElementById('logBody');
-    body.innerHTML = entries.map(e =>
-      `<tr>
+    body.innerHTML = entries.map(e => {
+      const cls = 'lv-' + e.level.replace(/ /g, '-');
+      return `<tr>
         <td class="t">${e.time}</td>
-        <td class="lv-${e.level}">${e.level}</td>
+        <td class="${cls}">${e.level}</td>
         <td class="m">${e.msg}</td>
-      </tr>`
-    ).join('');
+      </tr>`;
+    }).join('');
   }
+
+  // Auto-poll on page load to show any existing connection state
+  window.addEventListener('load', () => { poll(); startPolling(); });
 </script>
 
 </body>
