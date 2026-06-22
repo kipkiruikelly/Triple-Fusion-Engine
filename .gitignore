@@ -3,3 +3,10 @@ __pycache__/
 *.pyc
 venv/
 .env
+
+# User database
+instance/
+
+# Anaconda
+*.egg-info/
+.eggs/
