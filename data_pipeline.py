@@ -29,7 +29,7 @@ from sklearn.preprocessing import MinMaxScaler
 # Configuration
 TICKER      = "AAPL"
 START_DATE  = "2019-01-01"
-END_DATE    = "2024-01-01"
+END_DATE    = "2026-06-01"
 LOOKBACK    = 60
 TRAIN_RATIO = 0.80
 VAL_RATIO   = 0.10

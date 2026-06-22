@@ -92,7 +92,8 @@ def run_prediction(ticker):
     X = scaler.transform(df[feature_cols].iloc[-1:].values)
 
     lr_pred = float(lr_model.predict(X)[0])
-    rf_pred = float(rf_model.predict(X)[0])
+    rf_ret  = float(rf_model.predict(X)[0])
+    rf_pred = current_price * (1 + rf_ret / 100)
 
     price_change = lr_pred - current_price
     direction    = "Up" if price_change > 0 else "Down"

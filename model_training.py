@@ -66,7 +66,9 @@ def load_data(ticker):
         df[f"Close_lag_{lag}"]  = df["Close"].shift(lag)
         df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
 
-    df["Next_Close"] = df["Close"].shift(-1)
+    df["Next_Close"]  = df["Close"].shift(-1)
+    # RF predicts % return so its output is not bounded by the training price range
+    df["Next_Return"] = (df["Next_Close"] / df["Close"] - 1) * 100
     df.dropna(inplace=True)
 
     n         = len(df)
@@ -77,9 +79,14 @@ def load_data(ticker):
     X_val   = df.iloc[train_end:val_end][FEATURES].values
     X_test  = df.iloc[val_end:][FEATURES].values
 
-    y_train = df.iloc[:train_end]["Next_Close"].values
-    y_val   = df.iloc[train_end:val_end]["Next_Close"].values
-    y_test  = df.iloc[val_end:]["Next_Close"].values
+    y_train     = df.iloc[:train_end]["Next_Close"].values
+    y_val       = df.iloc[train_end:val_end]["Next_Close"].values
+    y_test      = df.iloc[val_end:]["Next_Close"].values
+
+    y_train_ret = df.iloc[:train_end]["Next_Return"].values
+    y_val_ret   = df.iloc[train_end:val_end]["Next_Return"].values
+    y_test_ret  = df.iloc[val_end:]["Next_Return"].values
+    close_test  = df.iloc[val_end:]["Close"].values
 
     scaler     = MinMaxScaler()
     X_train_sc = scaler.fit_transform(X_train)
@@ -95,6 +102,8 @@ def load_data(ticker):
     return {
         "X_train": X_train_sc, "X_val": X_val_sc, "X_test": X_test_sc,
         "y_train": y_train,    "y_val": y_val,     "y_test": y_test,
+        "y_train_ret": y_train_ret, "y_val_ret": y_val_ret, "y_test_ret": y_test_ret,
+        "close_test": close_test,
     }
 
 
@@ -130,10 +139,11 @@ def train_random_forest(data):
         min_samples_split=4, min_samples_leaf=2,
         max_features=0.7, random_state=42, n_jobs=-1
     )
-    model.fit(data["X_train"], data["y_train"])
+    model.fit(data["X_train"], data["y_train_ret"])
 
-    y_pred  = model.predict(data["X_test"])
-    metrics = evaluate(data["y_test"], y_pred, "Random Forest")
+    ret_pred = model.predict(data["X_test"])
+    y_pred   = data["close_test"] * (1 + ret_pred / 100)
+    metrics  = evaluate(data["y_test"], y_pred, "Random Forest")
 
     importance = pd.DataFrame({
         "Feature": FEATURES, "Importance": model.feature_importances_
