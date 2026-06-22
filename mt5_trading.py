@@ -26,6 +26,13 @@ from datetime import datetime, date
 import numpy as np
 import pandas as pd
 
+try:
+    from predictor import ml_signal as _ml_signal
+    _ML_AVAILABLE = True
+except Exception:
+    _ml_signal = None
+    _ML_AVAILABLE = False
+
 # Try live MT5 bridge; fall back to paper mode
 try:
     from mt5linux import MetaTrader5 as _MT5
@@ -222,6 +229,7 @@ class MT5Trader:
         self.backend       = MT5_BACKEND
         self.connected     = False
         self.trading       = False
+        self.use_ml        = True        # ML-driven trading on by default
         self._thread       = None
         self._lock         = threading.Lock()
         self.trade_log     = deque(maxlen=MAX_LOG_ENTRIES)
@@ -229,6 +237,7 @@ class MT5Trader:
         self.status_msg    = "Disconnected"
         self.equity_open   = None
         self.last_signal   = {}
+        self.last_ml       = {}
         self._mt5_instance = None
         self._paper        = None   # PaperAccount, set when in paper mode
 
@@ -325,6 +334,63 @@ class MT5Trader:
                 })
         except Exception:
             pass
+
+    # ── ML + technical signal fusion ─────────────────────────────────────────
+
+    def generate_signal_ml(self, symbol: str, timeframe=None) -> dict:
+        """
+        Combines the ML model prediction with technical indicators.
+
+        Decision table:
+          ML=BUY  + Tech=BUY  → BUY  (strong, both agree)
+          ML=SELL + Tech=SELL → SELL (strong, both agree)
+          ML=BUY  + Tech=HOLD → BUY  (ML-driven, weaker score)
+          ML=SELL + Tech=HOLD → SELL (ML-driven, weaker score)
+          ML=HOLD + any       → HOLD (models disagree, stay flat)
+          ML=BUY  + Tech=SELL → HOLD (conflicting, stay flat)
+          ML=SELL + Tech=BUY  → HOLD (conflicting, stay flat)
+        """
+        ml  = _ml_signal(symbol) if (_ML_AVAILABLE and _ml_signal) else {"action": "HOLD", "confidence": 0}
+        tec = self.generate_signal(symbol, timeframe)
+        self.last_ml = ml
+
+        ml_action  = ml.get("action",  "HOLD")
+        tec_action = tec.get("action", "HOLD")
+
+        if ml_action == "HOLD":
+            action = "HOLD"
+            score  = 0
+            reason = f"ML=HOLD (models disagree) | Tech={tec_action}"
+        elif ml_action == tec_action:
+            action = ml_action
+            score  = tec.get("score", 0) + 2   # +2 bonus when both agree
+            reason = (f"ML={ml_action} conf={ml.get('confidence',0):.0f}% | "
+                      f"Tech={tec_action} score={tec.get('score',0)} | "
+                      f"LR={ml.get('lr_pred',0):.2f} RF={ml.get('rf_pred',0):.2f}")
+        elif tec_action == "HOLD":
+            action = ml_action
+            score  = 2   # ML-only signal
+            reason = (f"ML={ml_action} conf={ml.get('confidence',0):.0f}% "
+                      f"(tech neutral) | LR={ml.get('lr_pred',0):.2f} RF={ml.get('rf_pred',0):.2f}")
+        else:
+            action = "HOLD"
+            score  = 0
+            reason = f"CONFLICTING: ML={ml_action} vs Tech={tec_action} — staying flat"
+
+        signal = {
+            "action"    : action,
+            "score"     : score,
+            "reason"    : reason,
+            "rsi"       : ml.get("rsi",  tec.get("rsi", 50)),
+            "macd"      : ml.get("macd_hist", tec.get("macd", 0)),
+            "atr"       : ml.get("atr",  tec.get("atr", 0)),
+            "price"     : ml.get("current_price", tec.get("price", 0)),
+            "lr_pred"   : ml.get("lr_pred", 0),
+            "rf_pred"   : ml.get("rf_pred", 0),
+            "confidence": ml.get("confidence", 0),
+        }
+        self.last_signal = signal
+        return signal
 
     # ── Signal generation ────────────────────────────────────────────────────
 
@@ -548,7 +614,9 @@ class MT5Trader:
                     time.sleep(interval)
                     continue
 
-                signal = self.generate_signal(symbol, tf)
+                signal = (self.generate_signal_ml(symbol, tf)
+                          if self.use_ml and _ML_AVAILABLE
+                          else self.generate_signal(symbol, tf))
                 self._log("SIGNAL", f"{signal['action']} score={signal['score']} {signal['reason']}")
 
                 if signal["action"] in ("BUY", "SELL"):
@@ -573,21 +641,24 @@ class MT5Trader:
         self._log("INFO", "Trading loop stopped")
 
     def start_trading(self, symbol: str, timeframe: str = "M5",
-                      risk_pct: float = 1.0, interval: int = 60) -> dict:
+                      risk_pct: float = 1.0, interval: int = 60,
+                      use_ml: bool = True) -> dict:
         if not self.connected:
             return {"ok": False, "error": "Not connected. Use account=0 for paper mode."}
         if self.trading:
             return {"ok": False, "error": "Already trading"}
+        self.use_ml     = use_ml and _ML_AVAILABLE
         self.trading    = True
         mode = "Paper" if self.is_paper else "Live"
-        self.status_msg = f"{mode} Trading — {symbol} {timeframe}"
+        ml_tag = "+ML" if self.use_ml else ""
+        self.status_msg = f"{mode} Trading{ml_tag} — {symbol} {timeframe}"
         self._thread = threading.Thread(
             target=self._trading_loop,
             args=(symbol, timeframe, risk_pct, interval),
             daemon=True,
         )
         self._thread.start()
-        return {"ok": True, "mode": mode.lower()}
+        return {"ok": True, "mode": mode.lower(), "ml": self.use_ml}
 
     def stop_trading(self) -> dict:
         if not self.trading:
@@ -617,9 +688,12 @@ class MT5Trader:
             "trading"     : self.trading,
             "backend"     : self.backend,
             "mode"        : "paper" if self.is_paper else "live",
+            "use_ml"      : self.use_ml,
+            "ml_available": _ML_AVAILABLE,
             "status_msg"  : self.status_msg,
             "account"     : self.account,
             "last_signal" : self.last_signal,
+            "last_ml"     : self.last_ml,
             "positions"   : positions,
             "log"         : list(self.trade_log)[:50],
         }
