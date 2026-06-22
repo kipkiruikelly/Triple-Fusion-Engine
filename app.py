@@ -75,7 +75,8 @@ def build_features(df):
 
 def run_prediction(ticker):
     """Download data, engineer features, and return prediction results."""
-    df = yf.download(ticker, period="6mo", auto_adjust=True, progress=False)
+    yf_ticker = ticker.replace(".", "-")
+    df = yf.download(yf_ticker, period="6mo", auto_adjust=True, progress=False)
 
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -166,6 +167,11 @@ def predict():
     except Exception:
         return render_template("index.html",
                                error=f'Could not fetch data for "{ticker}". Please check the symbol and try again.')
+
+
+@app.route("/api/predict/", methods=["GET"])
+def api_predict_empty():
+    return jsonify({"status": "error", "message": "Please provide a ticker symbol, e.g. /api/predict/AAPL"}), 400
 
 
 @app.route("/api/predict/<ticker>", methods=["GET"])
