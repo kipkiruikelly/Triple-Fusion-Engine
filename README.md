@@ -1,84 +1,151 @@
-# 📈 Stock Market Price Prediction System
+# Stock Market Price Prediction System
+
 **Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University**
 
----
-
-## Project Structure
-```
-stock_prediction/
-│
-├── data/                         ← Generated data files (created on first run)
-│   ├── AAPL_featured.csv
-│   ├── X_train_AAPL.npy  ...
-│   ├── scaler_AAPL.pkl
-│   └── feature_cols_AAPL.pkl
-│
-├── models/                       ← Saved trained models (created after training)
-│   ├── lstm_model_AAPL/
-│   ├── rf_model_AAPL.pkl
-│   └── lr_model_AAPL.pkl
-│
-├── static/
-│   ├── css/style.css
-│   └── js/chart.js
-│
-├── templates/
-│   ├── index.html
-│   └── result.html
-│
-├── utils/                        ← Shared utility functions
-│
-├── data_pipeline.py              ← STEP 1: Data collection & feature engineering
-├── model_training.py             ← STEP 2: Model training & evaluation (coming next)
-├── app.py                        ← STEP 3: Flask web application (coming next)
-├── requirements.txt
-└── README.md
-```
+A machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. Combines Linear Regression, Random Forest, and LSTM models with a live MT5 trading engine powered by MetaApi.
 
 ---
 
-## Setup Instructions
+## Features
 
-### 1. Create and activate a virtual environment
-```bash
-python -m venv venv
+- **ML Price Predictions** — LR + RF models predict next-day closing price; LSTM slot available via Colab
+- **Technical Analysis** — RSI, MACD, Bollinger Bands, EMA, ATR computed live from yfinance data
+- **TradingView Charts** — Interactive live chart with RSI and MACD studies for any ticker
+- **User Accounts** — Registration, login, subscription tiers (Free: 5 predictions/day, Pro: unlimited)
+- **Algorithmic Trading** — ML-fused signals automatically placed as real or paper trades
+- **MetaApi Integration** — Connect to any MT5 broker from Mac, Linux, or Windows without Wine
+- **Paper Trading** — $10,000 virtual account with real market data; no broker needed
+- **Risk Management** — ATR-based SL/TP (1.5× / 3×), 1% risk per trade, 5% daily loss circuit-breaker
 
-# Windows
-venv\Scripts\activate
+---
 
-# Mac / Linux
-source venv/bin/activate
+## Architecture
+
+```
+data_pipeline.py   →  Data/AAPL_featured.csv + numpy arrays
+model_training.py  →  Saved Models/lr_model_AAPL.pkl + rf_model_AAPL.pkl + scalers
+predictor.py       →  shared ML inference layer (used by Flask + trading loop)
+app.py             →  Flask web app (auth, predictions, MT5 routes)
+mt5_trading.py     →  trading engine (MetaApi / paper / direct MT5 bridge)
 ```
 
-### 2. Install dependencies
+### Two-Scaler Architecture
+| Scaler | Used for |
+|---|---|
+| `Data/scaler_AAPL.pkl` | LSTM pipeline (19 raw OHLCV + indicator features) |
+| `Saved Models/scaler_sklearn_AAPL.pkl` | LR + RF pipeline (25 features incl. lag terms) |
+
+### ML Signal Fusion (trading loop)
+- **BUY** — LR predicts price up AND RF predicts positive return
+- **SELL** — both models predict down
+- **HOLD** — models disagree, or tech indicator conflicts with ML direction
+
+---
+
+## Setup
+
+### Requirements
+- Python 3.10+
+- Anaconda base environment (Python 3.13 works for everything except LSTM training)
+
+### 1. Install dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the data pipeline (Step 1)
+### 2. Build training data
 ```bash
 python data_pipeline.py
 ```
 
-### 4. Train the models (Step 2 — coming next)
+### 3. Train ML models
 ```bash
 python model_training.py
 ```
 
-### 5. Run the Flask app locally (Step 3 — coming next)
+### 4. LSTM training (optional)
+Open `Step2_LSTM_Training.ipynb` in Google Colab, run all cells, then download `lstm_model_AAPL.keras` into `Saved Models/`.
+
+### 5. Run the app
 ```bash
-flask run
+python app.py
 ```
-Then open: http://127.0.0.1:5000
+Open **http://127.0.0.1:5000**
 
 ---
 
-## Google Colab
-Open `Step1_Data_Collection_Pipeline.ipynb` in Google Colab and run all cells in order.
+## Algorithmic Trading
+
+### Option A — MetaApi (recommended, works on Mac/Linux/Windows)
+1. Sign up at [metaapi.cloud](https://metaapi.cloud) (free tier available)
+2. Add your broker's MT5 account in the MetaApi dashboard
+3. In the app: go to **MT5 Algo Trading** → **MetaApi** tab
+4. Paste your **API Token** and **Account ID** → Connect
+5. Set symbol, timeframe, risk % → **Start Algorithm**
+
+### Option B — Paper Trading (no account needed)
+- Click the **Paper** tab → Connect instantly
+- Trades execute against live yfinance prices with $10,000 virtual balance
+
+### Option C — Direct MT5 Bridge (Linux only)
+Requires Wine ≥ 10.12 with Python + MetaTrader5 + rpyc installed inside the Wine prefix.
+```bash
+sudo apt install wine-devel
+WINEPREFIX=~/.mt5 wine python.exe -m mt5linux -p 18812 --host 0.0.0.0
+```
+
+---
+
+## Project Structure
+
+```
+Stock-Market-Predictor/
+├── app.py                        # Flask app — auth, prediction routes, MT5 API
+├── predictor.py                  # Shared ML inference (run_prediction, ml_signal)
+├── mt5_trading.py                # Trading engine (MetaApi / paper / direct MT5)
+├── data_pipeline.py              # Step 1 — download OHLCV data, engineer features
+├── model_training.py             # Step 2 — train LR + RF, evaluate, save models
+├── requirements.txt
+├── Procfile                      # gunicorn entry point for deployment
+│
+├── Data/                         # Generated by data_pipeline.py
+│   ├── AAPL_featured.csv
+│   ├── X_train_AAPL.npy  ...
+│   └── scaler_AAPL.pkl
+│
+├── Saved Models/                 # Generated by model_training.py
+│   ├── lr_model_AAPL.pkl
+│   ├── rf_model_AAPL.pkl
+│   ├── scaler_sklearn_AAPL.pkl
+│   ├── feature_cols_sklearn_AAPL.pkl
+│   └── lstm_model_AAPL.keras    # from Colab
+│
+├── Web Pages/
+│   ├── index.html                # Home — ticker input, quota counter
+│   ├── result.html               # Prediction result + TradingView chart
+│   ├── mt5.html                  # Algo trading dashboard
+│   ├── login.html
+│   ├── register.html
+│   └── pricing.html
+│
+└── Step1_Data_Collection_Pipeline.ipynb
+    Step2_LSTM_Training.ipynb
+```
+
+---
+
+## Configuration
+
+| Constant | File | Default | Description |
+|---|---|---|---|
+| `TICKER` | `data_pipeline.py` | `AAPL` | Symbol used for training |
+| `FREE_DAILY_LIMIT` | `app.py` | `5` | Predictions per day for free users |
+| `MAX_POSITIONS` | `mt5_trading.py` | `3` | Max concurrent open positions |
+| `DAILY_LOSS_LIMIT` | `mt5_trading.py` | `0.05` | 5% equity drawdown halts trading |
+| `PAPER_BALANCE` | `mt5_trading.py` | `10000` | Starting virtual balance |
 
 ---
 
 ## Disclaimer
-Predictions generated by this system are for educational and informational purposes only.
-They do not constitute financial advice. Always conduct your own analysis before making
-any investment decisions.
+
+Predictions and trades generated by this system are for **educational purposes only**. They do not constitute financial advice. Past performance does not guarantee future results. Never risk capital you cannot afford to lose.
