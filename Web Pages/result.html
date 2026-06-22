@@ -476,8 +476,15 @@
   <div class="topbar-left">
     <div class="logo">Market<span>Predict</span></div>
   </div>
-  <div class="topbar-right">
-    <a href="/">New prediction</a>
+  <div style="display:flex;align-items:center;gap:10px;">
+    {% if current_user.is_pro %}
+      <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:0.5px;">PRO</span>
+    {% else %}
+      <span style="color:var(--muted);font-size:9.5pt;">{{ current_user.predictions_remaining }}/5 left</span>
+      <a href="/pricing" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">Upgrade</a>
+    {% endif %}
+    <a href="/" style="color:var(--muted);text-decoration:none;font-size:10pt;font-weight:500;padding:6px 12px;border-radius:4px;border:1px solid var(--border);">New prediction</a>
+    <a href="/logout" style="color:var(--muted);text-decoration:none;font-size:10pt;font-weight:500;padding:6px 12px;border-radius:4px;border:1px solid var(--border);">Logout</a>
   </div>
 </div>
 

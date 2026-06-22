@@ -8,4 +8,6 @@ matplotlib
 seaborn
 plotly
 flask
+flask-login
+flask-sqlalchemy
 gunicorn
