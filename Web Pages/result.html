@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ ticker }} — MarketPredict</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <script src="https://s3.tradingview.com/tv.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -293,7 +293,7 @@
     .chart-tab.active { background: var(--surface2); color: var(--white); }
     .chart-tab:hover { color: var(--text); }
 
-    #chart { width: 100%; height: 280px; }
+    #tradingview_chart { width: 100%; height: 420px; }
 
     /* ── Data grid ── */
     .data-grid {
@@ -602,17 +602,19 @@
       </div>
     </div>
 
-    <!-- Chart -->
+    <!-- TradingView Chart -->
     <div class="chart-section">
       <div class="chart-header">
-        <div class="chart-title">{{ ticker }} — Price History & Moving Averages</div>
-        <div class="chart-tabs">
-          <div class="chart-tab active">90D</div>
-          <div class="chart-tab">SMA 7</div>
-          <div class="chart-tab">SMA 21</div>
+        <div class="chart-title">{{ ticker }} — Live Chart</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          {% if current_user.is_pro %}
+            <a href="/mt5" style="background:var(--accent);color:var(--white);text-decoration:none;font-size:8.5pt;font-weight:700;padding:4px 10px;border-radius:4px;letter-spacing:0.3px;">&#9654; MT5 Algo Trading</a>
+          {% else %}
+            <a href="/pricing" style="color:var(--muted);text-decoration:none;font-size:8.5pt;font-weight:600;padding:4px 10px;border:1px solid var(--border);border-radius:4px;">Upgrade for MT5</a>
+          {% endif %}
         </div>
       </div>
-      <div id="chart"></div>
+      <div id="tradingview_chart"></div>
     </div>
 
     <!-- Data grid -->
@@ -755,61 +757,26 @@
 </footer>
 
 <script>
-  const dates  = {{ chart_dates | safe }};
-  const prices = {{ chart_prices | safe }};
-  const sma7   = {{ chart_sma7 | safe }};
-  const sma21  = {{ chart_sma21 | safe }};
-
-  Plotly.newPlot("chart", [
-    {
-      x: dates, y: prices,
-      type: "scatter", mode: "lines",
-      name: "Close Price",
-      line: { color: "#3B82F6", width: 2 },
-      fill: "tozeroy",
-      fillcolor: "rgba(59,130,246,0.06)"
-    },
-    {
-      x: dates, y: sma7,
-      type: "scatter", mode: "lines",
-      name: "SMA 7",
-      line: { color: "#FF6B35", width: 1.5, dash: "dot" }
-    },
-    {
-      x: dates, y: sma21,
-      type: "scatter", mode: "lines",
-      name: "SMA 21",
-      line: { color: "#00C076", width: 1.5, dash: "dot" }
-    }
-  ], {
-    margin: { t: 10, r: 16, b: 40, l: 60 },
-    paper_bgcolor: "#1A1F2E",
-    plot_bgcolor:  "#1A1F2E",
-    font: { family: "Inter, sans-serif", size: 10, color: "#7A8499" },
-    xaxis: {
-      showgrid: true,
-      gridcolor: "#2A3150",
-      tickfont: { size: 9, color: "#7A8499" },
-      linecolor: "#2A3150"
-    },
-    yaxis: {
-      showgrid: true,
-      gridcolor: "#2A3150",
-      tickprefix: "$",
-      tickfont: { size: 9, color: "#7A8499" },
-      linecolor: "#2A3150"
-    },
-    legend: {
-      orientation: "h", y: -0.18,
-      font: { color: "#7A8499", size: 9 }
-    },
-    hovermode: "x unified",
-    hoverlabel: {
-      bgcolor: "#222840",
-      bordercolor: "#2A3150",
-      font: { color: "#E2E8F0", size: 10 }
-    }
-  }, { responsive: true, displayModeBar: false });
+  new TradingView.widget({
+    "container_id" : "tradingview_chart",
+    "autosize"     : true,
+    "symbol"       : "{{ ticker }}",
+    "interval"     : "D",
+    "timezone"     : "Etc/UTC",
+    "theme"        : "dark",
+    "style"        : "1",
+    "locale"       : "en",
+    "backgroundColor"  : "rgba(26,31,46,1)",
+    "gridColor"        : "rgba(42,49,80,0.8)",
+    "hide_top_toolbar" : false,
+    "hide_legend"      : false,
+    "save_image"       : false,
+    "studies"          : ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+    "show_popup_button": false,
+    "withdateranges"   : true,
+    "allow_symbol_change": true,
+    "support_host"     : "https://www.tradingview.com"
+  });
 </script>
 
 </body>

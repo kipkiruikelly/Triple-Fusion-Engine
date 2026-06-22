@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MT5 Algo Trading — MarketPredict</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0F1217;
+      --surface: #1A1F2E;
+      --surface2:#222840;
+      --border:  #2A3150;
+      --text:    #E2E8F0;
+      --muted:   #7A8499;
+      --accent:  #FF6B35;
+      --green:   #00C076;
+      --red:     #FF4D4D;
+      --yellow:  #FBBF24;
+      --blue:    #3B82F6;
+      --white:   #FFFFFF;
+    }
+
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .btn-nav { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; transition: all 0.15s; }
+    .btn-nav:hover { color: var(--white); border-color: var(--accent); }
+
+    .layout { display: flex; flex: 1; }
+
+    /* Sidebar */
+    .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 16px; flex-shrink: 0; display: flex; flex-direction: column; gap: 20px; }
+
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 10pt; font-weight: 700; color: var(--white); display: flex; align-items: center; gap: 8px; }
+    .panel-body { padding: 16px; }
+
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .dot-red    { background: var(--red); }
+    .dot-yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+
+    .form-group { margin-bottom: 12px; }
+    .form-label { display: block; font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; }
+    .form-input, .form-select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
+      padding: 8px 10px; font-family: 'Inter', sans-serif; font-size: 10pt; color: var(--white);
+      outline: none; transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--accent); }
+    .form-select option { background: var(--surface2); }
+
+    .btn { width: 100%; padding: 9px; border-radius: 5px; font-family: 'Inter', sans-serif; font-size: 10pt; font-weight: 700; cursor: pointer; transition: opacity 0.15s; border: none; margin-bottom: 6px; }
+    .btn:hover { opacity: 0.85; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-connect  { background: var(--blue);   color: var(--white); }
+    .btn-start    { background: var(--green);  color: var(--white); }
+    .btn-stop     { background: var(--red);    color: var(--white); }
+    .btn-close    { background: var(--surface2); color: var(--yellow); border: 1px solid var(--yellow); }
+    .btn-logout   { background: none; color: var(--muted); border: 1px solid var(--border); }
+
+    .acct-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 9.5pt; }
+    .acct-row:last-child { border-bottom: none; }
+    .acct-row .label { color: var(--muted); }
+    .acct-row .value { font-weight: 700; color: var(--white); }
+    .acct-row .value.green { color: var(--green); }
+    .acct-row .value.red   { color: var(--red); }
+
+    /* Main content */
+    .content { flex: 1; padding: 24px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+
+    /* Signal card */
+    .signal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .sig-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+    .sig-label { font-size: 8.5pt; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+    .sig-value { font-size: 18pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; }
+    .sig-sub   { font-size: 9pt; color: var(--muted); margin-top: 3px; }
+
+    .action-badge {
+      display: inline-block; font-size: 13pt; font-weight: 700;
+      padding: 4px 16px; border-radius: 6px; letter-spacing: 0.5px;
+    }
+    .badge-buy  { background: rgba(0,192,118,0.15); color: var(--green); border: 1px solid rgba(0,192,118,0.3); }
+    .badge-sell { background: rgba(255,77,77,0.15);  color: var(--red);   border: 1px solid rgba(255,77,77,0.3); }
+    .badge-hold { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+    /* Log */
+    .log-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    .log-table th { padding: 8px 12px; text-align: left; color: var(--muted); font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 1px solid var(--border); }
+    .log-table td { padding: 8px 12px; border-bottom: 1px solid rgba(42,49,80,0.5); }
+    .log-table tr:last-child td { border-bottom: none; }
+    .log-table .t { color: var(--muted); white-space: nowrap; }
+    .log-table .m { color: var(--text); }
+    .lv-TRADE  { color: var(--accent); font-weight: 700; }
+    .lv-INFO   { color: var(--blue); }
+    .lv-SIGNAL { color: var(--yellow); }
+    .lv-WARN   { color: var(--yellow); font-weight: 700; }
+    .lv-ERROR  { color: var(--red); font-weight: 700; }
+    .lv-CLOSE  { color: var(--green); }
+
+    .log-wrap { max-height: 320px; overflow-y: auto; }
+
+    .disclaimer-mini { font-size: 9pt; color: var(--muted); padding: 10px 0; border-top: 1px solid var(--border); line-height: 1.5; }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .signal-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Market<span>Predict</span> <span style="font-size:9pt;color:var(--accent);font-weight:600;letter-spacing:0.5px;">MT5</span></div>
+  <div class="topbar-right">
+    <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;">PRO</span>
+    <a href="/" class="btn-nav">Dashboard</a>
+    <a href="/logout" class="btn-nav">Logout</a>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- Sidebar: connection + trading controls -->
+  <aside class="sidebar">
+
+    <!-- Connection -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="status-dot dot-red" id="connDot"></div>
+        MT5 Connection
+      </div>
+      <div class="panel-body">
+        <div id="connStatus" style="font-size:9.5pt;color:var(--muted);margin-bottom:12px;">
+          Backend: <strong style="color:var(--text);">{{ backend }}</strong><br>
+          Status: <span id="statusText">Disconnected</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Account Number</label>
+          <input class="form-input" type="number" id="account" placeholder="12345678" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input class="form-input" type="password" id="password" placeholder="••••••••" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Server</label>
+          <input class="form-input" type="text" id="server" placeholder="ICMarkets-Live" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bridge Host</label>
+          <input class="form-input" type="text" id="host" value="localhost" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Bridge Port</label>
+          <input class="form-input" type="number" id="port" value="18812" />
+        </div>
+        <button class="btn btn-connect" id="btnConnect" onclick="connectMT5()">Connect</button>
+        <button class="btn btn-logout" onclick="disconnectMT5()">Disconnect</button>
+        <div style="font-size:8.5pt;color:var(--muted);margin-top:8px;line-height:1.5;">
+          Requires the <strong>PythonMT5Bridge</strong> EA running in MT5 (Wine).
+        </div>
+      </div>
+    </div>
+
+    <!-- Account info -->
+    <div class="panel" id="acctPanel" style="display:none;">
+      <div class="panel-header">Account</div>
+      <div class="panel-body" id="acctBody"></div>
+    </div>
+
+    <!-- Trading controls -->
+    <div class="panel">
+      <div class="panel-header">Algorithm Settings</div>
+      <div class="panel-body">
+        <div class="form-group">
+          <label class="form-label">Symbol</label>
+          <input class="form-input" type="text" id="symbol" value="EURUSD" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Timeframe</label>
+          <select class="form-select" id="timeframe">
+            <option value="M1">M1 — 1 minute</option>
+            <option value="M5" selected>M5 — 5 minutes</option>
+            <option value="M15">M15 — 15 minutes</option>
+            <option value="H1">H1 — 1 hour</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Risk per Trade (%)</label>
+          <input class="form-input" type="number" id="riskPct" value="1.0" min="0.1" max="5" step="0.1" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Check Interval (seconds)</label>
+          <input class="form-input" type="number" id="interval" value="60" min="10" max="3600" />
+        </div>
+        <button class="btn btn-start" id="btnStart" onclick="startTrading()" disabled>&#9654; Start Algorithm</button>
+        <button class="btn btn-stop"  id="btnStop"  onclick="stopTrading()"  disabled>&#9632; Stop Algorithm</button>
+        <button class="btn btn-close" onclick="closeAll()">&#10005; Close All Positions</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+
+    <!-- Live signal -->
+    <div class="panel">
+      <div class="panel-header">Live Signal</div>
+      <div class="panel-body">
+        <div class="signal-grid">
+          <div class="sig-card">
+            <div class="sig-label">Signal</div>
+            <div class="sig-value"><span class="action-badge badge-hold" id="sigAction">HOLD</span></div>
+            <div class="sig-sub" id="sigScore">Score: —</div>
+          </div>
+          <div class="sig-card">
+            <div class="sig-label">RSI (14)</div>
+            <div class="sig-value" id="sigRsi">—</div>
+            <div class="sig-sub" id="sigRsiLabel">—</div>
+          </div>
+          <div class="sig-card">
+            <div class="sig-label">MACD Histogram</div>
+            <div class="sig-value" id="sigMacd" style="font-size:13pt;">—</div>
+            <div class="sig-sub" id="sigMacdLabel">—</div>
+          </div>
+          <div class="sig-card">
+            <div class="sig-label">ATR (14)</div>
+            <div class="sig-value" id="sigAtr" style="font-size:13pt;">—</div>
+            <div class="sig-sub" id="sigPrice">Price: —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trade log -->
+    <div class="panel" style="flex:1;">
+      <div class="panel-header" style="justify-content:space-between;">
+        <span>Trade Log</span>
+        <span id="tradingBadge" style="font-size:8.5pt;font-weight:700;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--muted);">IDLE</span>
+      </div>
+      <div class="panel-body" style="padding:0;">
+        <div class="log-wrap">
+          <table class="log-table">
+            <thead><tr><th>Time</th><th>Level</th><th>Message</th></tr></thead>
+            <tbody id="logBody">
+              <tr><td colspan="3" style="color:var(--muted);text-align:center;padding:20px;">Connect to MT5 to see live log</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="disclaimer-mini">
+      <strong>Risk Disclaimer:</strong> Algorithmic trading involves substantial risk of loss. Past performance does not guarantee future results.
+      The algorithm uses RSI + MACD confluence signals with ATR-based position sizing. A 1% daily loss limit is enforced.
+      Never trade with capital you cannot afford to lose. This is for educational purposes.
+    </div>
+
+  </main>
+</div>
+
+<script>
+  let pollTimer = null;
+
+  function connectMT5() {
+    const payload = {
+      account : parseInt(document.getElementById('account').value),
+      password: document.getElementById('password').value,
+      server  : document.getElementById('server').value,
+      host    : document.getElementById('host').value,
+      port    : parseInt(document.getElementById('port').value),
+    };
+    fetch('/mt5/connect', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        setConnected(true);
+        updateAccount(data.account);
+        startPolling();
+      } else {
+        alert('Connection failed: ' + data.error);
+      }
+    });
+  }
+
+  function disconnectMT5() {
+    fetch('/mt5/disconnect', { method: 'POST' }).then(() => {
+      setConnected(false);
+      stopPolling();
+    });
+  }
+
+  function startTrading() {
+    const payload = {
+      symbol   : document.getElementById('symbol').value.toUpperCase(),
+      timeframe: document.getElementById('timeframe').value,
+      risk_pct : parseFloat(document.getElementById('riskPct').value),
+      interval : parseInt(document.getElementById('interval').value),
+    };
+    fetch('/mt5/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        setTrading(true);
+      } else {
+        alert('Could not start: ' + data.error);
+      }
+    });
+  }
+
+  function stopTrading() {
+    fetch('/mt5/stop', { method: 'POST' }).then(r => r.json()).then(() => setTrading(false));
+  }
+
+  function closeAll() {
+    const symbol = document.getElementById('symbol').value.toUpperCase();
+    if (!confirm(`Close ALL open positions for ${symbol}?`)) return;
+    fetch('/mt5/close_all', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ symbol })
+    })
+    .then(r => r.json())
+    .then(data => alert(`Closed ${data.closed} position(s)`));
+  }
+
+  function poll() {
+    fetch('/mt5/status')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('statusText').textContent = data.status_msg;
+        setConnected(data.connected);
+        setTrading(data.trading);
+        if (data.account && Object.keys(data.account).length) updateAccount(data.account);
+        if (data.last_signal && data.last_signal.action) updateSignal(data.last_signal);
+        if (data.log) updateLog(data.log);
+      })
+      .catch(() => {});
+  }
+
+  function startPolling() { if (!pollTimer) pollTimer = setInterval(poll, 3000); }
+  function stopPolling()  { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+  function setConnected(yes) {
+    document.getElementById('connDot').className = 'status-dot ' + (yes ? 'dot-green' : 'dot-red');
+    document.getElementById('btnStart').disabled = !yes;
+    if (!yes) {
+      document.getElementById('btnStop').disabled = true;
+      document.getElementById('acctPanel').style.display = 'none';
+    } else {
+      document.getElementById('acctPanel').style.display = 'block';
+    }
+  }
+
+  function setTrading(yes) {
+    document.getElementById('btnStart').disabled =  yes;
+    document.getElementById('btnStop').disabled  = !yes;
+    const badge = document.getElementById('tradingBadge');
+    badge.textContent = yes ? 'RUNNING' : 'IDLE';
+    badge.style.background = yes ? 'rgba(0,192,118,0.15)' : 'var(--surface2)';
+    badge.style.color       = yes ? 'var(--green)' : 'var(--muted)';
+  }
+
+  function updateAccount(acct) {
+    document.getElementById('acctPanel').style.display = 'block';
+    const rows = [
+      ['Name',        acct.name],
+      ['Login',       acct.login],
+      ['Server',      acct.server],
+      ['Balance',     acct.currency + ' ' + Number(acct.balance).toLocaleString()],
+      ['Equity',      acct.currency + ' ' + Number(acct.equity).toLocaleString()],
+      ['Free Margin', acct.currency + ' ' + Number(acct.free_margin).toLocaleString()],
+      ['Leverage',    '1:' + acct.leverage],
+    ];
+    document.getElementById('acctBody').innerHTML = rows.map(([l,v]) =>
+      `<div class="acct-row"><span class="label">${l}</span><span class="value">${v}</span></div>`
+    ).join('');
+  }
+
+  function updateSignal(sig) {
+    const el    = document.getElementById('sigAction');
+    const cls   = sig.action === 'BUY' ? 'badge-buy' : sig.action === 'SELL' ? 'badge-sell' : 'badge-hold';
+    el.textContent = sig.action;
+    el.className   = 'action-badge ' + cls;
+    document.getElementById('sigScore').textContent   = 'Score: ' + sig.score;
+    document.getElementById('sigRsi').textContent     = sig.rsi ?? '—';
+    document.getElementById('sigRsiLabel').textContent = sig.rsi < 30 ? 'Oversold' : sig.rsi > 70 ? 'Overbought' : 'Neutral';
+    document.getElementById('sigMacd').textContent    = sig.macd ?? '—';
+    document.getElementById('sigMacdLabel').textContent = sig.macd > 0 ? 'Bullish' : 'Bearish';
+    document.getElementById('sigAtr').textContent     = sig.atr ?? '—';
+    document.getElementById('sigPrice').textContent   = 'Price: ' + (sig.price ?? '—');
+  }
+
+  function updateLog(entries) {
+    if (!entries.length) return;
+    const body = document.getElementById('logBody');
+    body.innerHTML = entries.map(e =>
+      `<tr>
+        <td class="t">${e.time}</td>
+        <td class="lv-${e.level}">${e.level}</td>
+        <td class="m">${e.msg}</td>
+      </tr>`
+    ).join('');
+  }
+</script>
+
+</body>
+</html>

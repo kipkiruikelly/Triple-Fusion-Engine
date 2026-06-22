@@ -28,6 +28,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from mt5_trading import trader as mt5_trader
 
 app = Flask(__name__, template_folder="Web Pages", static_folder="Static Files")
 app.secret_key = os.environ.get("SECRET_KEY", "smp-dev-key-2025")
@@ -322,6 +323,79 @@ def predict():
     except Exception:
         return render_template("index.html",
                                error=f'Could not fetch data for "{ticker}". Please check the symbol and try again.')
+
+
+# ── MT5 routes (Pro only) ───────────────────────────────────────────────────
+
+def pro_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({"ok": False, "error": "Login required"}), 401
+        if not current_user.is_pro:
+            return jsonify({"ok": False, "error": "Pro subscription required"}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route("/mt5")
+@login_required
+def mt5_dashboard():
+    if not current_user.is_pro:
+        return redirect(url_for('pricing'))
+    return render_template("mt5.html", backend=mt5_trader.backend)
+
+
+@app.route("/mt5/connect", methods=["POST"])
+@pro_required
+def mt5_connect():
+    data     = request.get_json()
+    account  = int(data.get("account", 0))
+    password = data.get("password", "")
+    server   = data.get("server", "")
+    host     = data.get("host", "localhost")
+    port     = int(data.get("port", 18812))
+    return jsonify(mt5_trader.connect(account, password, server, host, port))
+
+
+@app.route("/mt5/disconnect", methods=["POST"])
+@pro_required
+def mt5_disconnect():
+    mt5_trader.disconnect()
+    return jsonify({"ok": True})
+
+
+@app.route("/mt5/start", methods=["POST"])
+@pro_required
+def mt5_start():
+    data      = request.get_json()
+    symbol    = data.get("symbol", "EURUSD")
+    timeframe = data.get("timeframe", "M5")
+    risk_pct  = float(data.get("risk_pct", 1.0))
+    interval  = int(data.get("interval", 60))
+    return jsonify(mt5_trader.start_trading(symbol, timeframe, risk_pct, interval))
+
+
+@app.route("/mt5/stop", methods=["POST"])
+@pro_required
+def mt5_stop():
+    return jsonify(mt5_trader.stop_trading())
+
+
+@app.route("/mt5/close_all", methods=["POST"])
+@pro_required
+def mt5_close_all():
+    data   = request.get_json()
+    symbol = data.get("symbol", "EURUSD")
+    n      = mt5_trader.close_all(symbol)
+    return jsonify({"ok": True, "closed": n})
+
+
+@app.route("/mt5/status")
+@pro_required
+def mt5_status():
+    return jsonify(mt5_trader.get_status())
 
 
 @app.route("/api/predict/", methods=["GET"])

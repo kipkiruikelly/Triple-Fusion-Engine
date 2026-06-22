@@ -10,4 +10,5 @@ plotly
 flask
 flask-login
 flask-sqlalchemy
+mt5linux
 gunicorn
