@@ -27,12 +27,16 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
-DEFAULT_TICKERS = ["AAPL", "TSLA", "MSFT", "GOOGL", "NVDA", "META", "AMZN"]
+DEFAULT_TICKERS = ["AAPL", "TSLA", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "NDX"]
+
+# Tickers that require a different yfinance symbol than their model name
+YF_SYMBOL_MAP = {"NDX": "^NDX"}
 
 
 def fetch_data(ticker: str) -> pd.DataFrame:
-    yf_ticker = ticker.replace(".", "-")
-    df = yf.download(yf_ticker, period="5y", auto_adjust=True, progress=False)
+    yf_ticker = YF_SYMBOL_MAP.get(ticker, ticker.replace(".", "-"))
+    period    = "max" if ticker == "NDX" else "5y"
+    df = yf.download(yf_ticker, period=period, auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
