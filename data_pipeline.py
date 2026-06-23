@@ -27,7 +27,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 # Configuration
-TICKER      = "AAPL"
+TICKER      = "QQQ"
 START_DATE  = "2019-01-01"
 END_DATE    = "2026-06-01"
 LOOKBACK    = 60

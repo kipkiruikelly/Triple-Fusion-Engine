@@ -25,10 +25,10 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
 print("Loading ML models...")
-lr_model     = joblib.load(os.path.join(MODELS_DIR, "lr_model_AAPL.pkl"))
-rf_model     = joblib.load(os.path.join(MODELS_DIR, "rf_model_AAPL.pkl"))
-scaler       = joblib.load(os.path.join(MODELS_DIR, "scaler_sklearn_AAPL.pkl"))
-feature_cols = joblib.load(os.path.join(MODELS_DIR, "feature_cols_sklearn_AAPL.pkl"))
+lr_model     = joblib.load(os.path.join(MODELS_DIR, "lr_model_QQQ.pkl"))
+rf_model     = joblib.load(os.path.join(MODELS_DIR, "rf_model_QQQ.pkl"))
+scaler       = joblib.load(os.path.join(MODELS_DIR, "scaler_sklearn_QQQ.pkl"))
+feature_cols = joblib.load(os.path.join(MODELS_DIR, "feature_cols_sklearn_QQQ.pkl"))
 print("ML models loaded.")
 
 

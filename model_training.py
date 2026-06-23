@@ -34,7 +34,7 @@ sns.set_theme(style="whitegrid")
 
 
 # Configuration
-TICKER      = "AAPL"
+TICKER      = "QQQ"
 TRAIN_RATIO = 0.80
 VAL_RATIO   = 0.10
 
