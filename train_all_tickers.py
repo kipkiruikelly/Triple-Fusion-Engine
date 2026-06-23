@@ -27,7 +27,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
-DEFAULT_TICKERS = ["AAPL", "TSLA", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "NDX"]
+DEFAULT_TICKERS = ["AAPL", "TSLA", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "NDX", "QQQ"]
 
 # Tickers that require a different yfinance symbol than their model name
 YF_SYMBOL_MAP = {"NDX": "^NDX"}
