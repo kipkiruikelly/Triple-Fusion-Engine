@@ -1,6 +1,6 @@
 """
 predictor.py
-Shared ML prediction layer for MarketPredict.
+Shared ML prediction layer for ML-QTS.
 
 Loads LR + RF models once and exposes two public functions:
   run_prediction(ticker) → full result dict (used by Flask routes)

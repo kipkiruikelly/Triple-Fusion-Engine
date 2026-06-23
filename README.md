@@ -1,4 +1,4 @@
-# Stock Market Price Prediction System
+# ML-based Quantitative Trading System
 
 **Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University**
 

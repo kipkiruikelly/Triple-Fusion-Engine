@@ -1,6 +1,6 @@
 """
 mt5_trading.py
-MT5 algorithmic trading engine for MarketPredict.
+MT5 algorithmic trading engine for ML-QTS.
 
 Two modes:
   - LIVE: Connects to MetaTrader 5 via Wine/mt5linux rpyc bridge.
@@ -144,7 +144,7 @@ class MetaApiBackend:
     # ── Trading ───────────────────────────────────────────────────────────────
 
     async def _do_place(self, symbol, action, lot, sl, tp):
-        opts = {"comment": "MarketPredict algo", "clientId": "mp-algo"}
+        opts = {"comment": "ML-QTS algo", "clientId": "mp-algo"}
         if action == "BUY":
             return await self._conn.create_market_buy_order(symbol, lot, sl, tp, opts)
         else:
@@ -768,7 +768,7 @@ class MT5Trader:
             "tp"           : tp,
             "deviation"    : 20,
             "magic"        : 20250622,
-            "comment"      : "MarketPredict algo",
+            "comment"      : "ML-QTS algo",
             "type_time"    : mt5.ORDER_TIME_GTC,
             "type_filling" : mt5.ORDER_FILLING_IOC,
         }
@@ -817,7 +817,7 @@ class MT5Trader:
                 "price"        : price,
                 "deviation"    : 20,
                 "magic"        : 20250622,
-                "comment"      : "MarketPredict close",
+                "comment"      : "ML-QTS close",
                 "type_time"    : mt5.ORDER_TIME_GTC,
                 "type_filling" : mt5.ORDER_FILLING_IOC,
             }

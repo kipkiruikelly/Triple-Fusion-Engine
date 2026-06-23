@@ -1,6 +1,6 @@
 """
 app.py
-Stock Market Price Prediction System
+ML-based Quantitative Trading System
 
 Flask web application with user authentication and subscription tiers.
 Free accounts: 5 predictions/day. Pro accounts: unlimited.
@@ -309,6 +309,6 @@ def api_predict(ticker):
 
 
 if __name__ == "__main__":
-    print("Stock Market Price Prediction System")
+    print("ML-based Quantitative Trading System")
     print("Running at: http://127.0.0.1:5000\n")
     app.run(debug=True, port=5000)

@@ -1,6 +1,6 @@
 """
 data_pipeline.py
-Stock Market Price Prediction System
+ML-based Quantitative Trading System
 
 Downloads historical OHLCV data for a given ticker, engineers technical
 indicator features, splits the dataset chronologically, scales the features,
@@ -203,7 +203,7 @@ def save_charts(df, df_train, df_val, df_test, ticker):
 
 
 def main():
-    print(f"\nStock Market Price Prediction System — Data Pipeline")
+    print(f"\nML-based Quantitative Trading System — Data Pipeline")
     print(f"Ticker: {TICKER} | Period: {START_DATE} to {END_DATE}\n")
 
     df_raw      = download_data(TICKER, START_DATE, END_DATE)

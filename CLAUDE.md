@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Stock Market Price Prediction System — a Python ML project that predicts next-day closing prices using Linear Regression, Random Forest, and LSTM models, served via a Flask web app.
+ML-based Quantitative Trading System — a Python ML project that predicts next-day closing prices using Linear Regression, Random Forest, and LSTM models, served via a Flask web app.
 
 **Author:** Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
 

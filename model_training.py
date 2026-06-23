@@ -1,6 +1,6 @@
 """
 model_training.py
-Stock Market Price Prediction System
+ML-based Quantitative Trading System
 
 Loads the prepared dataset from the Data directory, trains Linear Regression
 and Random Forest models, evaluates both on the held-out test set, and saves
@@ -197,7 +197,7 @@ def save_charts(y_true, lr_pred, rf_pred, rf_model):
 
 
 def main():
-    print(f"\nStock Market Price Prediction System — Model Training")
+    print(f"\nML-based Quantitative Trading System — Model Training")
     print(f"Ticker: {TICKER}\n")
 
     data = load_data(TICKER)
