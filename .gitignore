@@ -1,11 +1,13 @@
 .DS_Store
 __pycache__/
 *.pyc
+*.log
 venv/
 .env
 
-# User database
+# User databases
 instance/
+Data/users.db
 
 # Anaconda
 *.egg-info/

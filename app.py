@@ -14,16 +14,25 @@ Author: Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
 """
 
 import os
+import time
+import logging
 import warnings
 warnings.filterwarnings("ignore")
 
 from datetime import date
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, g
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from predictor import run_prediction
 from mt5_trading import trader as mt5_trader
+from azure_storage import download_models_from_azure, azure_enabled
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+_APP_START   = time.time()
+_metrics     = {"requests": 0, "predictions": 0, "total_latency": 0.0}
 
 app = Flask(__name__, template_folder="Web Pages", static_folder="Static Files")
 app.secret_key = os.environ.get("SECRET_KEY", "smp-dev-key-2025")
@@ -299,13 +308,61 @@ def api_predict(ticker):
         return jsonify({"status": "error",
                         "message": f"Daily limit of {FREE_DAILY_LIMIT} predictions reached. "
                                    "Upgrade to Pro for unlimited access."}), 429
+    t0 = time.time()
     try:
+        _try_azure_download(ticker.upper())
         result = run_prediction(ticker.upper())
         for key in ["chart_dates", "chart_prices", "chart_sma7", "chart_sma21"]:
             result.pop(key, None)
+        _metrics["predictions"] += 1
+        _metrics["total_latency"] += time.time() - t0
         return jsonify({"status": "success", "data": result})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 400
+
+
+# ── Monitoring endpoints ─────────────────────────────────────────────────────
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status":   "ok",
+        "uptime_s": round(time.time() - _APP_START, 1),
+    })
+
+
+@app.route("/metrics")
+def metrics():
+    reqs = _metrics["requests"]
+    avg  = (_metrics["total_latency"] / _metrics["predictions"]
+            if _metrics["predictions"] > 0 else 0)
+    return jsonify({
+        "uptime_s":        round(time.time() - _APP_START, 1),
+        "total_requests":  reqs,
+        "total_predictions": _metrics["predictions"],
+        "avg_latency_s":   round(avg, 3),
+        "azure_enabled":   azure_enabled(),
+    })
+
+
+# ── Request hooks ────────────────────────────────────────────────────────────
+
+@app.before_request
+def before_request():
+    g.start_time = time.time()
+    _metrics["requests"] += 1
+
+
+# ── Azure helper ─────────────────────────────────────────────────────────────
+
+def _try_azure_download(ticker: str):
+    """Download models from Azure if not present locally."""
+    models_dir = os.path.join(BASE_DIR, "Saved Models")
+    needed = f"lr_model_{ticker}.pkl"
+    if not os.path.exists(os.path.join(models_dir, needed)):
+        if azure_enabled():
+            logger.info("Models for %s not found locally — trying Azure...", ticker)
+            download_models_from_azure(ticker)
 
 
 if __name__ == "__main__":

@@ -1,71 +1,73 @@
-# CLAUDE.md
+# Stock Market Price Prediction System — Claude Code Instructions
+# Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
+# GitHub: kipkiruikelly/Stock-Market-Predictor
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## PROJECT OVERVIEW
+ML-based Quantitative Trading System — a Python ML web application that predicts the next trading day's closing price for any listed stock ticker using Linear Regression, Random Forest, and LSTM models. Built with Flask and deployed on Render. Developed as a diploma project for the Diploma in AI and Cloud Technologies (DAC) programme at Zetech University, Kenya.
 
-## Project Overview
+---
 
-ML-based Quantitative Trading System — a Python ML project that predicts next-day closing prices using Linear Regression, Random Forest, and LSTM models, served via a Flask web app.
+## WHAT HAS BEEN BUILT (DO NOT BREAK THESE)
 
-**Author:** Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
+### Core Python files
+- `app.py` — Flask web app. Auth via Flask-Login + SQLAlchemy. Per-ticker model cache with Azure fallback. Routes: /login, /register, /logout, /, /predict, /api/predict/<ticker>, /health, /metrics. Monitoring counters in `_metrics` dict. Request timing via `g`.
+- `auth.py` — Lightweight SQLite auth module (session-based alternative). DB: Data/users.db. Functions: init_db(), create_user(), verify_user().
+- `predictor.py` — Shared ML inference layer. Loads LR+RF models, fetches live yfinance data, engineers 25 features, returns prediction dict. Used by app.py and trading loop.
+- `data_pipeline.py` — Downloads 5y OHLCV, engineers 19 features using `ta` library, saves to Data/.
+- `model_training.py` — Trains LR + RF on AAPL with 25 features. Saves to Saved Models/.
+- `train_all_tickers.py` — Trains LR+RF for 7 tickers: AAPL, TSLA, MSFT, GOOGL, NVDA, META, AMZN. Supports --upload flag for Azure.
+- `azure_storage.py` — Azure Blob Storage integration. Container: trained-models. Auth: AZURE_STORAGE_CONNECTION_STRING env var. Functions: upload_models_to_azure(), download_models_from_azure(), list_models_in_azure(), azure_enabled().
+- `mt5_trading.py` — MT5/MetaApi/Paper trading engine for Pro users.
 
-## Environment
+### Web Pages (stored in `Web Pages/` — do not rename)
+- `index.html` — Dark financial dashboard. Orange accent (#FF6B35).
+- `result.html` — Prediction results with TradingView chart, model comparison, indicator cards.
+- `login.html` — Dark-themed login form.
+- `register.html` — Dark-themed registration form.
+- `pricing.html` — Subscription pricing page.
+- `mt5.html` — MT5 algorithmic trading dashboard (Pro only).
 
-Uses the Anaconda `base` environment (Python 3.13). TensorFlow is **not compatible with Python 3.13**, so the LSTM model is trained on Google Colab only.
+### Infrastructure
+- `Dockerfile` — Python 3.11-slim, non-root appuser, Gunicorn on port 5000.
+- `.dockerignore` — Excludes venv/, __pycache__, .git, notebooks, .DS_Store, .env, logs.
+- `.python-version` — 3.11.9 (pins for Render).
+- `Procfile` — web: gunicorn app:app
+- `requirements.txt` — Pinned versions. Key: flask==3.0.3, ta==0.11.0, azure-storage-blob==12.19.0.
 
-```bash
-# Activate base conda env if not already active
-conda activate base
+### Saved Models (AAPL, trained 2019-2024)
+- LR: MAE $1.64, RMSE $2.20, R2 0.9321, Dir. Acc 50.4%
+- RF: MAE $9.50, RMSE $11.74, R2 -0.9295, Dir. Acc 52.1%
+- LSTM: MAE $5.99, RMSE $6.70, R2 0.4429, Dir. Acc 48.4%
 
-# Install dependencies
-pip install -r requirements.txt
-```
+---
 
-## Workflow (must run in order)
+## IMPORTANT CONSTRAINTS
 
-**Step 1 — Data pipeline** (downloads OHLCV data, engineers features, saves to `Data/`)
-```bash
-python data_pipeline.py
-```
+### Never change these
+- `ta` library — do NOT switch to pandas_ta
+- `template_folder="Web Pages"` — do not rename folder
+- `static_folder="Static Files"` — do not rename folder
+- `Saved Models/` and `Data/` folder names
+- Real model metrics above — these are actual test-set results
 
-**Step 2 — Train sklearn models** (Linear Regression + Random Forest, saves to `Saved Models/`)
-```bash
-python model_training.py
-```
+### Azure Storage
+- Container: `trained-models` (private)
+- Auth: `AZURE_STORAGE_CONNECTION_STRING` env var
+- Files per ticker: lr_model_{T}.pkl, rf_model_{T}.pkl, scaler_sklearn_{T}.pkl, feature_cols_sklearn_{T}.pkl
+- app.py tries Azure download as fallback if local model files missing
 
-**Step 2b — LSTM training** — open `Step2_LSTM_Training.ipynb` in Google Colab and run all cells. Download `lstm_model_AAPL.keras` and place it in `Saved Models/`.
+### Flask config
+- `@login_required` protects `/` and `/predict`
+- `session["username"]` / Flask-Login both supported
+- `auth.py` stays as separate module
 
-**Step 3 — Run the Flask app**
-```bash
-python app.py          # development (http://127.0.0.1:5000)
-flask run              # alternative
-gunicorn app:app       # production (Procfile)
-```
+---
 
-## Architecture
-
-### Data Flow
-```
-data_pipeline.py  →  Data/AAPL_featured.csv + .npy arrays + scaler_AAPL.pkl
-model_training.py →  Saved Models/lr_model_AAPL.pkl + rf_model_AAPL.pkl + scaler_sklearn_AAPL.pkl
-app.py            ←  loads models at startup, fetches live 6-month data via yfinance per request
-```
-
-### Two Separate Scalers
-- `Data/scaler_AAPL.pkl` — fit on the LSTM pipeline's 19 raw OHLCV+indicator features
-- `Saved Models/scaler_sklearn_AAPL.pkl` — fit on the sklearn pipeline's 25 features (adds 5 Close lags + 3 Return lags, drops Open and BB_Mid)
-
-These are not interchangeable. `app.py` uses the sklearn scaler.
-
-### Flask App (`app.py`)
-- Templates in `Web Pages/` (not `templates/`), static files in `Static Files/`
-- Models loaded once at startup via `joblib.load()`
-- `POST /predict` — form submission, returns `result.html`
-- `GET /api/predict/<ticker>` — JSON API (omits chart data from response)
-- `build_features()` replicates feature engineering from `data_pipeline.py` for live inference
-- LSTM prediction slot exists but returns `"N/A"` — the keras model is loaded only if integrated later
-
-### Configuration Constants
-Both `data_pipeline.py` and `model_training.py` have a `TICKER = "AAPL"` constant at the top. Change it to run the pipeline for a different stock. The app accepts any ticker via form/API input at runtime.
-
-### Target Variable
-`model_training.py` predicts `Next_Close` (tomorrow's closing price via `df["Close"].shift(-1)`). The confidence score in `app.py` is a heuristic based on predicted change relative to recent 20-day volatility.
+## ENVIRONMENT
+- Dev: MacBook Air (Apple Silicon), Python 3.13 via Anaconda
+- TensorFlow does NOT work locally — LSTM shows N/A in UI
+- Deployment: Render, Python 3.11.9
+- Local run: `python app.py` → http://127.0.0.1:5000
+- Docker: `docker build -t stock-predictor . && docker run -p 5000:5000 stock-predictor`
+- Train all tickers: `python train_all_tickers.py`
+- Train + upload: `python train_all_tickers.py --upload`
