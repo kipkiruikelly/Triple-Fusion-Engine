@@ -24,7 +24,8 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, g
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from predictor import run_prediction
+from concurrent.futures import ThreadPoolExecutor
+from predictor import run_prediction, ml_signal
 from mt5_trading import trader as mt5_trader
 from azure_storage import download_models_from_azure, azure_enabled
 
@@ -307,6 +308,33 @@ def watchlist_remove():
     WatchlistItem.query.filter_by(user_id=current_user.id, ticker=ticker).delete()
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/api/watchlist/signals")
+@login_required
+def watchlist_signals():
+    """Return live ML signals for every ticker in the user's watchlist."""
+    items = WatchlistItem.query.filter_by(user_id=current_user.id).all()
+    tickers = [i.ticker for i in items]
+    if not tickers:
+        return jsonify({})
+
+    def _get(ticker):
+        sig = ml_signal(ticker, "1d")
+        price = sig.get("current_price", 0)
+        lr    = sig.get("lr_pred", price)
+        chg   = round((lr - price) / price * 100, 2) if price else 0
+        return ticker, {
+            "price": price,
+            "chg":   chg,
+            "dir":   sig.get("action", "HOLD"),
+            "conf":  sig.get("confidence", 0),
+        }
+
+    with ThreadPoolExecutor(max_workers=min(len(tickers), 6)) as ex:
+        results = dict(ex.map(lambda t: _get(t), tickers))
+
+    return jsonify(results)
 
 
 @app.route("/history")

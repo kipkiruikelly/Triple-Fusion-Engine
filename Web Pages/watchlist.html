@@ -288,40 +288,36 @@ watchlist.forEach(t => {
   if (el) el.textContent = names[t] || t;
 });
 
-// Simulated prices (replace with live API fetch in production)
-const mockData = {
-  AAPL:{price:189.30,chg:1.24,dir:'BUY',conf:68},
-  TSLA:{price:177.46,chg:-2.31,dir:'SELL',conf:72},
-  MSFT:{price:415.32,chg:0.64,dir:'BUY',conf:61},
-  GOOGL:{price:168.45,chg:0.91,dir:'BUY',conf:59},
-  NVDA:{price:875.40,chg:3.12,dir:'BUY',conf:78},
-  META:{price:512.30,chg:2.87,dir:'BUY',conf:65},
-  AMZN:{price:182.01,chg:-1.08,dir:'SELL',conf:55},
-  NDX:{price:16742.39,chg:0.78,dir:'BUY',conf:63},
-  QQQ:{price:444.85,chg:0.76,dir:'BUY',conf:62},
-};
+function applySignals(data) {
+  let bulls = 0, bears = 0;
+  watchlist.forEach(t => {
+    const d = data[t];
+    if (!d) return;
+    const pp = document.getElementById('price-' + t);
+    const pc = document.getElementById('chg-' + t);
+    const ps = document.getElementById('sig-' + t);
+    const pf = document.getElementById('conf-' + t);
+    if (pp) pp.textContent = '$' + Number(d.price).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
+    if (pc) { pc.textContent = (d.chg > 0 ? '+' : '') + d.chg + '%'; pc.className = 'cell-chg ' + (d.chg >= 0 ? 'up' : 'dn'); }
+    if (ps) {
+      const cls = d.dir === 'BUY' ? 'signal-buy' : d.dir === 'SELL' ? 'signal-sell' : 'signal-hold';
+      ps.innerHTML = `<span class="signal-pill ${cls}">${d.dir}</span>`;
+      if (d.dir === 'BUY') bulls++; else if (d.dir === 'SELL') bears++;
+    }
+    if (pf) { pf.textContent = Number(d.conf).toFixed(1) + '%'; pf.style.color = d.conf >= 65 ? 'var(--green)' : 'var(--muted)'; }
+  });
+  const bc = document.getElementById('bullCount');
+  const br = document.getElementById('bearCount');
+  if (bc) bc.textContent = bulls;
+  if (br) br.textContent = bears;
+}
 
-let bulls = 0, bears = 0;
-watchlist.forEach(t => {
-  const d = mockData[t];
-  if (!d) return;
-  const pp = document.getElementById('price-' + t);
-  const pc = document.getElementById('chg-' + t);
-  const ps = document.getElementById('sig-' + t);
-  const pf = document.getElementById('conf-' + t);
-  if (pp) pp.textContent = '$' + d.price.toLocaleString();
-  if (pc) { pc.textContent = (d.chg > 0 ? '+' : '') + d.chg + '%'; pc.className = 'cell-chg ' + (d.chg >= 0 ? 'up' : 'dn'); }
-  if (ps) {
-    const cls = d.dir === 'BUY' ? 'signal-buy' : d.dir === 'SELL' ? 'signal-sell' : 'signal-hold';
-    ps.innerHTML = `<span class="signal-pill ${cls}">${d.dir}</span>`;
-    if (d.dir === 'BUY') bulls++; else if (d.dir === 'SELL') bears++;
-  }
-  if (pf) { pf.textContent = d.conf + '%'; pf.style.color = d.conf >= 65 ? 'var(--green)' : 'var(--muted)'; }
-});
-const bc = document.getElementById('bullCount');
-const br = document.getElementById('bearCount');
-if (bc) bc.textContent = bulls;
-if (br) br.textContent = bears;
+if (watchlist.length) {
+  fetch('/api/watchlist/signals')
+    .then(r => r.json())
+    .then(applySignals)
+    .catch(() => {});
+}
 </script>
 </body>
 </html>

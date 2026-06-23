@@ -147,6 +147,29 @@ def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
+    # ICT 2022 — IPDA lookback levels (20 / 40 / 60 bars)
+    for n in [20, 40, 60]:
+        df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
+        df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
+
+    # ICT 2022 — Equal Highs / Equal Lows (liquidity pools)
+    tol   = close * 0.001
+    r10h  = high.rolling(10).max().shift(1)
+    r10l  = low.rolling(10).min().shift(1)
+    df["Equal_Highs"] = ((high - r10h).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
+    df["Equal_Lows"]  = ((low  - r10l).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
+
+    # ICT 2022 — OTE zone (Optimal Trade Entry: 0.62–0.79 Fibonacci of 20-bar swing)
+    rng20 = (sh20 - sl20).replace(0, np.nan)
+    df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
+    df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
+
+    # ICT 2022 — Consequent Encroachment (CE) of most recent FVG midpoint
+    bull_ce_level = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
+    bear_ce_level = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
+    df["CE_Bull_FVG_Dist"] = ((close - bull_ce_level) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+    df["CE_Bear_FVG_Dist"] = ((bear_ce_level - close) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+
     return df
 
 
@@ -183,6 +206,36 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     dow = et_idx.dayofweek
     df["Day_Sin"] = np.sin(2 * np.pi * dow / 5)
     df["Day_Cos"] = np.cos(2 * np.pi * dow / 5)
+
+    # ICT 2022 — Silver Bullet windows (ET)
+    df["In_SilverBullet_AM"] = ((hour >= 10) & (hour < 11)).astype(int)
+    df["In_SilverBullet_PM"] = ((hour >= 14) & (hour < 15)).astype(int)
+
+    # ICT 2022 — Asia session range (8 PM – 2 AM ET)
+    is_asia = (hour >= 20) | (hour < 2)
+    atr_h2 = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"], window=14) \
+               .average_true_range().fillna(df["Close"] * 0.01)
+    asia_high_ref = df["High"].where(is_asia).rolling(14, min_periods=1).max().ffill()
+    asia_low_ref  = df["Low"].where(is_asia).rolling(14, min_periods=1).min().ffill()
+    df["Asia_High_Dist"]    = ((asia_high_ref - df["Close"]) / (atr_h2 + 1e-8)).clip(-10, 10).fillna(0)
+    df["Asia_Low_Dist"]     = ((df["Close"] - asia_low_ref)  / (atr_h2 + 1e-8)).clip(-10, 10).fillna(0)
+    df["Asia_Range_Norm"]   = ((asia_high_ref - asia_low_ref) / (atr_h2 + 1e-8)).clip(0, 20).fillna(0)
+    df["Price_vs_AsiaHigh"] = (df["Close"] > asia_high_ref).astype(int)
+    df["Price_vs_AsiaLow"]  = (df["Close"] < asia_low_ref).astype(int)
+
+    # ICT 2022 — New Week Opening Gap (Monday open vs previous Friday close)
+    is_monday  = (et_idx.dayofweek == 0)
+    prev_close = df["Close"].shift(1)
+    nwog_open  = df["Open"].where(is_monday).ffill()
+    nwog_close = prev_close.where(is_monday).ffill()
+    nwog_lo    = nwog_close.clip(lower=0)
+    nwog_hi    = nwog_open
+    df["In_NWOG"] = (
+        nwog_hi.notna() & nwog_lo.notna() &
+        (df["Close"] >= nwog_lo) & (df["Close"] <= nwog_hi)
+    ).astype(int)
+    week_gap = (df["Open"] - prev_close).where(is_monday).ffill().fillna(0)
+    df["NWOG_Gap_Norm"] = (week_gap / (atr_h2 + 1e-8)).clip(-5, 5)
 
     return df
 
