@@ -556,8 +556,14 @@
     <!-- Stock header -->
     <div class="stock-header">
       <div class="stock-header-left">
-        <div class="ticker-name">{{ ticker }}</div>
-        <div class="company-label">As of {{ as_of }} &nbsp;&middot;&nbsp; Next-Day Prediction</div>
+        <div class="ticker-name">
+          {{ ticker }}
+          <span style="font-size:10pt;font-weight:600;padding:3px 10px;border-radius:4px;margin-left:10px;vertical-align:middle;
+            {% if interval == '1h' %}background:rgba(59,130,246,0.15);color:#60A5FA;{% else %}background:rgba(255,107,53,0.15);color:var(--accent);{% endif %}">
+            {{ interval|upper }}
+          </span>
+        </div>
+        <div class="company-label">As of {{ as_of }} &nbsp;&middot;&nbsp; {{ horizon }} Prediction</div>
       </div>
       <div class="stock-header-right">
         <div class="current-price">${{ current_price }}</div>
@@ -565,7 +571,7 @@
           {% if price_change >= 0 %}+{% endif %}${{ price_change }}
           &nbsp;({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
         </div>
-        <div class="as-of">Predicted next-day close</div>
+        <div class="as-of">Predicted {{ horizon|lower }} close</div>
       </div>
     </div>
 
@@ -761,7 +767,7 @@
     "container_id" : "tradingview_chart",
     "autosize"     : true,
     "symbol"       : "{{ ticker }}",
-    "interval"     : "D",
+    "interval"     : "{% if interval == '1h' %}60{% else %}D{% endif %}",
     "timezone"     : "Etc/UTC",
     "theme"        : "dark",
     "style"        : "1",

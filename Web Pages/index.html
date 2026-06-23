@@ -263,6 +263,41 @@
 
     .quick-tag:hover { border-color: var(--accent); color: var(--accent); }
 
+    /* ── Interval toggle ── */
+    .interval-toggle {
+      display: flex;
+      gap: 0;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      height: 38px;
+    }
+
+    .iv-btn {
+      flex: 1;
+      padding: 0 18px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-family: 'Inter', sans-serif;
+      font-size: 9.5pt;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .iv-btn.active {
+      background: var(--accent);
+      color: var(--white);
+    }
+
+    .iv-btn:not(.active):hover {
+      background: var(--surface2);
+      color: var(--text);
+    }
+
     .error-box {
       background: rgba(255,77,77,0.1);
       border: 1px solid rgba(255,77,77,0.3);
@@ -582,6 +617,7 @@
     <div class="search-section">
       <div class="search-label">Enter Ticker Symbol</div>
       <form id="predictForm" action="/predict" method="POST">
+        <input type="hidden" id="intervalInput" name="interval" value="{{ interval or '1d' }}" />
         <div class="search-row">
           <input
             class="search-input"
@@ -593,7 +629,11 @@
             autocomplete="off"
             autofocus
           />
-          <button type="submit" class="btn-predict">Get Prediction</button>
+          <div class="interval-toggle">
+            <button type="button" id="btn1d" class="iv-btn {% if (interval or '1d') == '1d' %}active{% endif %}" onclick="setInterval('1d')">Daily</button>
+            <button type="button" id="btn1h" class="iv-btn {% if interval == '1h' %}active{% endif %}" onclick="setInterval('1h')">1h Intraday</button>
+          </div>
+          <button type="submit" class="btn-predict">Predict</button>
         </div>
         <div class="quick-picks">
           <span class="quick-label">Quick pick:</span>
@@ -704,6 +744,12 @@
 </footer>
 
 <script>
+  function setInterval(iv) {
+    document.getElementById('intervalInput').value = iv;
+    document.getElementById('btn1d').classList.toggle('active', iv === '1d');
+    document.getElementById('btn1h').classList.toggle('active', iv === '1h');
+  }
+
   function setTicker(symbol) {
     document.getElementById('ticker').value = symbol;
     document.getElementById('predictForm').submit();

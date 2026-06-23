@@ -1,17 +1,19 @@
 """
 predictor.py
-Shared ML prediction layer for ML-QTS.
+Shared ML inference layer for ML-QTS.
 
-Loads LR + RF models once and exposes two public functions:
-  run_prediction(ticker) → full result dict (used by Flask routes)
-  ml_signal(ticker)      → {"action": BUY|SELL|HOLD, "lr_pred", "rf_pred",
-                             "current_price", "rf_ret", "confidence",
-                             "rsi", "macd_hist", "atr"}
-                           (used by the trading loop)
+Public functions:
+  run_prediction(ticker, interval="1d") → full result dict (Flask routes)
+  ml_signal(ticker, interval="1d")      → compact trading signal dict
+
+Supported intervals:
+  "1d"  — daily models (45 features, TA + ICT daily)
+  "1h"  — hourly models (55 features, + kill zones + session)
 """
 
 import os
 import json
+import pytz
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -24,22 +26,50 @@ import ta
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
-print("Loading ML models...")
-lr_model     = joblib.load(os.path.join(MODELS_DIR, "lr_model_QQQ.pkl"))
-rf_model     = joblib.load(os.path.join(MODELS_DIR, "rf_model_QQQ.pkl"))
-scaler       = joblib.load(os.path.join(MODELS_DIR, "scaler_sklearn_QQQ.pkl"))
-feature_cols = joblib.load(os.path.join(MODELS_DIR, "feature_cols_sklearn_QQQ.pkl"))
-print("ML models loaded.")
+YF_SYMBOL_MAP = {"NDX": "^NDX"}
+
+# Per-(ticker, interval) model cache so we only load from disk once
+_model_cache: dict = {}
 
 
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
+def _model_suffix(interval: str) -> str:
+    return "" if interval == "1d" else f"_{interval}"
+
+
+def _load_models(ticker: str, interval: str = "1d"):
+    """Return (lr, rf, scaler, feature_cols) — cached after first load."""
+    key = (ticker.upper(), interval)
+    if key in _model_cache:
+        return _model_cache[key]
+
+    suffix = _model_suffix(interval)
+    t = ticker.upper()
+    lr    = joblib.load(os.path.join(MODELS_DIR, f"lr_model_{t}{suffix}.pkl"))
+    rf    = joblib.load(os.path.join(MODELS_DIR, f"rf_model_{t}{suffix}.pkl"))
+    sc    = joblib.load(os.path.join(MODELS_DIR, f"scaler_sklearn_{t}{suffix}.pkl"))
+    feat  = joblib.load(os.path.join(MODELS_DIR, f"feature_cols_sklearn_{t}{suffix}.pkl"))
+    _model_cache[key] = (lr, rf, sc, feat)
+    return lr, rf, sc, feat
+
+
+def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
+    yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
+    period    = "730d" if interval == "1h" else "6mo"
+    df = yf.download(yf_ticker, period=period, interval=interval,
+                     auto_adjust=True, progress=False)
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+
+
+# ── Feature engineering ────────────────────────────────────────────────────────
+
+def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
     close = df["Close"]
     high  = df["High"]
     low   = df["Low"]
     open_ = df["Open"]
 
-    # Standard indicators
     df["SMA_7"]  = ta.trend.sma_indicator(close, window=7)
     df["SMA_21"] = ta.trend.sma_indicator(close, window=21)
     df["EMA_12"] = ta.trend.ema_indicator(close, window=12)
@@ -62,22 +92,15 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
     for lag in range(1, 6):
         df[f"Close_lag_{lag}"]  = close.shift(lag)
+    for lag in range(1, 4):
         df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
 
-    # ATR for position sizing (not a model feature)
-    hi = high.values
-    lo = low.values
-    cl = close.values
-    tr = np.maximum(hi[1:] - lo[1:],
-         np.maximum(np.abs(hi[1:] - cl[:-1]), np.abs(lo[1:] - cl[:-1])))
-    df["ATR_14"] = np.nan
-    if len(tr) >= 14:
-        df.iloc[14:, df.columns.get_loc("ATR_14")] = pd.Series(tr).rolling(14).mean().iloc[13:].values
-
-    # ICT features
+    # ATR for position sizing (not a model feature, kept for ml_signal)
     atr14 = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
     atr14 = atr14.fillna(close * 0.01)
+    df["ATR_14"] = atr14
 
+    # ICT — base features (work on all timeframes)
     sma200 = close.rolling(200, min_periods=1).mean()
     df["Above_200SMA"] = (close > sma200).astype(int)
     df["Dist_200SMA"]  = ((close - sma200) / sma200 * 100).fillna(0)
@@ -124,32 +147,78 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
+    return df
+
+
+def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
+    """Kill-zone and session features — only meaningful on sub-daily bars."""
+    idx = df.index
+    if idx.tz is not None:
+        et_idx = idx.tz_convert("America/New_York")
+    else:
+        et_idx = idx.tz_localize("UTC").tz_convert("America/New_York")
+
+    hour = et_idx.hour
+
+    df["In_London_KZ"]  = ((hour >= 3)  & (hour < 5)).astype(int)
+    df["In_NY_Open_KZ"] = ((hour >= 9)  & (hour < 11)).astype(int)
+    df["In_NY_PM_KZ"]   = ((hour >= 13) & (hour < 15)).astype(int)
+
+    date_str     = pd.Series(et_idx.date, index=df.index)
+    midnight_open = df.groupby(date_str)["Open"].transform("first")
+    df["Price_vs_MidnightOpen"] = (
+        (df["Close"] - midnight_open) / (midnight_open + 1e-8) * 100
+    )
+
+    session_high = df.groupby(date_str)["High"].transform("cummax")
+    session_low  = df.groupby(date_str)["Low"].transform("cummin")
+    atr_h = ta.volatility.AverageTrueRange(
+        df["High"], df["Low"], df["Close"], window=14
+    ).average_true_range().fillna(df["Close"] * 0.01)
+    df["Session_High_Dist"] = ((session_high - df["Close"]) / (atr_h + 1e-8)).clip(-10, 10)
+    df["Session_Low_Dist"]  = ((df["Close"] - session_low)  / (atr_h + 1e-8)).clip(-10, 10)
+
+    df["Hour_Sin"] = np.sin(2 * np.pi * hour / 24)
+    df["Hour_Cos"] = np.cos(2 * np.pi * hour / 24)
+    dow = et_idx.dayofweek
+    df["Day_Sin"] = np.sin(2 * np.pi * dow / 5)
+    df["Day_Cos"] = np.cos(2 * np.pi * dow / 5)
+
+    return df
+
+
+def build_features(df: pd.DataFrame, interval: str = "1d") -> pd.DataFrame:
+    df = _add_base_ta(df)
+    if interval != "1d":
+        df = _add_intraday_ict(df)
     df.dropna(inplace=True)
     return df
 
 
-def _fetch_df(ticker: str) -> pd.DataFrame:
-    yf_ticker = ticker.replace(".", "-")
-    df = yf.download(yf_ticker, period="6mo", auto_adjust=True, progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    return df
+# ── Public API ─────────────────────────────────────────────────────────────────
 
+def run_prediction(ticker: str, interval: str = "1d") -> dict:
+    """Full prediction result dict for Flask routes and the result page."""
+    ticker = ticker.upper()
+    min_bars = 70 if interval == "1d" else 200
 
-def run_prediction(ticker: str) -> dict:
-    """Full prediction result for Flask routes and the result page."""
-    df = _fetch_df(ticker)
-    if df.empty or len(df) < 70:
-        raise ValueError(f"Not enough data for '{ticker}'. Please check the ticker symbol.")
+    df = _fetch_df(ticker, interval)
+    if df.empty or len(df) < min_bars:
+        raise ValueError(
+            f"Not enough data for '{ticker}' on {interval} interval. "
+            "Check the ticker symbol."
+        )
 
-    df = build_features(df)
+    df = build_features(df, interval)
     if df.empty:
         raise ValueError("Feature engineering failed — insufficient data history.")
 
+    lr_model, rf_model, scaler, feature_cols = _load_models(ticker, interval)
+
     current_price = float(df["Close"].iloc[-1])
     X             = scaler.transform(df[feature_cols].iloc[-1:].values)
-    lr_pred       = float(lr_model.predict(X)[0])
-    rf_ret        = float(rf_model.predict(X)[0])
+    lr_pred       = float(lr_model.predict(X)[0])   # next close price
+    rf_ret        = float(rf_model.predict(X)[0])   # next % return
     rf_pred       = current_price * (1 + rf_ret / 100)
 
     price_change = lr_pred - current_price
@@ -158,8 +227,12 @@ def run_prediction(ticker: str) -> dict:
     change_pct   = abs(price_change / current_price * 100)
     confidence   = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
 
+    # Chart data (last 90 bars)
     chart_df     = df.tail(90)
-    chart_dates  = [d.strftime("%Y-%m-%d") for d in chart_df.index]
+    chart_dates  = [
+        d.strftime("%Y-%m-%d %H:%M") if interval != "1d" else d.strftime("%Y-%m-%d")
+        for d in chart_df.index
+    ]
     chart_prices = [round(float(p), 2) for p in chart_df["Close"]]
     chart_sma7   = [round(float(p), 2) for p in chart_df["SMA_7"]]
     chart_sma21  = [round(float(p), 2) for p in chart_df["SMA_21"]]
@@ -168,8 +241,23 @@ def run_prediction(ticker: str) -> dict:
     macd_val  = round(float(df["MACD"].iloc[-1]), 3)
     macd_hist = float(df["MACD_Hist"].iloc[-1])
 
+    # Human-readable timestamp for the last bar
+    last_idx = df.index[-1]
+    if interval == "1d":
+        as_of   = last_idx.strftime("%B %d, %Y")
+        horizon = "Next Day"
+    else:
+        try:
+            et = last_idx.tz_convert("America/New_York") if last_idx.tzinfo else last_idx
+            as_of = et.strftime("%b %d, %Y %I:%M %p ET")
+        except Exception:
+            as_of = str(last_idx)
+        horizon = "Next Hour" if interval == "1h" else "Next Bar"
+
     return {
-        "ticker"       : ticker.upper(),
+        "ticker"       : ticker,
+        "interval"     : interval,
+        "horizon"      : horizon,
         "current_price": round(current_price, 2),
         "lr_pred"      : round(lr_pred, 2),
         "rf_pred"      : round(rf_pred, 2),
@@ -189,31 +277,29 @@ def run_prediction(ticker: str) -> dict:
         "macd_signal"  : "Bullish" if macd_hist > 0 else "Bearish",
         "bb_upper"     : round(float(df["BB_Upper"].iloc[-1]), 2),
         "bb_lower"     : round(float(df["BB_Lower"].iloc[-1]), 2),
-        "as_of"        : df.index[-1].strftime("%B %d, %Y"),
+        "as_of"        : as_of,
     }
 
 
-def ml_signal(ticker: str) -> dict:
+def ml_signal(ticker: str, interval: str = "1d") -> dict:
     """
-    Distill the ML models into a trading signal for the auto-trade loop.
+    Trading signal for the MT5 auto-trade loop.
 
-    Logic:
-      LR direction  = "up"  if lr_pred > current_price, else "down"
-      RF direction  = "up"  if rf_ret > 0,             else "down"
-      ML action     = BUY  if both say "up"
-                    = SELL if both say "down"
-                    = HOLD if they disagree
-
-    Returns a dict consumed by MT5Trader.generate_signal_ml().
+    BUY  — LR and RF both predict up
+    SELL — both predict down
+    HOLD — models disagree
     """
     try:
-        df = _fetch_df(ticker)
+        ticker = ticker.upper()
+        df = _fetch_df(ticker, interval)
         if df.empty or len(df) < 70:
             return {"action": "HOLD", "error": "Insufficient data", "confidence": 0}
 
-        df = build_features(df)
+        df = build_features(df, interval)
         if df.empty:
             return {"action": "HOLD", "error": "Feature build failed", "confidence": 0}
+
+        lr_model, rf_model, scaler, feature_cols = _load_models(ticker, interval)
 
         current_price = float(df["Close"].iloc[-1])
         X             = scaler.transform(df[feature_cols].iloc[-1:].values)
@@ -229,9 +315,8 @@ def ml_signal(ticker: str) -> dict:
         elif not lr_up and not rf_up:
             action = "SELL"
         else:
-            action = "HOLD"   # models disagree — stay flat
+            action = "HOLD"
 
-        # Confidence based on predicted move vs recent volatility
         recent_vol = float(df["Daily_Return"].tail(20).std())
         change_pct = abs(lr_pred - current_price) / current_price * 100
         confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
@@ -242,6 +327,7 @@ def ml_signal(ticker: str) -> dict:
 
         return {
             "action"       : action,
+            "interval"     : interval,
             "current_price": round(current_price, 5),
             "lr_pred"      : round(lr_pred, 5),
             "rf_pred"      : round(rf_pred, 5),

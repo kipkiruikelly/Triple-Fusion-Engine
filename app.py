@@ -190,32 +190,43 @@ def home():
     return render_template("index.html")
 
 
+VALID_INTERVALS = {"1d", "1h"}
+
+
 @app.route("/predict", methods=["POST"])
 @login_required
 def predict():
-    ticker = request.form.get("ticker", "").upper().strip()
+    ticker   = request.form.get("ticker", "").upper().strip()
+    interval = request.form.get("interval", "1d").strip()
+
+    if interval not in VALID_INTERVALS:
+        interval = "1d"
 
     if not ticker:
-        return render_template("index.html", error="Please enter a stock ticker symbol.")
+        return render_template("index.html", error="Please enter a stock ticker symbol.",
+                               interval=interval)
 
     if len(ticker) > 10 or not ticker.replace(".", "").replace("-", "").isalpha():
         return render_template("index.html",
-                               error=f'"{ticker}" is not a valid ticker. Try AAPL, TSLA, or MSFT.')
+                               error=f'"{ticker}" is not a valid ticker. Try AAPL, TSLA, or MSFT.',
+                               interval=interval)
 
     if not consume_quota(current_user):
         return render_template("index.html",
                                error=f"You've used all {FREE_DAILY_LIMIT} free predictions for today. "
                                      "Upgrade to Pro for unlimited access.",
-                               show_upgrade=True)
+                               show_upgrade=True, interval=interval)
 
     try:
-        result = run_prediction(ticker)
+        _try_azure_download(ticker, interval)
+        result = run_prediction(ticker, interval)
         return render_template("result.html", **result)
     except ValueError as e:
-        return render_template("index.html", error=str(e))
+        return render_template("index.html", error=str(e), interval=interval)
     except Exception:
         return render_template("index.html",
-                               error=f'Could not fetch data for "{ticker}". Please check the symbol and try again.')
+                               error=f'Could not fetch data for "{ticker}". Please check the symbol and try again.',
+                               interval=interval)
 
 
 # ── MT5 routes (Pro only) ───────────────────────────────────────────────────
@@ -308,10 +319,13 @@ def api_predict(ticker):
         return jsonify({"status": "error",
                         "message": f"Daily limit of {FREE_DAILY_LIMIT} predictions reached. "
                                    "Upgrade to Pro for unlimited access."}), 429
+    interval = request.args.get("interval", "1d")
+    if interval not in VALID_INTERVALS:
+        interval = "1d"
     t0 = time.time()
     try:
-        _try_azure_download(ticker.upper())
-        result = run_prediction(ticker.upper())
+        _try_azure_download(ticker.upper(), interval)
+        result = run_prediction(ticker.upper(), interval)
         for key in ["chart_dates", "chart_prices", "chart_sma7", "chart_sma21"]:
             result.pop(key, None)
         _metrics["predictions"] += 1
@@ -355,13 +369,14 @@ def before_request():
 
 # ── Azure helper ─────────────────────────────────────────────────────────────
 
-def _try_azure_download(ticker: str):
+def _try_azure_download(ticker: str, interval: str = "1d"):
     """Download models from Azure if not present locally."""
     models_dir = os.path.join(BASE_DIR, "Saved Models")
-    needed = f"lr_model_{ticker}.pkl"
+    suffix = "" if interval == "1d" else f"_{interval}"
+    needed = f"lr_model_{ticker}{suffix}.pkl"
     if not os.path.exists(os.path.join(models_dir, needed)):
         if azure_enabled():
-            logger.info("Models for %s not found locally — trying Azure...", ticker)
+            logger.info("Models for %s (%s) not found locally — trying Azure...", ticker, interval)
             download_models_from_azure(ticker)
 
 
