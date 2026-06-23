@@ -44,6 +44,17 @@ FEATURES = [
     "RSI_14", "MACD", "MACD_Signal", "MACD_Hist",
     "BB_Upper", "BB_Lower", "BB_Mid", "BB_Width",
     "Volume_SMA_10", "Daily_Return",
+    # ICT-inspired features
+    "Above_200SMA", "Dist_200SMA",
+    "Body_Ratio", "Displacement",
+    "Dist_to_SH", "Dist_to_SL",
+    "Structure_Bullish", "PD_Position",
+    "Bull_FVG_Count", "Bear_FVG_Count",
+    "Bull_OB_Count", "Bear_OB_Count",
+    "Dist_PWH", "Dist_PWL",
+    "Swept_High", "Swept_Low",
+    "Quarter_Sin", "Quarter_Cos",
+    "Month_Sin", "Month_Cos",
 ]
 
 
@@ -77,6 +88,86 @@ def clean_data(df):
     return df
 
 
+def engineer_ict_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    ICT (Inner Circle Trader) inspired features derived from OHLCV data.
+
+    Concepts:
+      Trend filter      — 200-day SMA direction and distance
+      Candle character  — body ratio, displacement bars (large range expansion)
+      Market structure  — distance to 20-bar swing high/low, bullish/bearish bias
+      Premium/Discount  — price position inside the 60-bar range (0=discount, 1=premium)
+      Fair Value Gaps   — 3-bar imbalance (bullish/bearish)
+      Order Blocks      — last opposing candle before a displacement move
+      Weekly levels     — previous 5-bar high/low as liquidity reference
+      Liquidity sweeps  — price exceeds swing level then reverses
+      Seasonal encoding — quarterly and monthly sin/cos
+    """
+    close = df["Close"]
+    high  = df["High"]
+    low   = df["Low"]
+    open_ = df["Open"]
+
+    # Trend filter: 200-day SMA
+    sma200 = close.rolling(200, min_periods=1).mean()
+    df["Above_200SMA"] = (close > sma200).astype(int)
+    df["Dist_200SMA"]  = ((close - sma200) / sma200 * 100).fillna(0)
+
+    # Candle character
+    rng  = (high - low).replace(0, np.nan)
+    body = (close - open_).abs()
+    df["Body_Ratio"] = (body / rng).fillna(0).clip(0, 1)
+    atr14 = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
+    atr14 = atr14.fillna(close * 0.01)
+    df["Displacement"] = ((rng.fillna(0) > atr14 * 1.5) & (df["Body_Ratio"] > 0.6)).astype(int)
+
+    # Market structure
+    sh20 = high.rolling(20).max()
+    sl20 = low.rolling(20).min()
+    df["Dist_to_SH"]       = ((sh20 - close) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_to_SL"]       = ((close - sl20)  / (atr14 + 1e-8)).clip(-10, 10)
+    df["Structure_Bullish"] = (sh20 > high.rolling(60).max().shift(20)).astype(int)
+
+    # Premium / Discount — position in 60-bar range
+    rh = high.rolling(60).max()
+    rl = low.rolling(60).min()
+    df["PD_Position"] = ((close - rl) / (rh - rl).replace(0, np.nan)).fillna(0.5).clip(0, 1)
+
+    # Fair Value Gaps (3-bar imbalance)
+    bull_fvg = (low > high.shift(2)).astype(int)
+    bear_fvg = (high < low.shift(2)).astype(int)
+    df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
+    df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
+
+    # Order Blocks — opposing candle before a displacement move
+    bearish = (close < open_)
+    bullish = (close > open_)
+    bull_ob = (bearish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bullish
+    bear_ob = (bullish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bearish
+    df["Bull_OB_Count"] = bull_ob.astype(int).rolling(10, min_periods=1).sum()
+    df["Bear_OB_Count"] = bear_ob.astype(int).rolling(10, min_periods=1).sum()
+
+    # Weekly levels (prev 5-bar high/low = ~1 trading week)
+    pwh = high.rolling(5).max().shift(1)
+    pwl = low.rolling(5).min().shift(1)
+    df["Dist_PWH"] = ((pwh - close) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_PWL"] = ((close - pwl)  / (atr14 + 1e-8)).clip(-10, 10)
+
+    # Liquidity sweeps — price exceeded swing level but closed back inside
+    df["Swept_High"] = ((high > sh20.shift(1)) & (close < sh20.shift(1))).astype(int)
+    df["Swept_Low"]  = ((low  < sl20.shift(1)) & (close > sl20.shift(1))).astype(int)
+
+    # Seasonal / cyclical encoding
+    q = df.index.quarter
+    m = df.index.month
+    df["Quarter_Sin"] = np.sin(2 * np.pi * q / 4)
+    df["Quarter_Cos"] = np.cos(2 * np.pi * q / 4)
+    df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
+    df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
+
+    return df
+
+
 def engineer_features(df):
     print("Engineering features...")
     df = df.copy()
@@ -101,6 +192,8 @@ def engineer_features(df):
     df["Volume_SMA_10"] = ta.trend.sma_indicator(df["Volume"], window=10)
     df["Daily_Return"]  = df["Close"].pct_change() * 100
     df["Direction"]     = (df["Close"].shift(-1) > df["Close"]).astype(int)
+
+    df = engineer_ict_features(df)
 
     before = len(df)
     df.dropna(inplace=True)

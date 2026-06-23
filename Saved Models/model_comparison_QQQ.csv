@@ -1,3 +1,3 @@
 model,mae,rmse,r2,directional_accuracy
-Linear Regression,4.56,6.34,0.9947,51.8
-Random Forest,5.18,6.96,0.9936,50.1
+Linear Regression,4.58,6.38,0.9946,51.3
+Random Forest,4.89,6.63,0.9942,51.6

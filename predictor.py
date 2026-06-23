@@ -34,39 +34,95 @@ print("ML models loaded.")
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df["SMA_7"]  = ta.trend.sma_indicator(df["Close"], window=7)
-    df["SMA_21"] = ta.trend.sma_indicator(df["Close"], window=21)
-    df["EMA_12"] = ta.trend.ema_indicator(df["Close"], window=12)
-    df["EMA_26"] = ta.trend.ema_indicator(df["Close"], window=26)
-    df["RSI_14"] = ta.momentum.rsi(df["Close"], window=14)
+    close = df["Close"]
+    high  = df["High"]
+    low   = df["Low"]
+    open_ = df["Open"]
 
-    macd_obj = ta.trend.MACD(df["Close"], window_fast=12, window_slow=26, window_sign=9)
+    # Standard indicators
+    df["SMA_7"]  = ta.trend.sma_indicator(close, window=7)
+    df["SMA_21"] = ta.trend.sma_indicator(close, window=21)
+    df["EMA_12"] = ta.trend.ema_indicator(close, window=12)
+    df["EMA_26"] = ta.trend.ema_indicator(close, window=26)
+    df["RSI_14"] = ta.momentum.rsi(close, window=14)
+
+    macd_obj = ta.trend.MACD(close, window_fast=12, window_slow=26, window_sign=9)
     df["MACD"]        = macd_obj.macd()
     df["MACD_Signal"] = macd_obj.macd_signal()
     df["MACD_Hist"]   = macd_obj.macd_diff()
 
-    bb_obj = ta.volatility.BollingerBands(df["Close"], window=20, window_dev=2)
+    bb_obj = ta.volatility.BollingerBands(close, window=20, window_dev=2)
     df["BB_Upper"] = bb_obj.bollinger_hband()
     df["BB_Lower"] = bb_obj.bollinger_lband()
     df["BB_Mid"]   = bb_obj.bollinger_mavg()
     df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / df["BB_Mid"]
 
     df["Volume_SMA_10"] = ta.trend.sma_indicator(df["Volume"], window=10)
-    df["Daily_Return"]  = df["Close"].pct_change() * 100
+    df["Daily_Return"]  = close.pct_change() * 100
 
     for lag in range(1, 6):
-        df[f"Close_lag_{lag}"]  = df["Close"].shift(lag)
+        df[f"Close_lag_{lag}"]  = close.shift(lag)
         df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
 
-    # ATR (not a feature col but needed for position sizing)
-    hi = df["High"].values
-    lo = df["Low"].values
-    cl = df["Close"].values
+    # ATR for position sizing (not a model feature)
+    hi = high.values
+    lo = low.values
+    cl = close.values
     tr = np.maximum(hi[1:] - lo[1:],
          np.maximum(np.abs(hi[1:] - cl[:-1]), np.abs(lo[1:] - cl[:-1])))
     df["ATR_14"] = np.nan
     if len(tr) >= 14:
         df.iloc[14:, df.columns.get_loc("ATR_14")] = pd.Series(tr).rolling(14).mean().iloc[13:].values
+
+    # ICT features
+    atr14 = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
+    atr14 = atr14.fillna(close * 0.01)
+
+    sma200 = close.rolling(200, min_periods=1).mean()
+    df["Above_200SMA"] = (close > sma200).astype(int)
+    df["Dist_200SMA"]  = ((close - sma200) / sma200 * 100).fillna(0)
+
+    rng  = (high - low).replace(0, np.nan)
+    body = (close - open_).abs()
+    df["Body_Ratio"]   = (body / rng).fillna(0).clip(0, 1)
+    df["Displacement"] = ((rng.fillna(0) > atr14 * 1.5) & (df["Body_Ratio"] > 0.6)).astype(int)
+
+    sh20 = high.rolling(20).max()
+    sl20 = low.rolling(20).min()
+    df["Dist_to_SH"]       = ((sh20 - close) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_to_SL"]       = ((close - sl20)  / (atr14 + 1e-8)).clip(-10, 10)
+    df["Structure_Bullish"] = (sh20 > high.rolling(60).max().shift(20)).astype(int)
+
+    rh = high.rolling(60).max()
+    rl = low.rolling(60).min()
+    df["PD_Position"] = ((close - rl) / (rh - rl).replace(0, np.nan)).fillna(0.5).clip(0, 1)
+
+    bull_fvg = (low > high.shift(2)).astype(int)
+    bear_fvg = (high < low.shift(2)).astype(int)
+    df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
+    df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
+
+    bearish = (close < open_)
+    bullish = (close > open_)
+    bull_ob = (bearish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bullish
+    bear_ob = (bullish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bearish
+    df["Bull_OB_Count"] = bull_ob.astype(int).rolling(10, min_periods=1).sum()
+    df["Bear_OB_Count"] = bear_ob.astype(int).rolling(10, min_periods=1).sum()
+
+    pwh = high.rolling(5).max().shift(1)
+    pwl = low.rolling(5).min().shift(1)
+    df["Dist_PWH"] = ((pwh - close) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_PWL"] = ((close - pwl)  / (atr14 + 1e-8)).clip(-10, 10)
+
+    df["Swept_High"] = ((high > sh20.shift(1)) & (close < sh20.shift(1))).astype(int)
+    df["Swept_Low"]  = ((low  < sl20.shift(1)) & (close > sl20.shift(1))).astype(int)
+
+    q = df.index.quarter
+    m = df.index.month
+    df["Quarter_Sin"] = np.sin(2 * np.pi * q / 4)
+    df["Quarter_Cos"] = np.cos(2 * np.pi * q / 4)
+    df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
+    df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
     df.dropna(inplace=True)
     return df

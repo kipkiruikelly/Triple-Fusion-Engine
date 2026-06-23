@@ -52,6 +52,17 @@ FEATURES = [
     "Close_lag_1", "Close_lag_2", "Close_lag_3",
     "Close_lag_4", "Close_lag_5",
     "Return_lag_1", "Return_lag_2", "Return_lag_3",
+    # ICT-inspired features
+    "Above_200SMA", "Dist_200SMA",
+    "Body_Ratio", "Displacement",
+    "Dist_to_SH", "Dist_to_SL",
+    "Structure_Bullish", "PD_Position",
+    "Bull_FVG_Count", "Bear_FVG_Count",
+    "Bull_OB_Count", "Bear_OB_Count",
+    "Dist_PWH", "Dist_PWL",
+    "Swept_High", "Swept_Low",
+    "Quarter_Sin", "Quarter_Cos",
+    "Month_Sin", "Month_Cos",
 ]
 
 
