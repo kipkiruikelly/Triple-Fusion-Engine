@@ -4,15 +4,16 @@ MT5 algorithmic trading engine for ML-QTS.
 
 Two modes:
   - LIVE: Connects to MetaTrader 5 via Wine/mt5linux rpyc bridge.
-           Requires Wine with Python + MetaTrader5 package (wine-devel >= 10.12).
   - PAPER: Simulates trades against live yfinance data. No MT5 needed.
-           Paper mode is the default when MT5 is unavailable.
 
-Strategy (both modes):
-  - RSI(14) reversal from extreme zones
-  - MACD(12,26,9) histogram momentum flip
-  - EMA(20) trend filter
-  - ATR(14) dynamic SL/TP (SL=1.5×ATR, TP=3×ATR, 2:1 R:R)
+Triple-fusion signal (ICT primary, ML + tech as confirmation):
+  1. ICT gate — 200 SMA + market structure bias required to enter
+  2. ICT score — order blocks, FVGs, liquidity sweeps, PD zone
+  3. ML models — LR + RF direction agreement adds 2 pts confirmation
+  4. Tech indicators — RSI/MACD/EMA confluence adds score
+  Entry fires when ICT bias present AND ICT score >= 3 AND total >= 5.
+  Falls back to ML + tech fusion when ICT data unavailable.
+  - ATR(14) dynamic SL/TP (SL=1.5×ATR, TP=3×ATR)
   - 1% account risk per trade (configurable)
   - Max 3 open positions, 5% daily loss circuit-breaker
 """
@@ -28,10 +29,11 @@ import numpy as np
 import pandas as pd
 
 try:
-    from predictor import ml_signal as _ml_signal
+    from predictor import ml_signal as _ml_signal, build_features as _build_features
     _ML_AVAILABLE = True
 except Exception:
     _ml_signal = None
+    _build_features = None
     _ML_AVAILABLE = False
 
 # Try live MT5 bridge; fall back to paper mode
@@ -516,47 +518,180 @@ class MT5Trader:
         except Exception:
             pass
 
-    # ── ML + technical signal fusion ─────────────────────────────────────────
+    # ── ICT feature helpers ──────────────────────────────────────────────────
+
+    def _get_daily_bars_long(self, symbol: str, n: int = 300) -> "pd.DataFrame | None":
+        """Fetch ~15 months of daily OHLCV for ICT feature computation (needs 200+ bars)."""
+        import yfinance as yf
+        try:
+            yf_sym = symbol.replace(".", "-")
+            df = yf.download(yf_sym, period="18mo", auto_adjust=True, progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            return df.tail(n) if not df.empty else None
+        except Exception as e:
+            log.warning(f"Daily bars fetch error: {e}")
+            return None
+
+    def _ict_row(self, symbol: str) -> "dict | None":
+        """
+        Compute ICT features on daily bars and return a signal dict for the last bar.
+
+        Returns bias flags, per-direction scores, and ATR.
+        Returns None when data is unavailable or feature build fails.
+        """
+        if _build_features is None:
+            return None
+        df = self._get_daily_bars_long(symbol)
+        if df is None or len(df) < 30:
+            return None
+        try:
+            feat_df = _build_features(df)
+            if feat_df.empty:
+                return None
+            row   = feat_df.iloc[-1]
+            close = float(feat_df["Close"].iloc[-1])
+            open_ = float(feat_df["Open"].iloc[-1])
+
+            def _g(col, default=0.0):
+                return float(row[col]) if col in row.index else default
+
+            above_200 = _g("Above_200SMA")
+            struct_b  = _g("Structure_Bullish")
+            pd_pos    = _g("PD_Position", 0.5)
+            bull_ob   = _g("Bull_OB_Count")
+            bear_ob   = _g("Bear_OB_Count")
+            bull_fvg  = _g("Bull_FVG_Count")
+            bear_fvg  = _g("Bear_FVG_Count")
+            swept_h   = _g("Swept_High")
+            swept_l   = _g("Swept_Low")
+            disp      = _g("Displacement")
+            atr       = _g("ATR_14", close * 0.01)
+            if atr <= 0:
+                atr = close * 0.01
+
+            bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5)
+            bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)
+
+            buy = sell = 0
+
+            # PD zone (where to trade)
+            if pd_pos < 0.40:    buy  += 3
+            elif pd_pos < 0.50:  buy  += 1
+            if pd_pos > 0.60:    sell += 3
+            elif pd_pos > 0.50:  sell += 1
+
+            # Order blocks
+            if bull_ob > 0:  buy  += 2
+            if bear_ob > 0:  sell += 2
+
+            # Fair Value Gaps
+            if bull_fvg > 0: buy  += 1
+            if bear_fvg > 0: sell += 1
+
+            # Liquidity sweeps
+            if swept_l > 0:  buy  += 2
+            if swept_h > 0:  sell += 2
+
+            # Displacement
+            if disp > 0 and close > open_: buy  += 1
+            if disp > 0 and close < open_: sell += 1
+
+            return {
+                "bullish_bias": bullish_bias,
+                "bearish_bias": bearish_bias,
+                "buy_score"   : buy,
+                "sell_score"  : sell,
+                "atr"         : atr,
+                "pd_pos"      : round(pd_pos, 3),
+                "above_200"   : above_200,
+            }
+        except Exception as e:
+            log.warning(f"ICT feature computation error: {e}")
+            return None
+
+    # ── Triple-fusion signal (ICT gate + ML + Technical) ─────────────────────
 
     def generate_signal_ml(self, symbol: str, timeframe=None) -> dict:
         """
-        Combines the ML model prediction with technical indicators.
+        Triple-layer signal fusion — ICT has highest priority.
 
-        Decision table:
-          ML=BUY  + Tech=BUY  → BUY  (strong, both agree)
-          ML=SELL + Tech=SELL → SELL (strong, both agree)
-          ML=BUY  + Tech=HOLD → BUY  (ML-driven, weaker score)
-          ML=SELL + Tech=HOLD → SELL (ML-driven, weaker score)
-          ML=HOLD + any       → HOLD (models disagree, stay flat)
-          ML=BUY  + Tech=SELL → HOLD (conflicting, stay flat)
-          ML=SELL + Tech=BUY  → HOLD (conflicting, stay flat)
+        Layer 1 (ICT gate): Above_200SMA + Structure_Bullish sets directional bias.
+                            ICT score from OBs, FVGs, liquidity sweeps, PD zone.
+                            Requires bias present AND ICT score >= 3.
+        Layer 2 (ML):       LR + RF agreement adds +2 pts; disagreement subtracts -1.
+        Layer 3 (Tech):     RSI/MACD/EMA confluence adds its score; conflict subtracts -1.
+        Entry fires when total score (ICT + ML + Tech) >= 5.
+
+        Falls back to original ML + tech fusion if ICT data is unavailable.
         """
-        ml  = _ml_signal(symbol) if (_ML_AVAILABLE and _ml_signal) else {"action": "HOLD", "confidence": 0}
-        tec = self.generate_signal(symbol, timeframe)
+        # 1. ICT features (daily bars — primary gate)
+        ict = self._ict_row(symbol)
+
+        # 2. ML signal (LR + RF on daily 18-month data from predictor)
+        ml = (_ml_signal(symbol) if (_ML_AVAILABLE and _ml_signal)
+              else {"action": "HOLD", "confidence": 0})
         self.last_ml = ml
+
+        # 3. Technical signal (RSI/MACD/EMA)
+        tec = self.generate_signal(symbol, timeframe)
 
         ml_action  = ml.get("action",  "HOLD")
         tec_action = tec.get("action", "HOLD")
+        atr        = ml.get("atr", tec.get("atr", 0))
 
-        if ml_action == "HOLD":
-            action = "HOLD"
-            score  = 0
-            reason = f"ML=HOLD (models disagree) | Tech={tec_action}"
-        elif ml_action == tec_action:
-            action = ml_action
-            score  = tec.get("score", 0) + 2   # +2 bonus when both agree
-            reason = (f"ML={ml_action} conf={ml.get('confidence',0):.0f}% | "
-                      f"Tech={tec_action} score={tec.get('score',0)} | "
-                      f"LR={ml.get('lr_pred',0):.2f} RF={ml.get('rf_pred',0):.2f}")
-        elif tec_action == "HOLD":
-            action = ml_action
-            score  = 2   # ML-only signal
-            reason = (f"ML={ml_action} conf={ml.get('confidence',0):.0f}% "
-                      f"(tech neutral) | LR={ml.get('lr_pred',0):.2f} RF={ml.get('rf_pred',0):.2f}")
+        action = "HOLD"
+        score  = 0
+
+        if ict is not None:
+            # Use ICT's ATR (daily ATR, better for daily signal sizing)
+            if ict["atr"] > 0:
+                atr = ict["atr"]
+
+            for side in ("BUY", "SELL"):
+                bias_ok = ict["bullish_bias"] if side == "BUY" else ict["bearish_bias"]
+                ict_raw = ict["buy_score"]    if side == "BUY" else ict["sell_score"]
+
+                if not bias_ok or ict_raw < 3:
+                    continue
+
+                ml_pts  = 2 if ml_action == side else (0 if ml_action == "HOLD" else -1)
+                tec_pts = tec.get("score", 0) if tec_action == side else (
+                          0 if tec_action == "HOLD" else -1)
+
+                total = ict_raw + ml_pts + tec_pts
+                if total >= 5:
+                    action = side
+                    score  = total
+                    break
+
+            bias_str = ("bull" if ict["bullish_bias"] else
+                        "bear" if ict["bearish_bias"] else "neutral")
+            reason = (
+                f"ICT_bias={bias_str} PD={ict['pd_pos']:.2f} "
+                f"buy_pts={ict['buy_score']} sell_pts={ict['sell_score']} | "
+                f"ML={ml_action} conf={ml.get('confidence',0):.0f}% | "
+                f"Tech={tec_action} | "
+                f"LR={ml.get('lr_pred',0):.2f} RF={ml.get('rf_pred',0):.2f}"
+            )
+            if action != "HOLD":
+                reason = f"{action} total={score} | " + reason
+
         else:
-            action = "HOLD"
-            score  = 0
-            reason = f"CONFLICTING: ML={ml_action} vs Tech={tec_action} — staying flat"
+            # ICT unavailable — fall back to ML + tech fusion
+            if ml_action == "HOLD":
+                reason = f"ML=HOLD | Tech={tec_action}"
+            elif ml_action == tec_action:
+                action = ml_action
+                score  = tec.get("score", 0) + 2
+                reason = (f"ML={ml_action} conf={ml.get('confidence',0):.0f}% | "
+                          f"Tech={tec_action} | fallback (no ICT data)")
+            elif tec_action == "HOLD":
+                action = ml_action
+                score  = 2
+                reason = f"ML={ml_action} (tech neutral) | fallback (no ICT data)"
+            else:
+                reason = f"CONFLICT ML={ml_action} vs Tech={tec_action} | fallback"
 
         signal = {
             "action"    : action,
@@ -564,7 +699,7 @@ class MT5Trader:
             "reason"    : reason,
             "rsi"       : ml.get("rsi",  tec.get("rsi", 50)),
             "macd"      : ml.get("macd_hist", tec.get("macd", 0)),
-            "atr"       : ml.get("atr",  tec.get("atr", 0)),
+            "atr"       : atr,
             "price"     : ml.get("current_price", tec.get("price", 0)),
             "lr_pred"   : ml.get("lr_pred", 0),
             "rf_pred"   : ml.get("rf_pred", 0),

@@ -3,25 +3,32 @@
 backtest.py
 Walk-forward backtest for the Stock Market Price Prediction System.
 
-Tests the same ML+Technical signal fusion used by the live trading engine
-against historical daily OHLCV data. No lookahead bias — signals are generated
-using only data available up to and including the signal bar.
+Tests the triple-fusion signal (ICT gate + ML + Technical) against historical
+daily OHLCV data. No lookahead bias — signals use only data up to the signal bar.
 
 Entry  : next trading day's open
 Exit   : SL (1.5×ATR) / TP (3.0×ATR) hit intraday, or force-close after 5 bars
 Risk   : 1% of equity per trade (ATR position sizing)
 Guards : 5% daily loss circuit-breaker, max 3 concurrent positions
 
+Signal architecture (ICT has highest priority):
+  1. ICT gate — directional bias (200 SMA + market structure) required to trade
+  2. ICT score — OBs, FVGs, liquidity sweeps, PD zone (max weight)
+  3. ML score  — LR + RF directional agreement (confirmation)
+  4. Tech score — RSI, MACD, EMA (confirmation)
+  Entry when: ICT bias present AND ICT score >= 3 AND total score >= 5
+
 Usage:
     python backtest.py                                        # QQQ, 2022–2024
     python backtest.py --ticker QQQ --start 2022-01-01 --end 2024-12-31
-    python backtest.py --signal tech --no-plot
+    python backtest.py --signal ict --no-plot
     python backtest.py --risk 2.0 --save-trades trades.csv --save-chart chart.png
 
 Signal modes:
-    fused  (default) — ML (LR+RF) fused with Technical (RSI/MACD/EMA)
-    ml               — ML only
-    tech             — Technical only
+    fused  (default) — ICT gate + ML (LR+RF) + Technical (RSI/MACD/EMA)
+    ml               — ICT gate + ML only
+    tech             — ICT gate + Technical only
+    ict              — Pure ICT (no ML, no tech indicators)
 
 Author: Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
 """
@@ -231,8 +238,8 @@ def _tech_signal(lookback: pd.DataFrame) -> dict:
 
 
 def _ml_signal(lookback: pd.DataFrame, lr, rf, scaler, feat_cols) -> dict:
-    close = float(lookback["Close"].iloc[-1])
-    atr   = float(lookback["ATR_14"].iloc[-1]) if "ATR_14" in lookback.columns else close * 0.01
+    close   = float(lookback["Close"].iloc[-1])
+    atr     = float(lookback["ATR_14"].iloc[-1]) if "ATR_14" in lookback.columns else close * 0.01
     X       = scaler.transform(lookback[feat_cols].iloc[-1:].values)
     lr_pred = float(lr.predict(X)[0])
     rf_ret  = float(rf.predict(X)[0])
@@ -243,12 +250,101 @@ def _ml_signal(lookback: pd.DataFrame, lr, rf, scaler, feat_cols) -> dict:
     return {"action": action, "atr": atr}
 
 
-def _fuse(ml: dict, tech: dict) -> dict:
-    ma, ta_ = ml["action"], tech["action"]
-    atr     = ml.get("atr", tech.get("atr", 0))
-    if ma == "HOLD":           return {"action": "HOLD", "score": 0, "atr": atr}
-    if ma == ta_:              return {"action": ma, "score": tech["score"] + 2, "atr": atr}
-    if ta_ == "HOLD":          return {"action": ma, "score": 2, "atr": atr}
+def _ict_signal(lookback: pd.DataFrame) -> dict:
+    """
+    Reads precomputed ICT feature columns from the last bar of the lookback window.
+
+    Returns directional bias + per-side scores:
+      Bias : Above_200SMA AND Structure_Bullish (bullish) / neither (bearish) / mixed (neutral)
+      Score: OBs (+2), FVGs (+1), Liquidity sweeps (+2), PD zone (+1–3), Displacement (+1)
+    """
+    row   = lookback.iloc[-1]
+    close = float(lookback["Close"].iloc[-1])
+    open_ = float(lookback["Open"].iloc[-1])
+
+    def _g(col, default=0.0):
+        return float(row[col]) if col in row.index else default
+
+    above_200 = _g("Above_200SMA")
+    struct_b  = _g("Structure_Bullish")
+    pd_pos    = _g("PD_Position", 0.5)
+    bull_ob   = _g("Bull_OB_Count")
+    bear_ob   = _g("Bear_OB_Count")
+    bull_fvg  = _g("Bull_FVG_Count")
+    bear_fvg  = _g("Bear_FVG_Count")
+    swept_h   = _g("Swept_High")
+    swept_l   = _g("Swept_Low")
+    disp      = _g("Displacement")
+    atr       = _g("ATR_14", close * 0.01)
+    if atr <= 0:
+        atr = close * 0.01
+
+    # Trend bias (200 SMA + market structure must agree)
+    bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5)
+    bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)
+
+    buy = sell = 0
+
+    # Premium / discount zone (highest weight — this is the "where to trade" filter)
+    if pd_pos < 0.40:    buy  += 3   # deep discount
+    elif pd_pos < 0.50:  buy  += 1   # mild discount
+    if pd_pos > 0.60:    sell += 3   # deep premium
+    elif pd_pos > 0.50:  sell += 1   # mild premium
+
+    # Order blocks (+2 each — confirmed institutional interest)
+    if bull_ob > 0:  buy  += 2
+    if bear_ob > 0:  sell += 2
+
+    # Fair Value Gaps (+1 each — imbalance zones)
+    if bull_fvg > 0: buy  += 1
+    if bear_fvg > 0: sell += 1
+
+    # Liquidity sweeps (+2 each — stop hunt / reversal confirmation)
+    if swept_l > 0:  buy  += 2
+    if swept_h > 0:  sell += 2
+
+    # Displacement in direction of trade (+1 — impulsive candle)
+    if disp > 0 and close > open_: buy  += 1
+    if disp > 0 and close < open_: sell += 1
+
+    return {
+        "bullish_bias": bullish_bias,
+        "bearish_bias": bearish_bias,
+        "buy_score"   : buy,
+        "sell_score"  : sell,
+        "atr"         : atr,
+        "pd_pos"      : pd_pos,
+    }
+
+
+def _fuse(ict: dict, ml: dict, tech: dict) -> dict:
+    """
+    Triple-layer signal fusion.
+
+    ICT sets the directional gate — must have bias AND score >= 3.
+    ML adds 2 pts when it agrees, -1 when it conflicts, 0 when neutral.
+    Tech adds its raw score when it agrees, -1 when it conflicts, 0 when neutral.
+    Entry fires when ICT bias present AND total score >= 5.
+    """
+    atr = ict.get("atr", ml.get("atr", tech.get("atr", 0)))
+
+    for side in ("BUY", "SELL"):
+        bias_ok = ict["bullish_bias"] if side == "BUY" else ict["bearish_bias"]
+        ict_raw = ict["buy_score"]    if side == "BUY" else ict["sell_score"]
+
+        if not bias_ok or ict_raw < 3:
+            continue
+
+        ml_act  = ml.get("action", "HOLD")
+        ml_pts  = 2 if ml_act == side else (0 if ml_act == "HOLD" else -1)
+
+        tec_act = tech.get("action", "HOLD")
+        tec_pts = tech.get("score", 0) if tec_act == side else (0 if tec_act == "HOLD" else -1)
+
+        total = ict_raw + ml_pts + tec_pts
+        if total >= 5:
+            return {"action": side, "score": total, "atr": atr}
+
     return {"action": "HOLD", "score": 0, "atr": atr}
 
 
@@ -293,6 +389,7 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
         if verbose:
             print(f"Loading {ticker} models…")
         lr, rf, scaler, feat_cols = _load_models(ticker)
+    _HOLD = {"action": "HOLD", "score": 0, "atr": 0}
 
     if verbose:
         print(f"Downloading {ticker} data…")
@@ -373,14 +470,26 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
         if len(lookback) < WARMUP_BARS:
             continue
 
-        if mode == "tech":
-            sig = _tech_signal(lookback)
+        # ICT is always computed — it is the primary signal gate
+        ict = _ict_signal(lookback)
+
+        if mode == "fused":
+            ml_sig   = _ml_signal(lookback, lr, rf, scaler, feat_cols)
+            tech_sig = _tech_signal(lookback)
+            sig      = _fuse(ict, ml_sig, tech_sig)
         elif mode == "ml":
-            sig = _ml_signal(lookback, lr, rf, scaler, feat_cols)
-        else:
-            ml_  = _ml_signal(lookback, lr, rf, scaler, feat_cols)
-            tec_ = _tech_signal(lookback)
-            sig  = _fuse(ml_, tec_)
+            ml_sig = _ml_signal(lookback, lr, rf, scaler, feat_cols)
+            sig    = _fuse(ict, ml_sig, _HOLD)
+        elif mode == "tech":
+            tech_sig = _tech_signal(lookback)
+            sig      = _fuse(ict, _HOLD, tech_sig)
+        else:  # "ict" — pure ICT, stricter standalone threshold (score >= 5)
+            if ict["bullish_bias"] and ict["buy_score"] >= 5:
+                sig = {"action": "BUY",  "score": ict["buy_score"],  "atr": ict["atr"]}
+            elif ict["bearish_bias"] and ict["sell_score"] >= 5:
+                sig = {"action": "SELL", "score": ict["sell_score"], "atr": ict["atr"]}
+            else:
+                sig = _HOLD
 
         if sig["action"] not in ("BUY", "SELL"):
             continue
@@ -587,8 +696,8 @@ def main():
                    help="Starting balance (default: 10000)")
     p.add_argument("--risk",        default=1.0,      type=float,
                    help="Risk %% per trade (default: 1.0)")
-    p.add_argument("--signal",      default="fused",  choices=["fused", "ml", "tech"],
-                   help="Signal mode (default: fused)")
+    p.add_argument("--signal",      default="fused",  choices=["fused", "ml", "tech", "ict"],
+                   help="Signal mode (default: fused = ICT gate + ML + Tech)")
     p.add_argument("--commission",  default=0.001,    type=float,
                    help="Commission per side as fraction (default: 0.001 = 0.1%%)")
     p.add_argument("--no-plot",     action="store_true",
