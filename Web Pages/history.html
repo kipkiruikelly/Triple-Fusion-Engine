@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Prediction History — ML-QTS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
+      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
+      --accent: #FF6B35; --green: #00C076; --red: #FF4D4D;
+      --blue: #3B82F6; --white: #FFFFFF;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-left { display: flex; align-items: center; gap: 32px; }
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
+    .logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 4px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; padding: 6px 12px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+    .nav-links a.active { color: var(--white); background: var(--surface2); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; font-size: 10pt; color: var(--muted); }
+    .topbar-right a { color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s; }
+    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
+    .btn-upgrade { background: var(--accent) !important; color: var(--white) !important; border-color: var(--accent) !important; font-weight: 600; }
+
+    .ticker-strip { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 36px; display: flex; align-items: center; gap: 32px; overflow: hidden; }
+    .ticker-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 9.5pt; }
+    .ticker-item .name { color: var(--muted); font-weight: 500; }
+    .ticker-item .price { color: var(--text); font-weight: 600; }
+    .ticker-item .up { color: var(--green); font-weight: 600; }
+    .ticker-item .down { color: var(--red); font-weight: 600; }
+
+    .layout { display: flex; flex: 1; }
+    .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 0; flex-shrink: 0; }
+    .sidebar-section { padding: 0 16px; margin-bottom: 24px; }
+    .sidebar-label { font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 10pt; color: var(--muted); font-weight: 500; transition: all 0.15s; margin-bottom: 2px; text-decoration: none; }
+    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-item.active { background: var(--surface2); color: var(--white); }
+    .sidebar-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .sidebar-item.active .dot { background: var(--accent); }
+
+    .content { flex: 1; padding: 28px 32px; overflow-y: auto; }
+    .page-title { font-size: 16pt; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .page-subtitle { font-size: 10pt; color: var(--muted); margin-bottom: 28px; }
+
+    /* Summary stats */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+    .stat-label { font-size: 8.5pt; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .stat-value { font-size: 18pt; font-weight: 700; color: var(--white); }
+    .stat-sub { font-size: 9pt; color: var(--muted); margin-top: 2px; }
+
+    /* Filter bar */
+    .filter-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .filter-bar select, .filter-bar input { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 7px 12px; font-size: 9.5pt; font-family: inherit; outline: none; }
+    .filter-bar select:focus, .filter-bar input:focus { border-color: var(--accent); }
+    .filter-bar label { font-size: 9pt; color: var(--muted); }
+
+    /* History table */
+    .hist-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .hist-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    .hist-table thead tr { border-bottom: 1px solid var(--border); }
+    .hist-table th { padding: 12px 16px; text-align: left; font-size: 8pt; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
+    .hist-table td { padding: 13px 16px; border-bottom: 1px solid rgba(42,49,80,0.4); vertical-align: middle; }
+    .hist-table tr:last-child td { border-bottom: none; }
+    .hist-table tbody tr:hover { background: var(--surface2); }
+    .sym { font-weight: 700; color: var(--white); }
+    .interval-badge { display: inline-block; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 7px; font-size: 8pt; color: var(--muted); font-weight: 600; }
+    .dir-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 8.5pt; font-weight: 700; }
+    .dir-up { background: rgba(0,192,118,0.15); color: var(--green); }
+    .dir-dn { background: rgba(255,77,77,0.15); color: var(--red); }
+    .conf-bar { height: 4px; background: var(--border); border-radius: 2px; margin-top: 4px; width: 80px; }
+    .conf-fill { height: 4px; border-radius: 2px; background: var(--accent); }
+    .predict-again { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 5px; padding: 4px 12px; font-size: 8.5pt; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .predict-again:hover { background: var(--accent); color: var(--white); }
+
+    /* Pagination */
+    .pagination { display: flex; justify-content: flex-end; gap: 6px; margin-top: 18px; align-items: center; font-size: 9.5pt; color: var(--muted); }
+    .pg-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 5px; padding: 5px 12px; cursor: pointer; transition: all 0.15s; }
+    .pg-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .pg-btn.active { background: var(--accent); border-color: var(--accent); color: var(--white); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 64px 32px; }
+    .empty-icon { font-size: 36pt; margin-bottom: 16px; }
+    .empty-title { font-size: 14pt; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .empty-sub { font-size: 10pt; color: var(--muted); }
+    .empty-cta { display: inline-block; margin-top: 20px; background: var(--accent); color: var(--white); text-decoration: none; border-radius: 6px; padding: 10px 24px; font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<nav class="topbar">
+  <div class="topbar-left">
+    <a href="/" class="logo">Market<span>Predict</span></a>
+    <div class="nav-links">
+      <a href="/">Predictor</a>
+      <a href="/market">Markets</a>
+      <a href="/watchlist">Watchlist</a>
+      <a href="/history" class="active">History</a>
+      <a href="/pricing">Pricing</a>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span>{{ current_user.username }}</span>
+    {% if not current_user.is_pro %}
+      <a href="/pricing" class="btn-upgrade">Upgrade</a>
+    {% endif %}
+    <a href="/profile">Profile</a>
+    <a href="/logout">Logout</a>
+  </div>
+</nav>
+
+<div class="ticker-strip">
+  <div class="ticker-item"><span class="name">S&P 500</span><span class="price">5,308.15</span><span class="up">+0.51%</span></div>
+  <div class="ticker-item"><span class="name">NASDAQ</span><span class="price">16,742.39</span><span class="up">+0.78%</span></div>
+  <div class="ticker-item"><span class="name">DOW</span><span class="price">38,996.39</span><span class="down">-0.12%</span></div>
+  <div class="ticker-item"><span class="name">AAPL</span><span class="price">189.30</span><span class="up">+1.24%</span></div>
+  <div class="ticker-item"><span class="name">TSLA</span><span class="price">177.46</span><span class="down">-2.31%</span></div>
+  <div class="ticker-item"><span class="name">NVDA</span><span class="price">875.40</span><span class="up">+3.12%</span></div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navigation</div>
+      <a class="sidebar-item" href="/"><div class="dot"></div>Price Predictor</a>
+      <a class="sidebar-item" href="/market"><div class="dot"></div>Market Overview</a>
+      <a class="sidebar-item" href="/watchlist"><div class="dot"></div>Watchlist</a>
+      <a class="sidebar-item active" href="/history"><div class="dot"></div>Prediction History</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Filters</div>
+      <div class="sidebar-item" onclick="filterDir('all')"><div class="dot"></div>All Predictions</div>
+      <div class="sidebar-item" onclick="filterDir('Up')"><div class="dot"></div>Bullish Only</div>
+      <div class="sidebar-item" onclick="filterDir('Down')"><div class="dot"></div>Bearish Only</div>
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="page-title">Prediction History</div>
+    <div class="page-subtitle">Your last 100 ML price predictions — track accuracy and revisit past signals</div>
+
+    {% set total = records | length %}
+    {% set up_count = records | selectattr('direction', 'eq', 'Up') | list | length %}
+    {% set dn_count = total - up_count %}
+    {% set avg_conf = (records | map(attribute='confidence') | list | sum / total) | round(1) if total > 0 else 0 %}
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Predictions</div>
+        <div class="stat-value">{{ total }}</div>
+        <div class="stat-sub">All time</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Bullish Calls</div>
+        <div class="stat-value" style="color:var(--green)">{{ up_count }}</div>
+        <div class="stat-sub">{{ ((up_count / total * 100) | round(1)) if total > 0 else 0 }}% of total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Bearish Calls</div>
+        <div class="stat-value" style="color:var(--red)">{{ dn_count }}</div>
+        <div class="stat-sub">{{ ((dn_count / total * 100) | round(1)) if total > 0 else 0 }}% of total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Confidence</div>
+        <div class="stat-value" style="color:var(--accent)">{{ avg_conf }}%</div>
+        <div class="stat-sub">Across all predictions</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <label>Filter by ticker:</label>
+      <input type="text" id="tickerFilter" placeholder="e.g. AAPL" oninput="applyFilter()" style="width:120px;" />
+      <label>Interval:</label>
+      <select id="intervalFilter" onchange="applyFilter()">
+        <option value="">All</option>
+        <option value="1d">Daily</option>
+        <option value="1h">1h Intraday</option>
+      </select>
+      <label>Direction:</label>
+      <select id="dirFilter" onchange="applyFilter()">
+        <option value="">All</option>
+        <option value="Up">Bullish</option>
+        <option value="Down">Bearish</option>
+      </select>
+    </div>
+
+    {% if records %}
+    <div class="hist-table-wrap">
+      <table class="hist-table" id="histTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Ticker</th>
+            <th>Interval</th>
+            <th>Price at Prediction</th>
+            <th>LR Forecast</th>
+            <th>RF Forecast</th>
+            <th>Direction</th>
+            <th>Confidence</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr data-ticker="{{ r.ticker }}" data-interval="{{ r.interval }}" data-dir="{{ r.direction }}">
+            <td style="color:var(--muted)">{{ loop.index }}</td>
+            <td><span class="sym">{{ r.ticker }}</span></td>
+            <td><span class="interval-badge">{{ r.interval }}</span></td>
+            <td>${{ "%.2f"|format(r.current_price) }}</td>
+            <td>${{ "%.2f"|format(r.lr_pred) }}
+              {% set diff = r.lr_pred - r.current_price %}
+              <span style="font-size:8.5pt;color:{{ 'var(--green)' if diff >= 0 else 'var(--red)' }}">
+                ({{ '+' if diff >= 0 else '' }}{{ "%.2f"|format(diff) }})
+              </span>
+            </td>
+            <td>${{ "%.2f"|format(r.rf_pred) }}</td>
+            <td>
+              <span class="dir-pill {{ 'dir-up' if r.direction == 'Up' else 'dir-dn' }}">
+                {{ '▲ Bullish' if r.direction == 'Up' else '▼ Bearish' }}
+              </span>
+            </td>
+            <td>
+              <div>{{ r.confidence }}%</div>
+              <div class="conf-bar"><div class="conf-fill" style="width:{{ r.confidence }}%"></div></div>
+            </td>
+            <td style="color:var(--muted);white-space:nowrap;">{{ r.predicted_at.strftime('%b %d, %Y %H:%M') }}</td>
+            <td>
+              <form action="/predict" method="POST" style="display:inline">
+                <input type="hidden" name="ticker" value="{{ r.ticker }}" />
+                <input type="hidden" name="interval" value="{{ r.interval }}" />
+                <button type="submit" class="predict-again">Re-run</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="hist-table-wrap">
+      <div class="empty-state">
+        <div class="empty-icon">📊</div>
+        <div class="empty-title">No predictions yet</div>
+        <div class="empty-sub">Your prediction history will appear here after you run your first prediction.</div>
+        <a href="/" class="empty-cta">Make a prediction →</a>
+      </div>
+    </div>
+    {% endif %}
+  </main>
+</div>
+
+<script>
+function applyFilter() {
+  const tf = document.getElementById('tickerFilter').value.toUpperCase();
+  const iv = document.getElementById('intervalFilter').value;
+  const dv = document.getElementById('dirFilter').value;
+  document.querySelectorAll('#histTable tbody tr').forEach(row => {
+    const t = row.dataset.ticker || '';
+    const i = row.dataset.interval || '';
+    const d = row.dataset.dir || '';
+    const show = (!tf || t.includes(tf)) && (!iv || i === iv) && (!dv || d === dv);
+    row.style.display = show ? '' : 'none';
+  });
+}
+
+function filterDir(dir) {
+  document.getElementById('dirFilter').value = dir === 'all' ? '' : dir;
+  applyFilter();
+}
+</script>
+</body>
+</html>

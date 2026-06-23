@@ -19,8 +19,8 @@ import logging
 import warnings
 warnings.filterwarnings("ignore")
 
-from datetime import date
-from flask import Flask, render_template, request, jsonify, redirect, url_for, g
+from datetime import date, datetime
+from flask import Flask, render_template, request, jsonify, redirect, url_for, g, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -82,6 +82,31 @@ class User(UserMixin, db.Model):
         return max(0, FREE_DAILY_LIMIT - self.predictions_today)
 
 
+# ── PredictionHistory model ──────────────────────────────────────────────────
+
+class PredictionHistory(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ticker       = db.Column(db.String(12), nullable=False)
+    interval     = db.Column(db.String(4), nullable=False)
+    current_price= db.Column(db.Float, nullable=False)
+    lr_pred      = db.Column(db.Float, nullable=False)
+    rf_pred      = db.Column(db.Float, nullable=False)
+    direction    = db.Column(db.String(8), nullable=False)
+    confidence   = db.Column(db.Float, nullable=False)
+    predicted_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── WatchlistItem model ──────────────────────────────────────────────────────
+
+class WatchlistItem(db.Model):
+    id       = db.Column(db.Integer, primary_key=True)
+    user_id  = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ticker   = db.Column(db.String(12), nullable=False)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('user_id', 'ticker'),)
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -104,7 +129,7 @@ def consume_quota(user):
 
 os.makedirs(os.path.join(BASE_DIR, 'instance'), exist_ok=True)
 with app.app_context():
-    db.create_all()
+    db.create_all()  # creates User, PredictionHistory, WatchlistItem tables
 
 
 # ── Auth routes ─────────────────────────────────────────────────────────────
@@ -220,6 +245,22 @@ def predict():
     try:
         _try_azure_download(ticker, interval)
         result = run_prediction(ticker, interval)
+        # Save to prediction history
+        try:
+            ph = PredictionHistory(
+                user_id=current_user.id,
+                ticker=ticker,
+                interval=interval,
+                current_price=result["current_price"],
+                lr_pred=result["lr_pred"],
+                rf_pred=result["rf_pred"],
+                direction=result["direction"],
+                confidence=result["confidence"],
+            )
+            db.session.add(ph)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         return render_template("result.html", **result)
     except ValueError as e:
         return render_template("index.html", error=str(e), interval=interval)
@@ -227,6 +268,84 @@ def predict():
         return render_template("index.html",
                                error=f'Could not fetch data for "{ticker}". Please check the symbol and try again.',
                                interval=interval)
+
+
+# ── Market / Watchlist / History / Profile routes ────────────────────────────
+
+@app.route("/market")
+@login_required
+def market():
+    return render_template("market.html")
+
+
+@app.route("/watchlist")
+@login_required
+def watchlist():
+    items = WatchlistItem.query.filter_by(user_id=current_user.id).order_by(WatchlistItem.added_at).all()
+    return render_template("watchlist.html", watchlist=[i.ticker for i in items])
+
+
+@app.route("/api/watchlist/add", methods=["POST"])
+@login_required
+def watchlist_add():
+    ticker = (request.get_json() or {}).get("ticker", "").upper().strip()
+    if not ticker or len(ticker) > 10:
+        return jsonify({"ok": False, "error": "Invalid ticker"}), 400
+    try:
+        db.session.add(WatchlistItem(user_id=current_user.id, ticker=ticker))
+        db.session.commit()
+        return jsonify({"ok": True})
+    except Exception:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": "Already in watchlist"}), 409
+
+
+@app.route("/api/watchlist/remove", methods=["POST"])
+@login_required
+def watchlist_remove():
+    ticker = (request.get_json() or {}).get("ticker", "").upper().strip()
+    WatchlistItem.query.filter_by(user_id=current_user.id, ticker=ticker).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/history")
+@login_required
+def history():
+    records = (PredictionHistory.query
+               .filter_by(user_id=current_user.id)
+               .order_by(PredictionHistory.predicted_at.desc())
+               .limit(100).all())
+    return render_template("history.html", records=records)
+
+
+@app.route("/profile")
+@login_required
+def profile():
+    total = PredictionHistory.query.filter_by(user_id=current_user.id).count()
+    return render_template("profile.html", total_predictions=total)
+
+
+@app.route("/profile/change-password", methods=["POST"])
+@login_required
+def change_password():
+    current_pw = request.form.get("current_password", "")
+    new_pw     = request.form.get("new_password", "")
+    confirm_pw = request.form.get("confirm_password", "")
+    total      = PredictionHistory.query.filter_by(user_id=current_user.id).count()
+    if not current_user.check_password(current_pw):
+        return render_template("profile.html", total_predictions=total,
+                               pw_error="Current password is incorrect.")
+    if len(new_pw) < 6:
+        return render_template("profile.html", total_predictions=total,
+                               pw_error="New password must be at least 6 characters.")
+    if new_pw != confirm_pw:
+        return render_template("profile.html", total_predictions=total,
+                               pw_error="Passwords do not match.")
+    current_user.set_password(new_pw)
+    db.session.commit()
+    return render_template("profile.html", total_predictions=total,
+                           pw_success="Password updated successfully.")
 
 
 # ── MT5 routes (Pro only) ───────────────────────────────────────────────────

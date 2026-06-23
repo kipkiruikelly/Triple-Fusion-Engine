@@ -467,12 +467,13 @@
 <!-- Top bar -->
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo">Market<span>Predict</span></div>
+    <a href="/" class="logo" style="text-decoration:none;">Market<span>Predict</span></a>
     <nav class="nav-links">
       <a href="/" class="active">Predictor</a>
-      <a href="#markets" onclick="showSection('markets')">Markets</a>
-      <a href="#analysis" onclick="showSection('analysis')">Analysis</a>
-      <a href="#about" onclick="showSection('about')">About</a>
+      <a href="/market">Markets</a>
+      <a href="/watchlist">Watchlist</a>
+      <a href="/history">History</a>
+      <a href="/pricing">Pricing</a>
     </nav>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
@@ -483,6 +484,7 @@
       <span style="color:var(--muted);font-size:9.5pt;">{{ current_user.predictions_remaining }}/5 left</span>
       <a href="/pricing" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">Upgrade</a>
     {% endif %}
+    <a href="/profile" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Profile</a>
     <a href="/logout" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Logout</a>
   </div>
 </div>
