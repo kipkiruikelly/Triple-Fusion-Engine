@@ -49,10 +49,10 @@ BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
 WARMUP_BARS      = 100   # minimum bars of history before first signal
-MAX_HOLD         = 5     # force-close after this many bars
+MAX_HOLD         = 10    # force-close after this many bars (2 trading weeks)
 SL_ATR_MULT      = 1.5
-TP_ATR_MULT      = 3.0
-MAX_POSITIONS    = 3
+TP_ATR_MULT      = 2.5   # 1.67:1 R:R — closer TP, more hits over 10-bar hold
+MAX_POSITIONS    = 2     # cap concurrent positions to limit cluster drawdowns
 DAILY_LOSS_LIMIT = 0.05  # halt new entries if equity drops 5% intraday
 
 
@@ -279,9 +279,15 @@ def _ict_signal(lookback: pd.DataFrame) -> dict:
     if atr <= 0:
         atr = close * 0.01
 
-    # Trend bias (200 SMA + market structure must agree)
-    bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5)
-    bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)
+    # Short-term trend confirmation (EMA20 / EMA50 alignment)
+    ema20 = float(lookback["Close"].ewm(span=20, adjust=False).mean().iloc[-1])
+    ema50 = float(lookback["Close"].ewm(span=50, adjust=False).mean().iloc[-1])
+    st_bull = (close > ema20 > ema50)  # short-term uptrend
+    st_bear = (close < ema20 < ema50)  # short-term downtrend
+
+    # Trend bias: 200 SMA + market structure + EMA alignment must agree
+    bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5) and st_bull
+    bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)  and st_bear
 
     buy = sell = 0
 

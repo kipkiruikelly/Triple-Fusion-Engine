@@ -570,8 +570,14 @@ class MT5Trader:
             if atr <= 0:
                 atr = close * 0.01
 
-            bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5)
-            bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)
+            # EMA20 / EMA50 alignment as short-term trend confirmation
+            ema20 = float(feat_df["Close"].ewm(span=20, adjust=False).mean().iloc[-1])
+            ema50 = float(feat_df["Close"].ewm(span=50, adjust=False).mean().iloc[-1])
+            st_bull = (close > ema20 > ema50)
+            st_bear = (close < ema20 < ema50)
+
+            bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5) and st_bull
+            bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)  and st_bear
 
             buy = sell = 0
 
