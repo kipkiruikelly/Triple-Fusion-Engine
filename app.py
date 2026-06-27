@@ -530,4 +530,4 @@ def _try_azure_download(ticker: str, interval: str = "1d"):
 if __name__ == "__main__":
     print("ML-based Quantitative Trading System")
     print("Running at: http://127.0.0.1:5000\n")
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5000)
