@@ -294,6 +294,39 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     macd_val  = round(float(df["MACD"].iloc[-1]), 3)
     macd_hist = float(df["MACD_Hist"].iloc[-1])
 
+    # ICT values from last bar
+    last        = df.iloc[-1]
+    pd_pos      = round(float(last["PD_Position"]), 3)
+    above_200   = int(last["Above_200SMA"])
+    struct_bull = int(last["Structure_Bullish"])
+    bull_fvg    = int(last["Bull_FVG_Count"])
+    bear_fvg    = int(last["Bear_FVG_Count"])
+    bull_ob     = int(last["Bull_OB_Count"])
+    bear_ob     = int(last["Bear_OB_Count"])
+    swept_high  = int(last["Swept_High"])
+    swept_low   = int(last["Swept_Low"])
+    in_ote_buy  = int(last["In_OTE_Buy"])
+    in_ote_sell = int(last["In_OTE_Sell"])
+    eq_highs    = int(last["Equal_Highs"])
+    eq_lows     = int(last["Equal_Lows"])
+    displaced   = int(last["Displacement"])
+
+    # Derive readable ICT bias
+    if above_200 and struct_bull:
+        ict_bias = "Bullish"
+    elif not above_200 and not struct_bull:
+        ict_bias = "Bearish"
+    else:
+        ict_bias = "Neutral"
+
+    # PD zone label
+    if pd_pos <= 0.45:
+        pd_zone = "Discount"
+    elif pd_pos >= 0.55:
+        pd_zone = "Premium"
+    else:
+        pd_zone = "Equilibrium"
+
     # Human-readable timestamp for the last bar
     last_idx = df.index[-1]
     if interval == "1d":
@@ -331,6 +364,21 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         "bb_upper"     : round(float(df["BB_Upper"].iloc[-1]), 2),
         "bb_lower"     : round(float(df["BB_Lower"].iloc[-1]), 2),
         "as_of"        : as_of,
+        # ICT
+        "ict_bias"     : ict_bias,
+        "pd_position"  : pd_pos,
+        "pd_zone"      : pd_zone,
+        "bull_fvg"     : bull_fvg,
+        "bear_fvg"     : bear_fvg,
+        "bull_ob"      : bull_ob,
+        "bear_ob"      : bear_ob,
+        "swept_high"   : swept_high,
+        "swept_low"    : swept_low,
+        "in_ote_buy"   : in_ote_buy,
+        "in_ote_sell"  : in_ote_sell,
+        "eq_highs"     : eq_highs,
+        "eq_lows"      : eq_lows,
+        "displaced"    : displaced,
     }
 
 

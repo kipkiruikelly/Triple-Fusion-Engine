@@ -390,6 +390,77 @@
     .tag-lstm { background: rgba(0,192,118,0.15);  color: var(--green); }
     .tag-na   { background: rgba(122,132,153,0.15); color: var(--muted); }
 
+    /* ── ICT Section ── */
+    .ict-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .ict-section-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ict-bias-badge {
+      font-size: 8.5pt;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+
+    .ict-bias-bull { background: rgba(0,192,118,0.15); color: var(--green); }
+    .ict-bias-bear { background: rgba(255,77,77,0.15);  color: var(--red); }
+    .ict-bias-neut { background: rgba(122,132,153,0.15); color: var(--muted); }
+
+    .ict-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+    }
+
+    .ict-cell {
+      padding: 12px 16px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ict-cell:nth-child(4n) { border-right: none; }
+    .ict-cell:nth-last-child(-n+4) { border-bottom: none; }
+
+    .ict-cell-label {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 6px;
+    }
+
+    .ict-cell-value {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--white);
+    }
+
+    .ict-cell-sub {
+      font-size: 9pt;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    .ict-bull { color: var(--green); }
+    .ict-bear { color: var(--red); }
+    .ict-neut { color: var(--muted); }
+
     /* ── Indicators ── */
     .indicators-grid {
       display: grid;
@@ -721,6 +792,105 @@
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- ICT Analysis -->
+    <div class="ict-section">
+      <div class="ict-section-header">
+        ICT Analysis
+        <span class="ict-bias-badge {% if ict_bias == 'Bullish' %}ict-bias-bull{% elif ict_bias == 'Bearish' %}ict-bias-bear{% else %}ict-bias-neut{% endif %}">
+          {{ ict_bias }} Bias
+        </span>
+      </div>
+      <div class="ict-grid">
+
+        <!-- PD Zone -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">PD Position</div>
+          <div class="ict-cell-value {% if pd_zone == 'Discount' %}ict-bull{% elif pd_zone == 'Premium' %}ict-bear{% else %}ict-neut{% endif %}">
+            {{ pd_zone }}
+          </div>
+          <div class="ict-cell-sub">{{ (pd_position * 100)|round(1) }}% of range
+            {% if pd_zone == 'Discount' %} — buy zone{% elif pd_zone == 'Premium' %} — sell zone{% else %} — wait for expansion{% endif %}
+          </div>
+        </div>
+
+        <!-- Market Structure -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">Market Structure</div>
+          <div class="ict-cell-value {% if ict_bias == 'Bullish' %}ict-bull{% elif ict_bias == 'Bearish' %}ict-bear{% else %}ict-neut{% endif %}">
+            {% if ict_bias == 'Bullish' %}Higher Highs{% elif ict_bias == 'Bearish' %}Lower Lows{% else %}Ranging{% endif %}
+          </div>
+          <div class="ict-cell-sub">
+            {% if ict_bias == 'Bullish' %}Above 200 SMA · Bullish structure{% elif ict_bias == 'Bearish' %}Below 200 SMA · Bearish structure{% else %}Mixed signals{% endif %}
+          </div>
+        </div>
+
+        <!-- Fair Value Gaps -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">Fair Value Gaps (10 bars)</div>
+          <div class="ict-cell-value">
+            <span class="ict-bull">{{ bull_fvg }}↑</span>
+            &nbsp;/&nbsp;
+            <span class="ict-bear">{{ bear_fvg }}↓</span>
+          </div>
+          <div class="ict-cell-sub">Bullish / Bearish FVGs</div>
+        </div>
+
+        <!-- Order Blocks -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">Order Blocks (10 bars)</div>
+          <div class="ict-cell-value">
+            <span class="ict-bull">{{ bull_ob }}↑</span>
+            &nbsp;/&nbsp;
+            <span class="ict-bear">{{ bear_ob }}↓</span>
+          </div>
+          <div class="ict-cell-sub">Bullish / Bearish OBs</div>
+        </div>
+
+        <!-- OTE Zone -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">OTE Zone (0.62–0.79 Fib)</div>
+          <div class="ict-cell-value {% if in_ote_buy %}ict-bull{% elif in_ote_sell %}ict-bear{% else %}ict-neut{% endif %}">
+            {% if in_ote_buy %}Buy OTE{% elif in_ote_sell %}Sell OTE{% else %}Outside OTE{% endif %}
+          </div>
+          <div class="ict-cell-sub">Optimal Trade Entry zone</div>
+        </div>
+
+        <!-- Liquidity -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">Liquidity Pools</div>
+          <div class="ict-cell-value">
+            <span class="ict-bull">EQL {{ eq_lows }}</span>
+            &nbsp;/&nbsp;
+            <span class="ict-bear">EQH {{ eq_highs }}</span>
+          </div>
+          <div class="ict-cell-sub">Equal Lows / Equal Highs</div>
+        </div>
+
+        <!-- Liquidity Sweeps -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">Liquidity Sweep</div>
+          <div class="ict-cell-value {% if swept_low %}ict-bull{% elif swept_high %}ict-bear{% else %}ict-neut{% endif %}">
+            {% if swept_low %}Low Swept{% elif swept_high %}High Swept{% else %}None{% endif %}
+          </div>
+          <div class="ict-cell-sub">
+            {% if swept_low %}Potential reversal up{% elif swept_high %}Potential reversal down{% else %}No recent sweep{% endif %}
+          </div>
+        </div>
+
+        <!-- Displacement -->
+        <div class="ict-cell">
+          <div class="ict-cell-label">Displacement</div>
+          <div class="ict-cell-value {% if displaced %}ict-bull{% else %}ict-neut{% endif %}">
+            {% if displaced %}Active{% else %}None{% endif %}
+          </div>
+          <div class="ict-cell-sub">
+            {% if displaced %}Strong directional move detected{% else %}No displacement candle{% endif %}
+          </div>
+        </div>
+
+      </div>
     </div>
 
     <!-- Indicators -->
