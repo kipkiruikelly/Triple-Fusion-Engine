@@ -54,7 +54,7 @@ def _load_models(ticker: str, interval: str = "1d"):
 
 def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
     yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
-    period    = "730d" if interval == "1h" else "6mo"
+    period    = "730d" if interval == "1h" else "1y"
     df = yf.download(yf_ticker, period=period, interval=interval,
                      auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -327,6 +327,84 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     else:
         pd_zone = "Equilibrium"
 
+    # ── Lightweight Charts payload ─────────────────────────────────────────────
+    def _lw_time(ts):
+        if interval == "1d":
+            return ts.strftime("%Y-%m-%d")
+        if ts.tzinfo is not None:
+            return int(ts.timestamp())
+        return int(pd.Timestamp(ts, tz="UTC").timestamp())
+
+    chart_plot = df.tail(120)
+
+    candles = [
+        {
+            "time":  _lw_time(idx),
+            "open":  round(float(r["Open"]),  4),
+            "high":  round(float(r["High"]),  4),
+            "low":   round(float(r["Low"]),   4),
+            "close": round(float(r["Close"]), 4),
+        }
+        for idx, r in chart_plot.iterrows()
+    ]
+
+    sma200_raw  = df["Close"].rolling(200, min_periods=1).mean().tail(120)
+    sma200_line = [
+        {"time": _lw_time(idx), "value": round(float(v), 4)}
+        for idx, v in sma200_raw.items()
+        if pd.notna(v)
+    ]
+
+    # OTE zones (0.62–0.79 Fibonacci of last 20-bar swing)
+    atr_val = float(last["ATR_14"])
+    sh20    = float(df["High"].rolling(20).max().iloc[-1])
+    sl20_v  = float(df["Low"].rolling(20).min().iloc[-1])
+    rng20v  = max(sh20 - sl20_v, atr_val)
+    ote_buy_zone  = {"low": round(sh20  - rng20v * 0.79, 4), "high": round(sh20  - rng20v * 0.62, 4)}
+    ote_sell_zone = {"low": round(sl20_v + rng20v * 0.62, 4), "high": round(sl20_v + rng20v * 0.79, 4)}
+
+    # FVG zones (last 5 in the 120-bar window)
+    h_arr = chart_plot["High"].values
+    l_arr = chart_plot["Low"].values
+    fvg_list = []
+    for i in range(2, len(h_arr)):
+        if l_arr[i] > h_arr[i - 2]:            # Bullish FVG: gap above candle i-2
+            fvg_list.append({"low": round(float(h_arr[i - 2]), 4), "high": round(float(l_arr[i]), 4), "type": "bull"})
+        elif h_arr[i] < l_arr[i - 2]:           # Bearish FVG: gap below candle i-2
+            fvg_list.append({"low": round(float(h_arr[i]), 4), "high": round(float(l_arr[i - 2]), 4), "type": "bear"})
+    fvg_list = fvg_list[-5:]
+
+    # OB zones (last 5 in the 120-bar window)
+    o_arr = chart_plot["Open"].values
+    c_arr = chart_plot["Close"].values
+    d_arr = chart_plot["Displacement"].values
+    ob_list = []
+    for i in range(1, len(h_arr)):
+        if d_arr[i] and c_arr[i-1] < o_arr[i-1] and c_arr[i] > o_arr[i]:    # Bull OB
+            ob_list.append({"low": round(float(l_arr[i-1]), 4), "high": round(float(h_arr[i-1]), 4), "type": "bull"})
+        elif d_arr[i] and c_arr[i-1] > o_arr[i-1] and c_arr[i] < o_arr[i]:  # Bear OB
+            ob_list.append({"low": round(float(l_arr[i-1]), 4), "high": round(float(h_arr[i-1]), 4), "type": "bear"})
+    ob_list = ob_list[-5:]
+
+    # ATR-based SL / TP
+    sl_price = round(current_price - 1.5 * atr_val, 4) if direction == "Up" else round(current_price + 1.5 * atr_val, 4)
+    tp_price = round(current_price + 3.0 * atr_val, 4) if direction == "Up" else round(current_price - 3.0 * atr_val, 4)
+
+    lw_chart_data = {
+        "candles":    candles,
+        "sma200":     sma200_line,
+        "ote_buy":    ote_buy_zone,
+        "ote_sell":   ote_sell_zone,
+        "fvg":        fvg_list,
+        "ob":         ob_list,
+        "pred":       round(lr_pred, 4),
+        "sl":         sl_price,
+        "tp":         tp_price,
+        "direction":  direction,
+        "in_ote_buy": in_ote_buy,
+        "in_ote_sell": in_ote_sell,
+    }
+
     # Human-readable timestamp for the last bar
     last_idx = df.index[-1]
     if interval == "1d":
@@ -379,6 +457,8 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         "eq_highs"     : eq_highs,
         "eq_lows"      : eq_lows,
         "displaced"    : displaced,
+        # Lightweight Charts
+        "lw_chart"     : json.dumps(lw_chart_data),
     }
 
 

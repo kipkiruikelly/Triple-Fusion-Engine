@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{{ ticker }} — BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <script src="https://s3.tradingview.com/tv.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -293,7 +293,15 @@
     .chart-tab.active { background: var(--surface2); color: var(--white); }
     .chart-tab:hover { color: var(--text); }
 
-    #tradingview_chart { width: 100%; height: 420px; }
+    #chart-wrap    { position: relative; width: 100%; height: 420px; }
+    #lw-chart      { width: 100%; height: 100%; }
+    .chart-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+    .zone-box      { position: absolute; left: 0; }
+    .chart-legend  {
+      position: absolute; top: 8px; left: 10px; z-index: 2;
+      display: flex; gap: 10px; flex-wrap: wrap; pointer-events: none;
+      font-size: 8.5px; font-family: 'Inter', sans-serif; font-weight: 600;
+    }
 
     /* ── Data grid ── */
     .data-grid {
@@ -538,6 +546,75 @@
       .indicators-grid { grid-template-columns: 1fr 1fr; }
       .content { padding: 16px; }
     }
+
+    /* ── Quick Trade Panel ───────────────────────────────────────────────── */
+    .trade-panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:16px; }
+    .trade-panel-header { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--border); }
+    .trade-panel-title { font-size:10.5pt; font-weight:700; color:var(--white); flex:1; }
+    .trade-badge { font-size:8.5pt; font-weight:700; padding:3px 9px; border-radius:4px; }
+    .trade-connected    { background:rgba(0,192,118,0.15); color:var(--green); }
+    .trade-disconnected { background:rgba(122,132,153,0.15); color:var(--muted); }
+    .trade-pro-tag { font-size:8pt; font-weight:700; background:var(--accent); color:var(--white); padding:2px 7px; border-radius:3px; }
+    .trade-toggle-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:10pt; padding:0 4px; line-height:1; }
+    .trade-body { position:relative; }
+    .trade-lock-overlay { position:absolute; inset:0; background:rgba(15,18,23,0.9); display:flex; align-items:center; justify-content:center; z-index:10; }
+    .trade-lock-content { text-align:center; padding:28px 20px; }
+    .trade-conn-area { padding:14px 16px; }
+    .trade-conn-tabs { display:flex; gap:4px; margin-bottom:12px; }
+    .trade-tab { font-size:9pt; font-weight:600; padding:5px 12px; border-radius:4px; cursor:pointer; background:none; border:1px solid var(--border); color:var(--muted); transition:all 0.15s; }
+    .trade-tab.active { background:var(--surface2); color:var(--white); border-color:var(--surface2); }
+    .trade-conn-info { font-size:9pt; color:var(--muted); margin-bottom:10px; }
+    .trade-conn-hint { font-size:8.5pt; color:var(--muted); margin-top:8px; }
+    .trade-field-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .trade-input { background:var(--bg); border:1px solid var(--border); border-radius:5px; color:var(--text); font-size:10pt; padding:7px 10px; font-family:inherit; min-width:0; }
+    .trade-input:focus { outline:none; border-color:var(--accent); }
+    .trade-conn-btn { background:var(--surface2); border:1px solid var(--border); border-radius:5px; color:var(--white); font-size:9.5pt; font-weight:700; padding:7px 14px; cursor:pointer; white-space:nowrap; }
+    .trade-conn-btn:hover { background:var(--accent); border-color:var(--accent); }
+    .trade-account-bar { display:flex; align-items:center; gap:20px; padding:10px 16px; background:var(--bg); border-top:1px solid var(--border); border-bottom:1px solid var(--border); flex-wrap:wrap; }
+    .trade-acct-item { display:flex; flex-direction:column; gap:2px; }
+    .trade-acct-label { font-size:8pt; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.3px; }
+    .trade-acct-val { font-size:10pt; font-weight:700; color:var(--white); }
+    .trade-disconnect-btn { margin-left:auto; background:none; border:1px solid var(--border); border-radius:4px; color:var(--muted); font-size:8.5pt; padding:4px 10px; cursor:pointer; }
+    .trade-disconnect-btn:hover { border-color:var(--red); color:var(--red); }
+    .trade-order-area { padding:14px 16px; display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }
+    .trade-order-field { display:flex; flex-direction:column; gap:4px; }
+    .trade-field-label { font-size:8.5pt; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:0.3px; }
+    .trade-order-field .trade-input { width:90px; }
+    #order-symbol.trade-input { width:72px; text-transform:uppercase; font-weight:700; }
+    #order-risk.trade-input   { width:56px; }
+    .trade-order-btns { display:flex; gap:8px; align-items:center; padding-bottom:0; }
+    .trade-buy-btn  { background:var(--green); border:none; border-radius:5px; color:#fff; font-size:10pt; font-weight:700; padding:8px 22px; cursor:pointer; }
+    .trade-sell-btn { background:var(--red);   border:none; border-radius:5px; color:#fff; font-size:10pt; font-weight:700; padding:8px 22px; cursor:pointer; }
+    .trade-close-btn { background:var(--surface2); border:1px solid var(--border); border-radius:5px; color:var(--muted); font-size:10pt; font-weight:600; padding:8px 14px; cursor:pointer; }
+    .trade-close-btn:hover { border-color:var(--red); color:var(--red); }
+    .trade-buy-btn:hover,.trade-sell-btn:hover { opacity:0.85; }
+    .trade-msg { margin:0 16px 12px; padding:8px 12px; border-radius:5px; font-size:9.5pt; font-weight:600; }
+    .trade-msg-ok  { background:rgba(0,192,118,0.12); color:var(--green); border:1px solid rgba(0,192,118,0.3); }
+    .trade-msg-err { background:rgba(255,77,77,0.12);  color:var(--red);   border:1px solid rgba(255,77,77,0.3); }
+    .trade-msg-inf { background:rgba(59,130,246,0.12); color:#60A5FA;      border:1px solid rgba(59,130,246,0.3); }
+    .positions-area { border-top:1px solid var(--border); }
+    .positions-header { padding:8px 16px; font-size:9pt; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.3px; }
+    .position-row { display:flex; align-items:center; gap:14px; padding:8px 16px; border-top:1px solid var(--border); font-size:9.5pt; flex-wrap:wrap; }
+    .pos-ticket { color:var(--muted); font-size:9pt; }
+    .pos-buy  { color:var(--green); font-weight:700; }
+    .pos-sell { color:var(--red);   font-weight:700; }
+    .pos-sym  { color:var(--white); font-weight:700; }
+    .pos-pos  { color:var(--green); font-weight:700; }
+    .pos-neg  { color:var(--red);   font-weight:700; }
+
+    /* ── Multi-Timeframe Panel ───────────────────────────────────────────── */
+    .mtf-panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:16px; }
+    .mtf-header { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--border); font-size:10.5pt; font-weight:700; color:var(--white); }
+    .mtf-pro-badge { background:var(--accent); color:var(--white); font-size:8pt; font-weight:700; padding:2px 7px; border-radius:3px; }
+    .mtf-body { position:relative; min-height:88px; }
+    .mtf-table { width:100%; border-collapse:collapse; }
+    .mtf-table th { padding:9px 16px; font-size:9pt; font-weight:600; color:var(--muted); text-align:left; border-bottom:1px solid var(--border); text-transform:uppercase; letter-spacing:0.3px; }
+    .mtf-table td { padding:11px 16px; font-size:10pt; border-bottom:1px solid var(--border); color:var(--muted); }
+    .mtf-table tbody tr:last-child td { border-bottom:none; }
+    .tf-badge { font-size:8.5pt; font-weight:700; padding:3px 8px; border-radius:4px; background:var(--surface2); color:var(--white); }
+    .mtf-loading { padding:20px 16px; color:var(--muted); font-size:9.5pt; }
+    .mtf-lock-overlay { position:absolute; inset:0; background:rgba(15,18,23,0.88); display:flex; align-items:center; justify-content:center; z-index:5; backdrop-filter:blur(3px); }
+    .mtf-lock-content { text-align:center; padding:20px; }
   </style>
 </head>
 <body>
@@ -691,7 +768,96 @@
           {% endif %}
         </div>
       </div>
-      <div id="tradingview_chart"></div>
+      <div id="chart-wrap">
+        <div id="lw-chart"></div>
+        <div id="chart-overlay" class="chart-overlay"></div>
+        <div class="chart-legend">
+          <span style="color:#FF6B35;">&#8212; Prediction</span>
+          <span style="color:#00C076;">&#8212; TP &amp; Bull OTE/OB/FVG</span>
+          <span style="color:#FF4D4D;">&#8212; SL &amp; Bear OTE/OB/FVG</span>
+          <span style="color:#FF9900;">&#8212; 200 SMA</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Trade Panel -->
+    <div class="trade-panel">
+      <div class="trade-panel-header">
+        <span class="trade-panel-title">&#9889; Quick Trade</span>
+        <span id="trade-status-badge" class="trade-badge trade-disconnected">&#9679; Disconnected</span>
+        {% if not current_user.is_pro %}<span class="trade-pro-tag">PRO</span>{% endif %}
+        <button id="trade-toggle-btn" class="trade-toggle-btn" onclick="toggleTradePanel()">&#9660;</button>
+      </div>
+      <div class="trade-body" id="trade-body">
+
+        {% if not current_user.is_pro %}
+        <div class="trade-lock-overlay">
+          <div class="trade-lock-content">
+            <div style="font-size:30px;margin-bottom:10px;">&#128274;</div>
+            <div style="font-weight:700;font-size:13pt;color:var(--white);margin-bottom:6px;">Pro Required</div>
+            <div style="color:var(--muted);font-size:10pt;max-width:320px;margin:0 auto 18px;">Connect to paper &amp; live trading accounts and execute real-time orders directly from the chart.</div>
+            <a href="/pricing" class="trade-conn-btn" style="display:inline-block;text-decoration:none;">Upgrade to Pro</a>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Connection section -->
+        <div id="trade-connect-section" class="trade-conn-area">
+          <div class="trade-conn-tabs">
+            <button class="trade-tab active" data-tab="paper"    onclick="setConnTab('paper')">Paper</button>
+            <button class="trade-tab"         data-tab="metaapi" onclick="setConnTab('metaapi')">MetaApi</button>
+          </div>
+          <div id="tab-paper">
+            <div class="trade-conn-info">$10,000 virtual balance &nbsp;&middot;&nbsp; no broker credentials needed</div>
+            <button class="trade-conn-btn" onclick="connectTrade('paper')">Connect Paper Account</button>
+          </div>
+          <div id="tab-metaapi" style="display:none;">
+            <div class="trade-field-row">
+              <input id="mapi-token" class="trade-input" type="password" placeholder="MetaApi Token" style="width:200px;" />
+              <input id="mapi-id"    class="trade-input" type="text"     placeholder="Account ID"    style="width:160px;" />
+              <button class="trade-conn-btn" onclick="connectTrade('metaapi')">Connect</button>
+            </div>
+            <div class="trade-conn-hint">Get token at metaapi.cloud — free tier available</div>
+          </div>
+        </div>
+
+        <!-- Connected view -->
+        <div id="trade-connected-section" style="display:none;">
+          <div class="trade-account-bar">
+            <div class="trade-acct-item"><span class="trade-acct-label">Mode</span><span id="acct-mode" class="trade-acct-val">—</span></div>
+            <div class="trade-acct-item"><span class="trade-acct-label">Balance</span><span id="acct-balance" class="trade-acct-val">—</span></div>
+            <div class="trade-acct-item"><span class="trade-acct-label">Equity</span><span id="acct-equity" class="trade-acct-val">—</span></div>
+            <div class="trade-acct-item"><span class="trade-acct-label">Positions</span><span id="acct-pos-count" class="trade-acct-val">0</span></div>
+            <button class="trade-disconnect-btn" onclick="disconnectTrade()">Disconnect</button>
+          </div>
+          <div class="trade-order-area">
+            <div class="trade-order-field">
+              <label class="trade-field-label">Symbol</label>
+              <input id="order-symbol" class="trade-input" type="text" value="{{ ticker }}" />
+            </div>
+            <div class="trade-order-field">
+              <label class="trade-field-label">Risk %</label>
+              <input id="order-risk" class="trade-input" type="number" value="1" min="0.1" max="5" step="0.1" />
+            </div>
+            <div class="trade-order-field">
+              <label class="trade-field-label">SL (auto)</label>
+              <input id="order-sl" class="trade-input" type="number" step="0.01" readonly title="ATR-based, set automatically" />
+            </div>
+            <div class="trade-order-field">
+              <label class="trade-field-label">TP (auto)</label>
+              <input id="order-tp" class="trade-input" type="number" step="0.01" readonly title="ATR-based, set automatically" />
+            </div>
+            <div class="trade-order-btns">
+              <button class="trade-buy-btn"  onclick="placeOrder('BUY')">&#9650; BUY</button>
+              <button class="trade-sell-btn" onclick="placeOrder('SELL')">&#9660; SELL</button>
+              <button class="trade-close-btn" onclick="closeAll()">&#10005; Close All</button>
+            </div>
+          </div>
+          <div id="trade-msg" style="display:none;"></div>
+          <div id="positions-list"></div>
+        </div>
+
+      </div>
     </div>
 
     <!-- Data grid -->
@@ -893,6 +1059,57 @@
       </div>
     </div>
 
+    <!-- Multi-Timeframe Predictions -->
+    <div class="mtf-panel">
+      <div class="mtf-header">
+        Multi-Timeframe Predictions
+        {% if not current_user.is_pro %}<span class="mtf-pro-badge">PRO</span>{% endif %}
+      </div>
+      <div class="mtf-body">
+        {% if current_user.is_pro %}<div id="mtf-loading" class="mtf-loading">Fetching multi-timeframe analysis&hellip;</div>{% endif %}
+        <table class="mtf-table" id="mtf-table" {% if current_user.is_pro %}style="display:none;"{% endif %}>
+          <thead>
+            <tr>
+              <th>Timeframe</th>
+              <th>Prev Day Close</th>
+              <th>Prediction</th>
+              <th>Direction</th>
+              <th>Change</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tf-badge">1D</span></td>
+              <td id="mtf-1d-prev">—</td>
+              <td id="mtf-1d-pred">—</td>
+              <td id="mtf-1d-dir">—</td>
+              <td id="mtf-1d-chg">—</td>
+              <td id="mtf-1d-conf">—</td>
+            </tr>
+            <tr>
+              <td><span class="tf-badge">1H</span></td>
+              <td id="mtf-1h-prev" style="color:var(--muted);font-size:9pt;">current bar</td>
+              <td id="mtf-1h-pred">—</td>
+              <td id="mtf-1h-dir">—</td>
+              <td id="mtf-1h-chg">—</td>
+              <td id="mtf-1h-conf">—</td>
+            </tr>
+          </tbody>
+        </table>
+        {% if not current_user.is_pro %}
+        <div class="mtf-lock-overlay">
+          <div class="mtf-lock-content">
+            <div style="font-size:26px;margin-bottom:8px;">&#128274;</div>
+            <div style="font-weight:700;font-size:12pt;color:var(--white);margin-bottom:6px;">Pro Feature</div>
+            <div style="color:var(--muted);font-size:9.5pt;max-width:300px;margin:0 auto 14px;">Real-time multi-timeframe predictions (1D &amp; 1H) with previous day close reference require Pro.</div>
+            <a href="/pricing" class="trade-conn-btn" style="display:inline-block;text-decoration:none;">Upgrade to Pro</a>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
     <!-- Indicators -->
     <div class="indicators-grid">
       <div class="ind-card">
@@ -929,30 +1146,328 @@
 </div>
 
 <footer>
-  BullLogic &nbsp;&middot;&nbsp; BullLogic &nbsp;&middot;&nbsp; 2026
+  BullLogic &nbsp;&middot;&nbsp; 2026
 </footer>
 
 <script>
-  new TradingView.widget({
-    "container_id" : "tradingview_chart",
-    "autosize"     : true,
-    "symbol"       : "{{ ticker }}",
-    "interval"     : "{% if interval == '1h' %}60{% else %}D{% endif %}",
-    "timezone"     : "Etc/UTC",
-    "theme"        : "dark",
-    "style"        : "1",
-    "locale"       : "en",
-    "backgroundColor"  : "rgba(26,31,46,1)",
-    "gridColor"        : "rgba(42,49,80,0.8)",
-    "hide_top_toolbar" : false,
-    "hide_legend"      : false,
-    "save_image"       : false,
-    "studies"          : ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-    "show_popup_button": false,
-    "withdateranges"   : true,
-    "allow_symbol_change": true,
-    "support_host"     : "https://www.tradingview.com"
+const D = {{ lw_chart | safe }};
+const _isPro = {{ current_user.is_pro | tojson }};
+
+(function () {
+  'use strict';
+  const LS  = LightweightCharts.LineStyle;
+
+  const wrap = document.getElementById('lw-chart');
+
+  const chart = LightweightCharts.createChart(wrap, {
+    width:  wrap.offsetWidth,
+    height: 420,
+    layout: {
+      background: { color: '#1A1F2E' },
+      textColor:  '#7A8499',
+      fontFamily: "Inter, sans-serif",
+      fontSize:   11,
+    },
+    grid: {
+      vertLines: { color: '#2A3150' },
+      horzLines: { color: '#2A3150' },
+    },
+    rightPriceScale: { borderColor: '#2A3150' },
+    timeScale: {
+      borderColor:    '#2A3150',
+      timeVisible:    true,
+      secondsVisible: false,
+    },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
   });
+
+  /* ── Candlestick series ────────────────────────────────────────────────── */
+  const cs = chart.addCandlestickSeries({
+    upColor:      '#00C076',
+    downColor:    '#FF4D4D',
+    borderVisible: false,
+    wickUpColor:   '#00C076',
+    wickDownColor: '#FF4D4D',
+  });
+  cs.setData(D.candles);
+
+  /* ── 200 SMA line ─────────────────────────────────────────────────────── */
+  const smaLine = chart.addLineSeries({
+    color:             '#FF9900',
+    lineWidth:         1,
+    priceLineVisible:  false,
+    lastValueVisible:  false,
+    title:             '200 SMA',
+  });
+  smaLine.setData(D.sma200);
+
+  /* ── Prediction / SL / TP price lines ─────────────────────────────────── */
+  cs.createPriceLine({ price: D.pred, color: '#FF6B35', lineWidth: 2, lineStyle: LS.Dashed,  axisLabelVisible: true, title: '▶ Pred $' + D.pred });
+  cs.createPriceLine({ price: D.tp,   color: '#00C076', lineWidth: 1, lineStyle: LS.Dotted,  axisLabelVisible: true, title: 'TP $' + D.tp   });
+  cs.createPriceLine({ price: D.sl,   color: '#FF4D4D', lineWidth: 1, lineStyle: LS.Dotted,  axisLabelVisible: true, title: 'SL $' + D.sl   });
+
+  chart.timeScale().fitContent();
+
+  /* ── Zone overlay boxes ────────────────────────────────────────────────── */
+  const overlay = document.getElementById('chart-overlay');
+
+  function makeBox(hiPrice, loPrice, bg, border, label) {
+    const yHi = cs.priceToCoordinate(hiPrice);
+    const yLo = cs.priceToCoordinate(loPrice);
+    if (yHi === null || yLo === null) return;
+    const top = Math.min(yHi, yLo);
+    const hgt = Math.max(Math.abs(yLo - yHi), 2);
+    const psW = chart.priceScale('right').width();
+
+    const div   = document.createElement('div');
+    div.className = 'zone-box';
+    div.style.cssText = [
+      'top:'    + top + 'px',
+      'height:' + hgt + 'px',
+      'right:'  + psW + 'px',
+      'background:' + bg,
+      'border-top:1px solid '    + border,
+      'border-bottom:1px solid ' + border,
+    ].join(';');
+
+    if (label) {
+      const span = document.createElement('span');
+      span.style.cssText = 'position:absolute;right:6px;top:1px;font-size:9px;color:' + border + ';font-weight:700;';
+      span.textContent = label;
+      div.appendChild(span);
+    }
+    overlay.appendChild(div);
+  }
+
+  function drawZones() {
+    overlay.innerHTML = '';
+
+    /* OTE buy zone */
+    makeBox(D.ote_buy.high, D.ote_buy.low,
+      D.in_ote_buy ? 'rgba(0,192,118,0.10)' : 'rgba(0,192,118,0.04)',
+      D.in_ote_buy ? '#00C076'              : 'rgba(0,192,118,0.35)',
+      'OTE Buy');
+
+    /* OTE sell zone */
+    makeBox(D.ote_sell.high, D.ote_sell.low,
+      D.in_ote_sell ? 'rgba(255,77,77,0.10)' : 'rgba(255,77,77,0.04)',
+      D.in_ote_sell ? '#FF4D4D'              : 'rgba(255,77,77,0.35)',
+      'OTE Sell');
+
+    /* FVG zones */
+    D.fvg.forEach(function (z) {
+      var bull = z.type === 'bull';
+      makeBox(z.high, z.low,
+        bull ? 'rgba(59,130,246,0.08)' : 'rgba(234,179,8,0.08)',
+        bull ? 'rgba(59,130,246,0.6)'  : 'rgba(234,179,8,0.6)',
+        'FVG');
+    });
+
+    /* OB zones */
+    D.ob.forEach(function (z) {
+      var bull = z.type === 'bull';
+      makeBox(z.high, z.low,
+        bull ? 'rgba(139,92,246,0.08)' : 'rgba(249,115,22,0.08)',
+        bull ? 'rgba(139,92,246,0.6)'  : 'rgba(249,115,22,0.6)',
+        'OB');
+    });
+  }
+
+  /* Redraw on zoom / pan / resize */
+  chart.timeScale().subscribeVisibleLogicalRangeChange(drawZones);
+  wrap.addEventListener('wheel',    function () { setTimeout(drawZones, 60); }, { passive: true });
+  wrap.addEventListener('dblclick', function () { setTimeout(drawZones, 80); });
+
+  var ro = new ResizeObserver(function () {
+    chart.resize(wrap.offsetWidth, 420);
+    drawZones();
+  });
+  ro.observe(wrap);
+
+  setTimeout(drawZones, 150);
+
+})();
+
+/* ── Quick Trade Panel ──────────────────────────────────────────────────────*/
+var _tradePanelOpen = true;
+
+function toggleTradePanel() {
+  _tradePanelOpen = !_tradePanelOpen;
+  document.getElementById('trade-body').style.display      = _tradePanelOpen ? '' : 'none';
+  document.getElementById('trade-toggle-btn').textContent  = _tradePanelOpen ? '▼' : '▶';
+}
+
+function setConnTab(tab) {
+  document.querySelectorAll('.trade-conn-tabs .trade-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.getElementById('tab-paper').style.display    = tab === 'paper'    ? '' : 'none';
+  document.getElementById('tab-metaapi').style.display  = tab === 'metaapi'  ? '' : 'none';
+}
+
+function connectTrade(mode) {
+  if (!_isPro) { tradeMsg('Pro subscription required.', 'inf'); return; }
+  var body = { mode: mode };
+  if (mode === 'metaapi') {
+    body.token      = document.getElementById('mapi-token').value.trim();
+    body.account_id = document.getElementById('mapi-id').value.trim();
+    if (!body.token || !body.account_id) { tradeMsg('Enter MetaApi token and account ID.', 'err'); return; }
+  }
+  tradeMsg('Connecting…', 'inf');
+  fetch('/api/trade/connect', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) { applyConnected(d); }
+      else      { tradeMsg(d.error || 'Connection failed.', 'err'); }
+    }).catch(function(e){ tradeMsg('Network error: '+e.message, 'err'); });
+}
+
+function applyConnected(d) {
+  document.getElementById('trade-connect-section').style.display  = 'none';
+  document.getElementById('trade-connected-section').style.display = '';
+  var acct = d.account || {};
+  document.getElementById('acct-mode').textContent    = d.mode || '—';
+  document.getElementById('acct-balance').textContent = '$' + (acct.balance||0).toFixed(2);
+  document.getElementById('acct-equity').textContent  = '$' + (acct.equity||0).toFixed(2);
+  document.getElementById('trade-status-badge').className  = 'trade-badge trade-connected';
+  document.getElementById('trade-status-badge').textContent = '● ' + (d.mode || 'connected');
+  /* Pre-fill SL/TP from chart data */
+  document.getElementById('order-sl').value = D.sl;
+  document.getElementById('order-tp').value = D.tp;
+  refreshTradeStatus();
+}
+
+function disconnectTrade() {
+  fetch('/api/trade/disconnect', { method:'POST' }).then(function(){
+    document.getElementById('trade-connect-section').style.display  = '';
+    document.getElementById('trade-connected-section').style.display = 'none';
+    document.getElementById('positions-list').innerHTML = '';
+    document.getElementById('trade-status-badge').className  = 'trade-badge trade-disconnected';
+    document.getElementById('trade-status-badge').textContent = '● Disconnected';
+  });
+}
+
+function placeOrder(action) {
+  if (!_isPro) { tradeMsg('Pro subscription required.', 'err'); return; }
+  var body = {
+    ticker:   document.getElementById('order-symbol').value.trim().toUpperCase(),
+    action:   action,
+    risk_pct: parseFloat(document.getElementById('order-risk').value) || 1,
+    atr:      D.atr || 0,
+  };
+  if (!body.ticker) { tradeMsg('Enter a symbol.', 'err'); return; }
+  tradeMsg('Placing ' + action + '…', 'inf');
+  fetch('/api/trade/order', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok) {
+        var t = d.trade;
+        tradeMsg(action + ' ' + t.lot + ' ' + t.symbol + ' @ $' + t.price.toFixed(2) + '  |  Ticket #' + t.ticket, 'ok');
+        refreshTradeStatus();
+      } else {
+        tradeMsg(d.error || 'Order failed.', 'err');
+      }
+    }).catch(function(e){ tradeMsg('Network error: '+e.message, 'err'); });
+}
+
+function closeAll() {
+  if (!_isPro) return;
+  var sym = document.getElementById('order-symbol').value.trim().toUpperCase();
+  fetch('/api/trade/close', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ticker:sym}) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){ tradeMsg('Closed ' + (d.closed||0) + ' position(s).', d.ok ? 'ok' : 'err'); refreshTradeStatus(); });
+}
+
+function refreshTradeStatus() {
+  fetch('/api/trade/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok || !d.connected) return;
+      var acct = d.account || {};
+      document.getElementById('acct-balance').textContent    = '$' + (acct.balance||0).toFixed(2);
+      document.getElementById('acct-equity').textContent     = '$' + (acct.equity||0).toFixed(2);
+      document.getElementById('acct-pos-count').textContent  = (d.positions||[]).length;
+      renderPositions(d.positions || []);
+    });
+}
+
+function renderPositions(positions) {
+  var el = document.getElementById('positions-list');
+  if (!positions.length) { el.innerHTML = ''; return; }
+  var h = '<div class="positions-area"><div class="positions-header">Open Positions (' + positions.length + ')</div>';
+  positions.forEach(function(p){
+    var pc  = (p.pnl||0) >= 0 ? 'pos-pos' : 'pos-neg';
+    var ac  = p.action === 'BUY' ? 'pos-buy' : 'pos-sell';
+    h += '<div class="position-row">'
+       + '<span class="pos-ticket">#'+p.ticket+'</span>'
+       + '<span class="'+ac+'">'+p.action+'</span>'
+       + '<span class="pos-sym">'+p.symbol+'</span>'
+       + '<span>'+p.lot+' lot @ $'+p.price.toFixed(2)+'</span>'
+       + '<span>SL $'+p.sl.toFixed(2)+'</span>'
+       + '<span>TP $'+p.tp.toFixed(2)+'</span>'
+       + '<span class="'+pc+'">P&amp;L $'+(p.pnl||0).toFixed(2)+'</span>'
+       + '</div>';
+  });
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function tradeMsg(msg, type) {
+  var el = document.getElementById('trade-msg');
+  el.style.display = '';
+  el.className     = 'trade-msg trade-msg-' + (type||'inf');
+  el.textContent   = msg;
+  if (type === 'ok' || type === 'err') {
+    clearTimeout(el._t);
+    el._t = setTimeout(function(){ el.style.display = 'none'; }, 5000);
+  }
+}
+
+/* Check if already connected from a previous session */
+if (_isPro) {
+  fetch('/api/trade/status')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.ok && d.connected) applyConnected({ ok:true, mode:d.mode, account:d.account });
+    });
+}
+
+/* ── Multi-Timeframe Predictions ────────────────────────────────────────────*/
+{% if current_user.is_pro %}
+(function(){
+  fetch('/api/mtf/{{ ticker }}')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var load = document.getElementById('mtf-loading');
+      var tbl  = document.getElementById('mtf-table');
+      if (!d.ok) {
+        if (load) load.textContent = 'Failed: ' + (d.error || 'unknown error');
+        return;
+      }
+      if (load) load.style.display = 'none';
+      tbl.style.display = '';
+
+      function fill(idPfx, tfData, prevTxt) {
+        var dir = tfData.direction;
+        var cls = dir === 'Up' ? 'val-up' : 'val-down';
+        var arr = dir === 'Up' ? '↑' : '↓';
+        var sgn = tfData.price_change >= 0 ? '+' : '';
+        document.getElementById(idPfx+'-prev').textContent  = prevTxt || '—';
+        document.getElementById(idPfx+'-pred').innerHTML  = '<span class="'+cls+'">$'+tfData.pred.toFixed(2)+'</span>';
+        document.getElementById(idPfx+'-dir').innerHTML   = '<span class="'+cls+'">'+arr+' '+dir+'</span>';
+        document.getElementById(idPfx+'-chg').innerHTML   = '<span class="'+cls+'">'+sgn+'$'+tfData.price_change.toFixed(2)+' ('+sgn+tfData.change_pct.toFixed(2)+'%)</span>';
+        document.getElementById(idPfx+'-conf').textContent = tfData.confidence.toFixed(1)+'%';
+      }
+
+      fill('mtf-1d', d['1d'], '$' + d.prev_close.toFixed(2));
+      fill('mtf-1h', d['1h'], null);
+    })
+    .catch(function(e){
+      var load = document.getElementById('mtf-loading');
+      if (load) load.textContent = 'Error loading predictions: ' + e.message;
+    });
+})();
+{% endif %}
 </script>
 
 </body>

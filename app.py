@@ -482,6 +482,134 @@ def api_predict(ticker):
         return jsonify({"status": "error", "message": str(e)}), 400
 
 
+# ── Quick Trade routes ───────────────────────────────────────────────────────
+
+@app.route("/api/trade/connect", methods=["POST"])
+@login_required
+def trade_connect():
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "error": "Pro required"}), 403
+    data = request.get_json() or {}
+    mode = data.get("mode", "paper")
+    if mode == "metaapi":
+        result = mt5_trader.connect(0, "", "",
+                                    metaapi_token=data.get("token", ""),
+                                    metaapi_account_id=data.get("account_id", ""))
+    elif mode == "paper":
+        result = mt5_trader.connect(0, "", "")
+    else:
+        return jsonify({"ok": False, "error": "Unknown mode"}), 400
+    return jsonify(result)
+
+
+@app.route("/api/trade/disconnect", methods=["POST"])
+@login_required
+def trade_disconnect():
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "error": "Pro required"}), 403
+    mt5_trader.disconnect()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/trade/status", methods=["GET"])
+@login_required
+def trade_status():
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "connected": False}), 403
+    s = mt5_trader.get_status()
+    return jsonify({
+        "ok":        True,
+        "connected": s["connected"],
+        "mode":      s.get("mode", "none"),
+        "account":   s.get("account", {}),
+        "positions": s.get("positions", []),
+    })
+
+
+@app.route("/api/trade/order", methods=["POST"])
+@login_required
+def trade_order():
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "error": "Pro required"}), 403
+    if not mt5_trader.connected:
+        return jsonify({"ok": False, "error": "Not connected — use Connect Paper Account first"}), 400
+    data     = request.get_json() or {}
+    ticker   = data.get("ticker", "").upper()
+    action   = data.get("action", "").upper()
+    risk_pct = float(data.get("risk_pct", 1.0))
+    atr      = float(data.get("atr", 0))
+    if action not in ("BUY", "SELL"):
+        return jsonify({"ok": False, "error": "action must be BUY or SELL"}), 400
+    if not ticker:
+        return jsonify({"ok": False, "error": "ticker required"}), 400
+    try:
+        result = mt5_trader.place_order(ticker, action, risk_pct, atr)
+        if result.get("ok"):
+            mt5_trader.refresh_account()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@app.route("/api/trade/close", methods=["POST"])
+@login_required
+def trade_close():
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "error": "Pro required"}), 403
+    if not mt5_trader.connected:
+        return jsonify({"ok": False, "error": "Not connected"}), 400
+    data   = request.get_json() or {}
+    ticker = data.get("ticker", "").upper()
+    n      = mt5_trader.close_all(ticker)
+    mt5_trader.refresh_account()
+    return jsonify({"ok": True, "closed": n})
+
+
+# ── Multi-timeframe predictions ───────────────────────────────────────────────
+
+@app.route("/api/mtf/<ticker>", methods=["GET"])
+@login_required
+def api_mtf(ticker):
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "error": "Pro required"}), 403
+    ticker = ticker.upper()
+    try:
+        _try_azure_download(ticker, "1d")
+        _try_azure_download(ticker, "1h")
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f1d = ex.submit(run_prediction, ticker, "1d")
+            f1h = ex.submit(run_prediction, ticker, "1h")
+            r1d = f1d.result()
+            r1h = f1h.result()
+        import yfinance as yf
+        hist = yf.download(ticker, period="5d", interval="1d",
+                           auto_adjust=True, progress=False)
+        if hasattr(hist.columns, "get_level_values"):
+            hist.columns = hist.columns.get_level_values(0)
+        prev_close = round(float(hist["Close"].iloc[-2]), 2) if len(hist) >= 2 else 0.0
+        return jsonify({
+            "ok":         True,
+            "ticker":     ticker,
+            "prev_close": prev_close,
+            "1d": {
+                "pred":         r1d["primary_pred"],
+                "direction":    r1d["direction"],
+                "change_pct":   r1d["change_pct"],
+                "price_change": r1d["price_change"],
+                "confidence":   r1d["confidence"],
+            },
+            "1h": {
+                "pred":         r1h["primary_pred"],
+                "direction":    r1h["direction"],
+                "change_pct":   r1h["change_pct"],
+                "price_change": r1h["price_change"],
+                "confidence":   r1h["confidence"],
+            },
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
 # ── Monitoring endpoints ─────────────────────────────────────────────────────
 
 @app.route("/health")
