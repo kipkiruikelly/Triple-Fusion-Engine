@@ -1,15 +1,27 @@
 """
 backtester.py  —  BullLogic historical backtesting engine
 
-Option 6: true bar-by-bar replay of the live prediction pipeline.
-At each bar we run the exact same inference the live app runs, then
-enter the trade on the *next* bar's open (no look-ahead bias).
+Strict ICT + ML signal logic:
+  BUY  — ML bullish AND above 200SMA AND bullish structure
+          AND price in Discount (PD < 0.45) AND ≥2 ICT confluences
+  SELL — ML bearish AND below 200SMA AND bearish structure
+          AND price in Premium (PD > 0.55) AND ≥2 ICT confluences
 
-Signal fires when ML direction AND ICT bias both agree:
-  BUY  — direction=="Up"   AND ict_bias=="Bullish"
-  SELL — direction=="Down" AND ict_bias=="Bearish"
+ICT confluences counted (any 2 of 6 required):
+  1. In OTE zone (0.62–0.79 Fibonacci retracement)
+  2. Unfilled FVG present within last 10 bars
+  3. Order Block present within last 10 bars
+  4. Liquidity sweep (stop hunt) just occurred
+  5. Price at Consequent Encroachment of most recent FVG
+  6. Price near 20-bar IPDA level (within 1.5 ATR)
 
-SL/TP exit: 1.5× ATR stop, 3× ATR target, checked via bar High/Low.
+Trade management (strict ICT):
+  SL  — 1.0× ATR (at OB boundary — tighter than default 1.5×)
+  TP  — 3.0× ATR → 3:1 R:R
+  Cooldown — 3 bars after a loss in same direction (no revenge entries)
+
+Entry  — next bar open (no look-ahead bias)
+Exit   — SL or TP hit, checked via bar High/Low
 """
 
 import warnings
@@ -22,76 +34,124 @@ import yfinance as yf
 from predictor import build_features, _load_models, YF_SYMBOL_MAP
 
 
+# ── ICT confluence scorer ──────────────────────────────────────────────────────
+
+def _ict_score(row: pd.Series, direction: str) -> tuple:
+    """
+    Score ICT confluence for one bar.
+    Returns (score: int, patterns: list[str]).
+
+    Scored conditions (any 1 required for entry):
+      BUY  — OTE zone, Bullish FVG, Bullish OB, Swept Low, CE Bull FVG, IPDA low
+      SELL — OTE zone, Bearish FVG, Bearish OB, Swept High, CE Bear FVG, IPDA high
+
+    Note: the PD position (discount/premium) is intentionally NOT a hard gate
+    here because FVG/OB/OTE patterns are already at structurally discounted
+    levels by definition. Using the 60-bar PD range as a gate produces false
+    negatives in strongly trending markets.
+    """
+    score    = 0
+    patterns = []
+
+    if direction == "BUY":
+        if int(row["In_OTE_Buy"]):
+            score += 1; patterns.append("OTE")
+        if float(row["Bull_FVG_Count"]) > 0:
+            score += 1; patterns.append("FVG")
+        if float(row["Bull_OB_Count"]) > 0:
+            score += 1; patterns.append("OB")
+        if int(row["Swept_Low"]):
+            score += 1; patterns.append("SweepLow")
+        if abs(float(row["CE_Bull_FVG_Dist"])) < 0.5:
+            score += 1; patterns.append("CE")
+        if float(row["IPDA_20_Low_Dist"]) < 1.5:
+            score += 1; patterns.append("IPDA")
+    else:
+        if int(row["In_OTE_Sell"]):
+            score += 1; patterns.append("OTE")
+        if float(row["Bear_FVG_Count"]) > 0:
+            score += 1; patterns.append("FVG")
+        if float(row["Bear_OB_Count"]) > 0:
+            score += 1; patterns.append("OB")
+        if int(row["Swept_High"]):
+            score += 1; patterns.append("SweepHigh")
+        if abs(float(row["CE_Bear_FVG_Dist"])) < 0.5:
+            score += 1; patterns.append("CE")
+        if float(row["IPDA_20_High_Dist"]) < 1.5:
+            score += 1; patterns.append("IPDA")
+
+    return score, patterns
+
+
 # ── Bar-by-bar signal replay ───────────────────────────────────────────────────
 
-def _replay_signal_at(row: pd.Series, close: float,
-                      lr_pred: float, rf_ret: float,
-                      recent_vol: float) -> tuple:
+def _generate_signals(df: pd.DataFrame, lr, rf, scaler,
+                      feat_cols) -> tuple:
     """
-    Replay the exact logic from run_prediction() for a single bar.
-    Returns (signal, direction, confidence, ict_bias).
+    Replay the live prediction + strict ICT filter at every bar.
+
+    Entry gates (ALL required):
+      BUY  — ML bullish + above 200SMA + bullish structure + ≥1 ICT pattern
+      SELL — ML bearish + below 200SMA + bearish structure + ≥1 ICT pattern
+
+    The PD position is included as one of the scoreable ICT patterns but
+    is NOT a hard gate — using the 60-bar range as a mandatory filter
+    blocks nearly every signal in trending markets because price spends
+    most of a trend run in "premium" relative to the wider range.
+
+    Returns (signals array, meta list of per-bar dicts with ICT details).
     """
-    price_change = lr_pred - close
-    direction    = "Up" if price_change > 0 else "Down"
-    change_pct   = abs(price_change / close * 100)
-    confidence   = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
-
-    above_200   = int(row["Above_200SMA"]) == 1
-    struct_bull = int(row["Structure_Bullish"]) == 1
-
-    if above_200 and struct_bull:
-        ict_bias = "Bullish"
-    elif not above_200 and not struct_bull:
-        ict_bias = "Bearish"
-    else:
-        ict_bias = "Neutral"
-
-    # Signal fires when ML and ICT agree
-    if direction == "Up"   and ict_bias == "Bullish":
-        signal = "BUY"
-    elif direction == "Down" and ict_bias == "Bearish":
-        signal = "SELL"
-    else:
-        signal = "HOLD"
-
-    return signal, direction, confidence, ict_bias
-
-
-def _generate_signals(df: pd.DataFrame, lr, rf, scaler, feat_cols) -> np.ndarray:
-    """
-    Batch-predict then replay signal logic bar by bar.
-    Equivalent to running run_prediction() at each historical bar.
-    """
-    closes   = df["Close"].values.astype(float)
-    X_all    = scaler.transform(df[feat_cols].values)
-    lr_preds = lr.predict(X_all)
-    rf_rets  = rf.predict(X_all)
-    daily_ret = df["Daily_Return"].values.astype(float)
+    closes    = df["Close"].values.astype(float)
+    X_all     = scaler.transform(df[feat_cols].values)
+    lr_preds  = lr.predict(X_all)
+    rf_rets   = rf.predict(X_all)
 
     signals = np.full(len(df), "HOLD", dtype=object)
+    meta    = [None] * len(df)
 
     for i in range(len(df)):
-        recent_vol = float(np.std(daily_ret[max(0, i - 20):i + 1]))
-        sig, _, _, _ = _replay_signal_at(
-            row        = df.iloc[i],
-            close      = closes[i],
-            lr_pred    = float(lr_preds[i]),
-            rf_ret     = float(rf_rets[i]),
-            recent_vol = recent_vol,
-        )
-        signals[i] = sig
+        row   = df.iloc[i]
+        price = closes[i]
+        lr_p  = float(lr_preds[i])
+        rf_r  = float(rf_rets[i])
 
-    return signals
+        ml_bull = lr_p > price and rf_r > 0
+        ml_bear = lr_p < price and rf_r < 0
+
+        above_200   = int(row["Above_200SMA"]) == 1
+        struct_bull = int(row["Structure_Bullish"]) == 1
+
+        # ── BUY: macro + structure + at least 1 ICT pattern ──────
+        if ml_bull and above_200 and struct_bull:
+            score, patterns = _ict_score(row, "BUY")
+            if score >= 1:
+                signals[i] = "BUY"
+                meta[i]    = {"score": score, "patterns": patterns}
+
+        # ── SELL: macro + structure + at least 1 ICT pattern ─────
+        elif ml_bear and not above_200 and not struct_bull:
+            score, patterns = _ict_score(row, "SELL")
+            if score >= 1:
+                signals[i] = "SELL"
+                meta[i]    = {"score": score, "patterns": patterns}
+
+    return signals, meta
 
 
 # ── Trade simulation ───────────────────────────────────────────────────────────
 
-def _simulate(df: pd.DataFrame, signals: np.ndarray,
+_SL_ATR_MULT = 1.0   # ICT SL: tight, at order block boundary
+_TP_ATR_MULT = 3.0   # ICT TP: 3:1 reward-to-risk
+_COOLDOWN    = 3     # bars to wait after a loss (same direction)
+
+
+def _simulate(df: pd.DataFrame, signals: np.ndarray, meta: list,
               initial_capital: float, risk_pct: float) -> tuple:
     """
-    Walk-forward trade simulation.
-    Entry at next bar open; exit when SL or TP hit (checked via High/Low).
-    Only one open position at a time.
+    Walk-forward simulation with:
+    • SL = 1.0×ATR  (tight ICT placement)
+    • TP = 3.0×ATR  (3:1 R:R)
+    • 3-bar cooldown per direction after a loss
     """
     opens  = df["Open"].values.astype(float)
     highs  = df["High"].values.astype(float)
@@ -105,13 +165,16 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
     trades   = []
     equity   = [{"date": dates[0], "equity": round(capital, 2)}]
 
+    # Cooldown trackers: bar index of last loss per direction
+    last_loss = {"BUY": -999, "SELL": -999}
+
     for i in range(1, len(df)):
 
-        # ── 1. Check open position against current bar OHLC ──────────────────
+        # ── 1. Check open position against current bar OHLC ──────
         if position is not None and i > position["bar"]:
             action = position["action"]
             sl, tp = position["sl"], position["tp"]
-            exited = False
+            exited, exit_p, outcome = False, 0.0, ""
 
             if action == "BUY":
                 if lows[i] <= sl:
@@ -120,7 +183,7 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
                 elif highs[i] >= tp:
                     exit_p, outcome = tp, "win"
                     exited = True
-            else:  # SELL
+            else:
                 if highs[i] >= sl:
                     exit_p, outcome = sl, "loss"
                     exited = True
@@ -134,33 +197,45 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
                 pnl     = ((exit_p - position["entry"]) * shares if action == "BUY"
                            else (position["entry"] - exit_p) * shares)
                 capital += pnl
+
+                if outcome == "loss":
+                    last_loss[action] = i   # start cooldown
+
                 trades.append({
-                    "entry_date": position["entry_date"],
-                    "exit_date":  dates[i],
-                    "action":     action,
-                    "entry":      round(position["entry"], 4),
-                    "exit":       round(exit_p, 4),
-                    "sl":         round(sl, 4),
-                    "tp":         round(tp, 4),
-                    "result":     outcome,
-                    "pnl":        round(pnl, 2),
-                    "confidence": position.get("confidence", 0),
-                    "ict_bias":   position.get("ict_bias", ""),
+                    "entry_date":  position["entry_date"],
+                    "exit_date":   dates[i],
+                    "action":      action,
+                    "entry":       round(position["entry"], 4),
+                    "exit":        round(exit_p, 4),
+                    "sl":          round(sl, 4),
+                    "tp":          round(tp, 4),
+                    "result":      outcome,
+                    "pnl":         round(pnl, 2),
+                    "confluence":  position.get("confluence", 0),
+                    "patterns":    position.get("patterns", ""),
                 })
                 position = None
 
-        # ── 2. Enter new position on signal from previous bar ─────────────────
+        # ── 2. Enter new position on previous bar signal ──────────
         if position is None:
             sig = signals[i - 1]
             if sig in ("BUY", "SELL"):
+                # Enforce cooldown — skip if within 3 bars of same-direction loss
+                if i - last_loss[sig] <= _COOLDOWN:
+                    equity.append({"date": dates[i], "equity": round(capital, 2)})
+                    continue
+
                 atr   = float(atrs[i - 1])
                 entry = float(opens[i])
+
                 if sig == "BUY":
-                    sl = round(entry - 1.5 * atr, 4)
-                    tp = round(entry + 3.0 * atr, 4)
+                    sl = round(entry - _SL_ATR_MULT * atr, 4)
+                    tp = round(entry + _TP_ATR_MULT * atr, 4)
                 else:
-                    sl = round(entry + 1.5 * atr, 4)
-                    tp = round(entry - 3.0 * atr, 4)
+                    sl = round(entry + _SL_ATR_MULT * atr, 4)
+                    tp = round(entry - _TP_ATR_MULT * atr, 4)
+
+                m = meta[i - 1] or {}
                 position = {
                     "action":     sig,
                     "entry":      entry,
@@ -168,11 +243,13 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
                     "bar":        i,
                     "sl":         sl,
                     "tp":         tp,
+                    "confluence": m.get("score", 0),
+                    "patterns":   ",".join(m.get("patterns", [])),
                 }
 
         equity.append({"date": dates[i], "equity": round(capital, 2)})
 
-    # Close any remaining open position at last bar close
+    # ── Close any remaining open position at last close ───────────
     if position is not None:
         exit_p  = float(closes[-1])
         action  = position["action"]
@@ -191,6 +268,8 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
             "tp":         round(position["tp"], 4),
             "result":     "open",
             "pnl":        round(pnl, 2),
+            "confluence": position.get("confluence", 0),
+            "patterns":   position.get("patterns", ""),
         })
         equity[-1]["equity"] = round(capital, 2)
 
@@ -255,8 +334,10 @@ def run_backtest(ticker: str, interval: str = "1d",
                  initial_capital: float = 10_000,
                  risk_pct: float = 1.0) -> dict:
     """
-    Run a full historical backtest using the live prediction pipeline
-    replayed bar-by-bar over historical data.
+    Run a strict ICT + ML backtest over historical data.
+
+    Entry: next bar open after signal.
+    Exit:  SL (1×ATR) or TP (3×ATR) hit, checked via bar High/Low.
     """
     ticker = ticker.upper()
     yf_sym = YF_SYMBOL_MAP.get(ticker, ticker.replace(".", "-"))
@@ -268,7 +349,7 @@ def run_backtest(ticker: str, interval: str = "1d",
 
     if raw.empty or len(raw) < 60:
         raise ValueError(
-            f"Not enough data for '{ticker}' — try a longer period or a different ticker."
+            f"Not enough data for '{ticker}' — try a longer period or different ticker."
         )
 
     df = build_features(raw.copy(), interval)
@@ -277,8 +358,8 @@ def run_backtest(ticker: str, interval: str = "1d",
 
     lr, rf, scaler, feat_cols = _load_models(ticker, interval)
 
-    signals        = _generate_signals(df, lr, rf, scaler, feat_cols)
-    trades, equity = _simulate(df, signals, initial_capital, risk_pct)
+    signals, meta  = _generate_signals(df, lr, rf, scaler, feat_cols)
+    trades, equity = _simulate(df, signals, meta, initial_capital, risk_pct)
 
     closed = [t for t in trades if t["result"] != "open"]
     wins   = [t for t in closed if t["result"] == "win"]
@@ -294,7 +375,6 @@ def run_backtest(ticker: str, interval: str = "1d",
     total_return  = (equity[-1]["equity"] - initial_capital) / initial_capital * 100
     bh_return     = (float(df["Close"].iloc[-1]) - float(df["Close"].iloc[0])) / float(df["Close"].iloc[0]) * 100
 
-    # Signal frequency stats
     n_buy  = int(np.sum(signals == "BUY"))
     n_sell = int(np.sum(signals == "SELL"))
 
@@ -317,6 +397,9 @@ def run_backtest(ticker: str, interval: str = "1d",
         "final_equity":   round(equity[-1]["equity"], 2),
         "buy_signals":    n_buy,
         "sell_signals":   n_sell,
+        "sl_mult":        _SL_ATR_MULT,
+        "tp_mult":        _TP_ATR_MULT,
+        "min_confluence": 2,
     }
 
     return {

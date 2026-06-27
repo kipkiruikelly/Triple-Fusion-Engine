@@ -551,6 +551,7 @@
               <th>Dir</th>
               <th>Entry $</th><th>Exit $</th>
               <th>SL</th><th>TP</th>
+              <th>ICT Setup</th>
               <th>Result</th><th>P&amp;L</th>
             </tr>
           </thead>
@@ -855,6 +856,13 @@
                 : t.result === 'loss' ? '<span class="badge-loss">LOSS</span>'
                 : '<span class="badge-open">OPEN</span>';
       const pc  = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      const patterns = (t.patterns || '').split(',').filter(Boolean);
+      const patHtml = patterns.map(p => {
+        const colors = {OTE:'#8B5CF6',FVG:'#3B82F6',OB:'#F59E0B',
+                        SweepLow:'#00C076',SweepHigh:'#FF4D4D',CE:'#06B6D4',IPDA:'#7A8499'};
+        const c = colors[p] || 'var(--muted)';
+        return `<span style="background:${c}22;color:${c};padding:1px 5px;border-radius:3px;font-size:7.5pt;font-weight:700;margin-right:2px;">${p}</span>`;
+      }).join('');
       tbody.innerHTML += `<tr>
         <td style="color:var(--muted);font-size:9pt;">${n}</td>
         <td>${t.entry_date}</td>
@@ -864,6 +872,7 @@
         <td>${t.exit}</td>
         <td style="color:var(--red);font-size:9pt;">${t.sl}</td>
         <td style="color:var(--green);font-size:9pt;">${t.tp}</td>
+        <td style="white-space:nowrap;">${patHtml || '<span style="color:var(--muted);">—</span>'}</td>
         <td>${res}</td>
         <td class="${pc}">${t.pnl >= 0 ? '+' : ''}${fmt$(t.pnl)}</td>
       </tr>`;
