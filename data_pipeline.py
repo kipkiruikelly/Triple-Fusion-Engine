@@ -9,7 +9,7 @@ builds LSTM input sequences, and saves all outputs to the Data directory.
 Usage:
     python data_pipeline.py
 
-Author: Kelvin Kipkirui
+Author: BullLogic
 """
 
 import os

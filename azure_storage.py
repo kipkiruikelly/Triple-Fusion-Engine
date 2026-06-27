@@ -1,6 +1,6 @@
 """
 azure_storage.py
-Azure Blob Storage integration for ML-QTS model artifacts.
+Azure Blob Storage integration for BullLogic model artifacts.
 
 Container: trained-models
 Auth: AZURE_STORAGE_CONNECTION_STRING env var

@@ -12,7 +12,7 @@ due to TensorFlow compatibility constraints on Python 3.13.
 Usage:
     python model_training.py
 
-Author: Kelvin Kipkirui
+Author: BullLogic
 """
 
 import os

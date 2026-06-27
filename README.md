@@ -1,6 +1,6 @@
 # ML-based Quantitative Trading System
 
-**Kelvin Kipkirui**
+**BullLogic**
 
 A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. Combines Linear Regression, Random Forest, and LSTM models with a live MT5 trading engine powered by MetaApi.
 

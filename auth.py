@@ -1,6 +1,6 @@
 """
 auth.py
-SQLite-based authentication module for ML-QTS.
+SQLite-based authentication module for BullLogic.
 
 Functions: init_db(), create_user(), verify_user()
 DB path: Data/users.db

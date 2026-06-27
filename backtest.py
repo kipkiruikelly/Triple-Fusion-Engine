@@ -30,7 +30,7 @@ Signal modes:
     tech             — ICT gate + Technical only
     ict              — Pure ICT (no ML, no tech indicators)
 
-Author: Kelvin Kipkirui
+Author: BullLogic
 """
 
 import os

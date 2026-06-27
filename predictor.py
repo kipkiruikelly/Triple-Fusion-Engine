@@ -1,6 +1,6 @@
 """
 predictor.py
-Shared ML inference layer for ML-QTS.
+Shared ML inference layer for BullLogic.
 
 Public functions:
   run_prediction(ticker, interval="1d") → full result dict (Flask routes)

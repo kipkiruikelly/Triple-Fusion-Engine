@@ -1,6 +1,6 @@
 """
 mt5_trading.py
-MT5 algorithmic trading engine for ML-QTS.
+MT5 algorithmic trading engine for BullLogic.
 
 Two modes:
   - LIVE: Connects to MetaTrader 5 via Wine/mt5linux rpyc bridge.
@@ -146,7 +146,7 @@ class MetaApiBackend:
     # ── Trading ───────────────────────────────────────────────────────────────
 
     async def _do_place(self, symbol, action, lot, sl, tp):
-        opts = {"comment": "ML-QTS algo", "clientId": "mp-algo"}
+        opts = {"comment": "BullLogic algo", "clientId": "mp-algo"}
         if action == "BUY":
             return await self._conn.create_market_buy_order(symbol, lot, sl, tp, opts)
         else:
@@ -909,7 +909,7 @@ class MT5Trader:
             "tp"           : tp,
             "deviation"    : 20,
             "magic"        : 20250622,
-            "comment"      : "ML-QTS algo",
+            "comment"      : "BullLogic algo",
             "type_time"    : mt5.ORDER_TIME_GTC,
             "type_filling" : mt5.ORDER_FILLING_IOC,
         }
@@ -958,7 +958,7 @@ class MT5Trader:
                 "price"        : price,
                 "deviation"    : 20,
                 "magic"        : 20250622,
-                "comment"      : "ML-QTS close",
+                "comment"      : "BullLogic close",
                 "type_time"    : mt5.ORDER_TIME_GTC,
                 "type_filling" : mt5.ORDER_FILLING_IOC,
             }
