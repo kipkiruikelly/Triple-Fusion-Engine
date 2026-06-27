@@ -74,6 +74,20 @@ Open **http://127.0.0.1:5000**
 
 ---
 
+## Hosted Server Access
+
+The app runs as a persistent systemd service on a Kali Linux server, accessible privately via Tailscale VPN:
+
+| Access | URL |
+|---|---|
+| HTTPS (recommended) | https://kali.tail3ceaef.ts.net |
+| Direct IP | http://100.116.236.84:5000 |
+| SSH | `ssh xkcdhatguy@100.116.236.84` |
+
+Requires Tailscale installed and connected to the `kipkiruikelly.github` tailnet.
+
+---
+
 ## Algorithmic Trading
 
 ### Option A — MetaApi (recommended, works on Mac/Linux/Windows)
