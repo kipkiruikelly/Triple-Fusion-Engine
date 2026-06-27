@@ -41,9 +41,103 @@ from sklearn.metrics import mean_absolute_error, r2_score
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
-DEFAULT_TICKERS = ["AAPL", "TSLA", "MSFT", "GOOGL", "NVDA", "META", "AMZN", "NDX", "QQQ"]
-YF_SYMBOL_MAP       = {"NDX": "^NDX"}
-MAX_HISTORY_TICKERS = {"NDX", "QQQ"}
+DEFAULT_TICKERS = [
+    # ── US Stocks ──────────────────────────────────────────────────────────────
+    # Tech
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD", "NFLX",
+    # Finance
+    "JPM", "GS", "BAC", "V", "MA",
+    # Healthcare
+    "JNJ", "PFE", "UNH",
+    # Energy
+    "XOM", "CVX",
+    # Consumer / Industrials
+    "WMT", "HD", "COST", "BA", "DIS",
+
+    # ── ETFs ───────────────────────────────────────────────────────────────────
+    "QQQ", "SPY", "IWM", "DIA", "GLD", "SLV", "TLT", "XLF", "XLE",
+
+    # ── Crypto ─────────────────────────────────────────────────────────────────
+    "BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "AVAX", "DOGE",
+    "DOT", "LINK", "LTC", "MATIC", "UNI", "ATOM",
+
+    # ── Forex ──────────────────────────────────────────────────────────────────
+    "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
+    "EURGBP", "EURJPY", "GBPJPY", "XAUUSD", "XAGUSD",
+
+    # ── Commodities ────────────────────────────────────────────────────────────
+    "GOLD", "SILVER", "OIL", "BRENT", "NATGAS", "COPPER",
+    "WHEAT", "CORN", "SOYBEAN", "COFFEE",
+
+    # ── Indices ────────────────────────────────────────────────────────────────
+    "NDX", "SPX", "DJI", "RUT", "FTSE", "DAX", "NIKKEI", "HSI",
+]
+
+YF_SYMBOL_MAP = {
+    # ── Indices ───────────────────────────────────────────────────────────────
+    "NDX":      "^NDX",
+    "SPX":      "^GSPC",
+    "DJI":      "^DJI",
+    "VIX":      "^VIX",
+    "RUT":      "^RUT",
+    "FTSE":     "^FTSE",
+    "DAX":      "^GDAXI",
+    "NIKKEI":   "^N225",
+    "HSI":      "^HSI",
+
+    # ── Crypto ────────────────────────────────────────────────────────────────
+    "BTC":      "BTC-USD",
+    "ETH":      "ETH-USD",
+    "BNB":      "BNB-USD",
+    "SOL":      "SOL-USD",
+    "XRP":      "XRP-USD",
+    "ADA":      "ADA-USD",
+    "AVAX":     "AVAX-USD",
+    "DOGE":     "DOGE-USD",
+    "DOT":      "DOT-USD",
+    "LINK":     "LINK-USD",
+    "LTC":      "LTC-USD",
+    "MATIC":    "POL-USD",
+    "SHIB":     "SHIB-USD",
+    "UNI":      "UNI-USD",
+    "ATOM":     "ATOM-USD",
+
+    # ── Forex (spot) ──────────────────────────────────────────────────────────
+    "EURUSD":   "EURUSD=X",
+    "GBPUSD":   "GBPUSD=X",
+    "USDJPY":   "USDJPY=X",
+    "AUDUSD":   "AUDUSD=X",
+    "USDCAD":   "USDCAD=X",
+    "USDCHF":   "USDCHF=X",
+    "NZDUSD":   "NZDUSD=X",
+    "EURGBP":   "EURGBP=X",
+    "EURJPY":   "EURJPY=X",
+    "GBPJPY":   "GBPJPY=X",
+    "USDMXN":   "MXN=X",
+    "USDZAR":   "ZAR=X",
+    "XAUUSD":   "XAUUSD=X",
+    "XAGUSD":   "XAGUSD=X",
+
+    # ── Commodities (futures) ─────────────────────────────────────────────────
+    "GOLD":     "GC=F",
+    "SILVER":   "SI=F",
+    "OIL":      "CL=F",
+    "BRENT":    "BZ=F",
+    "NATGAS":   "NG=F",
+    "COPPER":   "HG=F",
+    "PLATINUM": "PL=F",
+    "PALLADIUM":"PA=F",
+    "WHEAT":    "ZW=F",
+    "CORN":     "ZC=F",
+    "SOYBEAN":  "ZS=F",
+    "COTTON":   "CT=F",
+    "SUGAR":    "SB=F",
+    "COCOA":    "CC=F",
+    "COFFEE":   "KC=F",
+}
+
+MAX_HISTORY_TICKERS = {"NDX", "QQQ", "SPX", "DJI", "RUT", "FTSE", "DAX", "NIKKEI", "HSI",
+                        "SPY", "IWM", "DIA", "GLD", "SLV", "TLT", "XLF", "XLE"}
 
 # ── Feature lists ──────────────────────────────────────────────────────────────
 
@@ -402,16 +496,26 @@ def main():
                         help="Upload models to Azure after training")
     parser.add_argument("--fast",     action="store_true",
                         help="RF-50/depth-6 — faster, slightly lower accuracy")
-    parser.add_argument("--workers",  type=int, default=None,
+    parser.add_argument("--workers",      type=int, default=None,
                         help="Max parallel workers (default: one per ticker)")
+    parser.add_argument("--skip-existing", action="store_true",
+                        help="Skip tickers whose model files already exist")
     args = parser.parse_args()
 
     tickers  = [t.upper() for t in args.tickers]
     rf_trees = 50  if args.fast else 100
     rf_depth = 6   if args.fast else 8
-    max_w    = args.workers or len(tickers)
     suffix   = model_suffix(args.interval)
 
+    if args.skip_existing:
+        before = len(tickers)
+        tickers = [
+            t for t in tickers
+            if not os.path.exists(os.path.join(MODELS_DIR, f"lr_model_{t}{suffix}.pkl"))
+        ]
+        print(f"  Skipping {before - len(tickers)} already-trained tickers.\n")
+
+    max_w    = args.workers or min(len(tickers), 8)
     feat_list = _feature_list(args.interval)
     mode_tag  = "fast (RF-50/d6)" if args.fast else "standard (RF-100/d8)"
 
