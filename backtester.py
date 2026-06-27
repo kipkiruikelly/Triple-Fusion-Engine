@@ -1,11 +1,15 @@
 """
-backtester.py
-Historical backtesting engine for BullLogic.
+backtester.py  —  BullLogic historical backtesting engine
 
-Generates ML + ICT signals on historical bars, simulates trades
-with ATR-based SL/TP, and returns detailed performance metrics.
+Option 6: true bar-by-bar replay of the live prediction pipeline.
+At each bar we run the exact same inference the live app runs, then
+enter the trade on the *next* bar's open (no look-ahead bias).
 
-No look-ahead bias: signal at bar i → entry at bar i+1 open.
+Signal fires when ML direction AND ICT bias both agree:
+  BUY  — direction=="Up"   AND ict_bias=="Bullish"
+  SELL — direction=="Down" AND ict_bias=="Bearish"
+
+SL/TP exit: 1.5× ATR stop, 3× ATR target, checked via bar High/Low.
 """
 
 import warnings
@@ -14,51 +18,80 @@ warnings.filterwarnings("ignore")
 import numpy as np
 import pandas as pd
 import yfinance as yf
-import os
 
 from predictor import build_features, _load_models, YF_SYMBOL_MAP
 
-BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
-MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
+# ── Bar-by-bar signal replay ───────────────────────────────────────────────────
 
-# ── Signal generation ─────────────────────────────────────────────────────────
+def _replay_signal_at(row: pd.Series, close: float,
+                      lr_pred: float, rf_ret: float,
+                      recent_vol: float) -> tuple:
+    """
+    Replay the exact logic from run_prediction() for a single bar.
+    Returns (signal, direction, confidence, ict_bias).
+    """
+    price_change = lr_pred - close
+    direction    = "Up" if price_change > 0 else "Down"
+    change_pct   = abs(price_change / close * 100)
+    confidence   = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
+
+    above_200   = int(row["Above_200SMA"]) == 1
+    struct_bull = int(row["Structure_Bullish"]) == 1
+
+    if above_200 and struct_bull:
+        ict_bias = "Bullish"
+    elif not above_200 and not struct_bull:
+        ict_bias = "Bearish"
+    else:
+        ict_bias = "Neutral"
+
+    # Signal fires when ML and ICT agree
+    if direction == "Up"   and ict_bias == "Bullish":
+        signal = "BUY"
+    elif direction == "Down" and ict_bias == "Bearish":
+        signal = "SELL"
+    else:
+        signal = "HOLD"
+
+    return signal, direction, confidence, ict_bias
+
 
 def _generate_signals(df: pd.DataFrame, lr, rf, scaler, feat_cols) -> np.ndarray:
     """
-    Batch-predict signals for every bar.
-    Returns numpy array of "BUY", "SELL", or "HOLD" strings.
-
-    Entry logic:
-      BUY  — LR predicts up, RF predicts positive return,
-              price in discount zone (PD_Position < 0.45), above 200 SMA
-      SELL — LR predicts down, RF predicts negative return,
-              price in premium zone (PD_Position > 0.55), below 200 SMA
+    Batch-predict then replay signal logic bar by bar.
+    Equivalent to running run_prediction() at each historical bar.
     """
-    close   = df["Close"].values
-    X       = scaler.transform(df[feat_cols].values)
-    lr_pred = lr.predict(X)
-    rf_ret  = rf.predict(X)
-
-    lr_up = lr_pred > close
-    rf_up = rf_ret  > 0
-
-    pd_pos    = df["PD_Position"].values
-    above_200 = df["Above_200SMA"].values > 0.5
+    closes   = df["Close"].values.astype(float)
+    X_all    = scaler.transform(df[feat_cols].values)
+    lr_preds = lr.predict(X_all)
+    rf_rets  = rf.predict(X_all)
+    daily_ret = df["Daily_Return"].values.astype(float)
 
     signals = np.full(len(df), "HOLD", dtype=object)
-    signals[lr_up  & rf_up  & (pd_pos < 0.45) & above_200]  = "BUY"
-    signals[~lr_up & ~rf_up & (pd_pos > 0.55) & ~above_200] = "SELL"
+
+    for i in range(len(df)):
+        recent_vol = float(np.std(daily_ret[max(0, i - 20):i + 1]))
+        sig, _, _, _ = _replay_signal_at(
+            row        = df.iloc[i],
+            close      = closes[i],
+            lr_pred    = float(lr_preds[i]),
+            rf_ret     = float(rf_rets[i]),
+            recent_vol = recent_vol,
+        )
+        signals[i] = sig
+
     return signals
 
 
-# ── Trade simulation ──────────────────────────────────────────────────────────
+# ── Trade simulation ───────────────────────────────────────────────────────────
 
 def _simulate(df: pd.DataFrame, signals: np.ndarray,
               initial_capital: float, risk_pct: float) -> tuple:
     """
     Walk-forward trade simulation.
-    Enter at next bar open, exit when SL or TP is hit (checked via High/Low).
+    Entry at next bar open; exit when SL or TP hit (checked via High/Low).
+    Only one open position at a time.
     """
     opens  = df["Open"].values.astype(float)
     highs  = df["High"].values.astype(float)
@@ -73,12 +106,13 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
     equity   = [{"date": dates[0], "equity": round(capital, 2)}]
 
     for i in range(1, len(df)):
-        # ── 1. Check open position against today's OHLC ──────────────────────
+
+        # ── 1. Check open position against current bar OHLC ──────────────────
         if position is not None and i > position["bar"]:
             action = position["action"]
             sl, tp = position["sl"], position["tp"]
-
             exited = False
+
             if action == "BUY":
                 if lows[i] <= sl:
                     exit_p, outcome = sl, "loss"
@@ -86,7 +120,7 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
                 elif highs[i] >= tp:
                     exit_p, outcome = tp, "win"
                     exited = True
-            else:
+            else:  # SELL
                 if highs[i] >= sl:
                     exit_p, outcome = sl, "loss"
                     exited = True
@@ -110,10 +144,12 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
                     "tp":         round(tp, 4),
                     "result":     outcome,
                     "pnl":        round(pnl, 2),
+                    "confidence": position.get("confidence", 0),
+                    "ict_bias":   position.get("ict_bias", ""),
                 })
                 position = None
 
-        # ── 2. Enter new position if signal fired on previous bar ─────────────
+        # ── 2. Enter new position on signal from previous bar ─────────────────
         if position is None:
             sig = signals[i - 1]
             if sig in ("BUY", "SELL"):
@@ -161,7 +197,7 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray,
     return trades, equity
 
 
-# ── Performance metrics ───────────────────────────────────────────────────────
+# ── Performance metrics ────────────────────────────────────────────────────────
 
 def _max_drawdown(equity_curve: list) -> float:
     peak, max_dd = equity_curve[0]["equity"], 0.0
@@ -177,17 +213,17 @@ def _max_drawdown(equity_curve: list) -> float:
 
 def _sharpe(equity_curve: list) -> float:
     eqs  = [p["equity"] for p in equity_curve]
-    rets = [(eqs[i] - eqs[i-1]) / eqs[i-1] for i in range(1, len(eqs)) if eqs[i-1] > 0]
+    rets = [(eqs[i] - eqs[i - 1]) / eqs[i - 1]
+            for i in range(1, len(eqs)) if eqs[i - 1] > 0]
     if len(rets) < 2:
         return 0.0
     mu  = sum(rets) / len(rets)
-    var = sum((r - mu)**2 for r in rets) / (len(rets) - 1)
-    std = var**0.5
-    return round(mu / std * (252**0.5), 2) if std > 0 else 0.0
+    var = sum((r - mu) ** 2 for r in rets) / (len(rets) - 1)
+    std = var ** 0.5
+    return round(mu / std * (252 ** 0.5), 2) if std > 0 else 0.0
 
 
 def _monthly_returns(equity_curve: list) -> dict:
-    """Return {YYYY-MM: pct_change} from the equity curve."""
     monthly = {}
     for p in equity_curve:
         ym = p["date"][:7]
@@ -195,7 +231,7 @@ def _monthly_returns(equity_curve: list) -> dict:
     months = sorted(monthly)
     result = {}
     for i in range(1, len(months)):
-        prev = monthly[months[i-1]]
+        prev = monthly[months[i - 1]]
         curr = monthly[months[i]]
         if prev > 0:
             result[months[i]] = round((curr - prev) / prev * 100, 2)
@@ -203,7 +239,6 @@ def _monthly_returns(equity_curve: list) -> dict:
 
 
 def _bh_curve(df: pd.DataFrame, initial_capital: float) -> list:
-    """Buy-and-hold equity curve (buy first close, hold to end)."""
     closes = df["Close"].values.astype(float)
     dates  = [str(d.date()) for d in df.index]
     base   = closes[0]
@@ -213,65 +248,55 @@ def _bh_curve(df: pd.DataFrame, initial_capital: float) -> list:
     ]
 
 
-# ── Public entry point ────────────────────────────────────────────────────────
+# ── Public entry point ─────────────────────────────────────────────────────────
 
 def run_backtest(ticker: str, interval: str = "1d",
                  period: str = "2y",
                  initial_capital: float = 10_000,
                  risk_pct: float = 1.0) -> dict:
     """
-    Run a full historical backtest.
-
-    Args:
-        ticker:          Equity symbol (e.g. "AAPL")
-        interval:        "1d" or "1h"
-        period:          yfinance period string: "6mo", "1y", "2y"
-        initial_capital: Starting cash in USD
-        risk_pct:        Percent of capital risked per trade (1 = 1%)
-
-    Returns:
-        Full result dict ready to JSON-serialize.
+    Run a full historical backtest using the live prediction pipeline
+    replayed bar-by-bar over historical data.
     """
     ticker = ticker.upper()
-
-    # ── Fetch data ────────────────────────────────────────────────────────────
     yf_sym = YF_SYMBOL_MAP.get(ticker, ticker.replace(".", "-"))
+
     raw = yf.download(yf_sym, period=period, interval=interval,
                       auto_adjust=True, progress=False)
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = raw.columns.get_level_values(0)
 
     if raw.empty or len(raw) < 60:
-        raise ValueError(f"Not enough data for '{ticker}' — try a longer period or different ticker.")
+        raise ValueError(
+            f"Not enough data for '{ticker}' — try a longer period or a different ticker."
+        )
 
-    # ── Feature engineering ───────────────────────────────────────────────────
     df = build_features(raw.copy(), interval)
     if df.empty or len(df) < 30:
         raise ValueError("Feature engineering produced insufficient rows.")
 
-    # ── Load models ───────────────────────────────────────────────────────────
     lr, rf, scaler, feat_cols = _load_models(ticker, interval)
 
-    # ── Signals + simulation ──────────────────────────────────────────────────
-    signals       = _generate_signals(df, lr, rf, scaler, feat_cols)
+    signals        = _generate_signals(df, lr, rf, scaler, feat_cols)
     trades, equity = _simulate(df, signals, initial_capital, risk_pct)
 
-    # ── Metrics ───────────────────────────────────────────────────────────────
     closed = [t for t in trades if t["result"] != "open"]
     wins   = [t for t in closed if t["result"] == "win"]
     losses = [t for t in closed if t["result"] == "loss"]
-    pnls   = [t["pnl"] for t in closed]
 
-    gross_profit = sum(t["pnl"] for t in wins)
-    gross_loss   = abs(sum(t["pnl"] for t in losses))
-    win_rate     = len(wins) / len(closed) * 100 if closed else 0
+    gross_profit  = sum(t["pnl"] for t in wins)
+    gross_loss    = abs(sum(t["pnl"] for t in losses))
+    win_rate      = len(wins) / len(closed) * 100 if closed else 0
     profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if wins else 0.0)
-    avg_win      = gross_profit / len(wins)   if wins   else 0.0
-    avg_loss     = gross_loss   / len(losses) if losses else 0.0
-    expectancy   = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
+    avg_win       = gross_profit / len(wins)   if wins   else 0.0
+    avg_loss      = gross_loss   / len(losses) if losses else 0.0
+    expectancy    = (win_rate / 100 * avg_win) - ((1 - win_rate / 100) * avg_loss)
+    total_return  = (equity[-1]["equity"] - initial_capital) / initial_capital * 100
+    bh_return     = (float(df["Close"].iloc[-1]) - float(df["Close"].iloc[0])) / float(df["Close"].iloc[0]) * 100
 
-    total_return = (equity[-1]["equity"] - initial_capital) / initial_capital * 100
-    bh_return    = (float(df["Close"].iloc[-1]) - float(df["Close"].iloc[0])) / float(df["Close"].iloc[0]) * 100
+    # Signal frequency stats
+    n_buy  = int(np.sum(signals == "BUY"))
+    n_sell = int(np.sum(signals == "SELL"))
 
     metrics = {
         "total_return":   round(total_return, 2),
@@ -290,6 +315,8 @@ def run_backtest(ticker: str, interval: str = "1d",
         "max_drawdown":   _max_drawdown(equity),
         "sharpe":         _sharpe(equity),
         "final_equity":   round(equity[-1]["equity"], 2),
+        "buy_signals":    n_buy,
+        "sell_signals":   n_sell,
     }
 
     return {
