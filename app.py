@@ -216,7 +216,7 @@ def home():
     return render_template("index.html")
 
 
-VALID_INTERVALS = {"1d", "1h"}
+VALID_INTERVALS = {"1d", "1h", "15m"}
 
 
 @app.route("/predict", methods=["POST"])

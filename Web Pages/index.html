@@ -634,7 +634,7 @@
   <!-- Main content -->
   <main class="content">
     <div class="page-title">Stock Price Predictor</div>
-    <div class="page-subtitle">Machine learning-based next-day price prediction using technical indicators and historical OHLCV data</div>
+    <div class="page-subtitle">ML-powered price prediction across 15-minute, hourly, and daily timeframes — ICT confluence + LR &amp; RF models</div>
 
     <!-- Search -->
     <div class="search-section">
@@ -653,8 +653,9 @@
             autofocus
           />
           <div class="interval-toggle">
-            <button type="button" id="btn1d" class="iv-btn {% if (interval or '1d') == '1d' %}active{% endif %}" onclick="setInterval('1d')">Daily</button>
-            <button type="button" id="btn1h" class="iv-btn {% if interval == '1h' %}active{% endif %}" onclick="setInterval('1h')">1h Intraday</button>
+            <button type="button" id="btn15m" class="iv-btn {% if interval == '15m' %}active{% endif %}" onclick="setInterval('15m')">15 Min</button>
+            <button type="button" id="btn1h"  class="iv-btn {% if interval == '1h'  %}active{% endif %}" onclick="setInterval('1h')">1 Hour</button>
+            <button type="button" id="btn1d"  class="iv-btn {% if (interval or '1d') == '1d' %}active{% endif %}" onclick="setInterval('1d')">Daily</button>
           </div>
           <button type="submit" class="btn-predict">Predict</button>
         </div>
@@ -999,8 +1000,9 @@
 <script>
   function setInterval(iv) {
     document.getElementById('intervalInput').value = iv;
-    document.getElementById('btn1d').classList.toggle('active', iv === '1d');
-    document.getElementById('btn1h').classList.toggle('active', iv === '1h');
+    document.getElementById('btn15m').classList.toggle('active', iv === '15m');
+    document.getElementById('btn1h').classList.toggle('active',  iv === '1h');
+    document.getElementById('btn1d').classList.toggle('active',  iv === '1d');
   }
 
   function setTicker(symbol) {

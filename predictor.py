@@ -113,9 +113,17 @@ def _load_models(ticker: str, interval: str = "1d"):
     return lr, rf, sc, feat
 
 
+_FETCH_PERIOD = {
+    "1d":  "1y",
+    "1h":  "730d",
+    "15m": "60d",
+    "5m":  "60d",
+}
+
+
 def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
     yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
-    period    = "730d" if interval == "1h" else "1y"
+    period    = _FETCH_PERIOD.get(interval, "1y")
     df = yf.download(yf_ticker, period=period, interval=interval,
                      auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -314,7 +322,7 @@ def build_features(df: pd.DataFrame, interval: str = "1d") -> pd.DataFrame:
 def run_prediction(ticker: str, interval: str = "1d") -> dict:
     """Full prediction result dict for Flask routes and the result page."""
     ticker = ticker.upper()
-    min_bars = 70 if interval == "1d" else 200
+    min_bars = {"1d": 70, "1h": 200, "15m": 150, "5m": 100}.get(interval, 70)
 
     df = _fetch_df(ticker, interval)
     if df.empty or len(df) < min_bars:
@@ -468,6 +476,12 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
 
     # Human-readable timestamp for the last bar
     last_idx = df.index[-1]
+    _horizon_label = {
+        "1d":  "Next Day",
+        "1h":  "Next Hour",
+        "15m": "Next 15 Minutes",
+        "5m":  "Next 5 Minutes",
+    }
     if interval == "1d":
         as_of   = last_idx.strftime("%B %d, %Y")
         horizon = "Next Day"
@@ -477,7 +491,7 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
             as_of = et.strftime("%b %d, %Y %I:%M %p ET")
         except Exception:
             as_of = str(last_idx)
-        horizon = "Next Hour" if interval == "1h" else "Next Bar"
+        horizon = _horizon_label.get(interval, "Next Bar")
 
     return {
         "ticker"       : ticker,

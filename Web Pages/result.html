@@ -296,6 +296,26 @@
     #chart-wrap    { position: relative; width: 100%; height: 420px; }
     #lw-chart      { width: 100%; height: 100%; }
     .chart-overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+
+    /* Fullscreen */
+    #chart-wrap:fullscreen,
+    #chart-wrap:-webkit-full-screen {
+      width: 100vw; height: 100vh;
+      background: #0d0d0f;
+      border-radius: 0;
+    }
+    #chart-wrap:fullscreen #lw-chart,
+    #chart-wrap:-webkit-full-screen #lw-chart {
+      width: 100%; height: 100%;
+    }
+    .fs-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); border-radius: 5px;
+      padding: 4px 8px; cursor: pointer; font-size: 13px;
+      transition: color 0.15s, border-color 0.15s;
+      line-height: 1;
+    }
+    .fs-btn:hover { color: var(--white); border-color: var(--text); }
     .zone-box      { position: absolute; left: 0; }
     .chart-legend  {
       position: absolute; top: 8px; left: 10px; z-index: 2;
@@ -602,6 +622,58 @@
     .pos-pos  { color:var(--green); font-weight:700; }
     .pos-neg  { color:var(--red);   font-weight:700; }
 
+    /* ── On-chart trade bar ─────────────────────────────────────────────────── */
+    #chart-trade-bar {
+      position: absolute;
+      bottom: 36px; right: 10px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      pointer-events: auto;
+    }
+    .ctb-acct {
+      font-size: 8.5pt; font-weight: 700; color: var(--text);
+      background: rgba(15,18,23,0.82);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 5px 10px;
+      backdrop-filter: blur(4px);
+      white-space: nowrap;
+    }
+    .ctb-acct span { color: var(--green); }
+    .ctb-buy {
+      background: var(--green); border: none; border-radius: 5px;
+      color: #fff; font-size: 10pt; font-weight: 800;
+      padding: 6px 16px; cursor: pointer; letter-spacing: 0.3px;
+      box-shadow: 0 2px 8px rgba(0,192,118,0.35);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .ctb-sell {
+      background: var(--red); border: none; border-radius: 5px;
+      color: #fff; font-size: 10pt; font-weight: 800;
+      padding: 6px 16px; cursor: pointer; letter-spacing: 0.3px;
+      box-shadow: 0 2px 8px rgba(255,77,77,0.35);
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .ctb-close {
+      background: rgba(30,34,50,0.9); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted); font-size: 9.5pt;
+      font-weight: 700; padding: 6px 10px; cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .ctb-connect {
+      background: rgba(15,18,23,0.85); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--muted); font-size: 9pt;
+      font-weight: 700; padding: 6px 12px; cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .ctb-buy:hover,.ctb-sell:hover { opacity:0.85; transform:translateY(-1px); }
+    .ctb-close:hover  { border-color:var(--red);  color:var(--red); }
+    .ctb-connect:hover { border-color:var(--accent); color:var(--accent); }
+
     /* ── Multi-Timeframe Panel ───────────────────────────────────────────── */
     .mtf-panel { background:var(--surface); border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:16px; }
     .mtf-header { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--border); font-size:10.5pt; font-weight:700; color:var(--white); }
@@ -742,7 +814,9 @@
         <div class="ticker-name">
           {{ ticker }}
           <span style="font-size:10pt;font-weight:600;padding:3px 10px;border-radius:4px;margin-left:10px;vertical-align:middle;
-            {% if interval == '1h' %}background:rgba(59,130,246,0.15);color:#60A5FA;{% else %}background:rgba(255,107,53,0.15);color:var(--accent);{% endif %}">
+            {% if interval == '15m' %}background:rgba(139,92,246,0.15);color:#A78BFA;
+            {% elif interval == '1h' %}background:rgba(59,130,246,0.15);color:#60A5FA;
+            {% else %}background:rgba(255,107,53,0.15);color:var(--accent);{% endif %}">
             {{ interval|upper }}
           </span>
         </div>
@@ -801,6 +875,7 @@
           {% else %}
             <a href="/pricing" style="color:var(--muted);text-decoration:none;font-size:8.5pt;font-weight:600;padding:4px 10px;border:1px solid var(--border);border-radius:4px;">Upgrade for MT5</a>
           {% endif %}
+          <button class="fs-btn" id="fs-btn" onclick="toggleChartFullscreen()" title="Fullscreen">⛶</button>
         </div>
       </div>
       <div id="chart-wrap">
@@ -811,6 +886,25 @@
           <span style="color:#00C076;">&#8212; TP &amp; Bull OTE/OB/FVG</span>
           <span style="color:#FF4D4D;">&#8212; SL &amp; Bear OTE/OB/FVG</span>
           <span style="color:#FF9900;">&#8212; 200 SMA</span>
+        </div>
+
+        <!-- On-chart trade buttons -->
+        <div id="chart-trade-bar">
+          {% if current_user.is_pro %}
+          <!-- disconnected state -->
+          <div id="ctb-disconnected">
+            <button class="ctb-connect" onclick="connectTrade('paper');scrollToTradePanel()">⚡ Connect to Trade</button>
+          </div>
+          <!-- connected state (hidden until connected) -->
+          <div id="ctb-connected" style="display:none;align-items:center;gap:6px;">
+            <div class="ctb-acct" id="ctb-acct-info">Balance: <span id="ctb-balance">—</span></div>
+            <button class="ctb-buy"   onclick="placeOrder('BUY')">▲ BUY</button>
+            <button class="ctb-sell"  onclick="placeOrder('SELL')">▼ SELL</button>
+            <button class="ctb-close" onclick="closeAll()" title="Close all positions for {{ ticker }}">✕</button>
+          </div>
+          {% else %}
+          <a href="/pricing" class="ctb-connect" style="text-decoration:none;">🔒 Upgrade to Trade</a>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -905,7 +999,7 @@
             <td>${{ current_price }}</td>
           </tr>
           <tr>
-            <td>Predicted Price</td>
+            <td>{{ horizon }} Price</td>
             <td class="{% if direction == 'Up' %}val-up{% else %}val-down{% endif %}">${{ primary_pred }}</td>
           </tr>
           <tr>
@@ -971,7 +1065,7 @@
         <thead>
           <tr>
             <th>Model</th>
-            <th style="text-align:right;">Predicted Price</th>
+            <th style="text-align:right;">{{ horizon }} Price</th>
             <th style="text-align:right;">Type</th>
           </tr>
         </thead>
@@ -1314,14 +1408,33 @@ const _isPro = {{ current_user.is_pro | tojson }};
   wrap.addEventListener('dblclick', function () { setTimeout(drawZones, 80); });
 
   var ro = new ResizeObserver(function () {
-    chart.resize(wrap.offsetWidth, 420);
+    var h = document.fullscreenElement === wrap ? wrap.offsetHeight : 420;
+    chart.resize(wrap.offsetWidth, h);
     drawZones();
   });
   ro.observe(wrap);
 
+  document.addEventListener('fullscreenchange', function () {
+    var isFs = document.fullscreenElement === wrap;
+    var h = isFs ? window.innerHeight : 420;
+    chart.resize(wrap.offsetWidth, h);
+    document.getElementById('fs-btn').textContent = isFs ? '✕' : '⛶';
+    document.getElementById('fs-btn').title = isFs ? 'Exit fullscreen' : 'Fullscreen';
+    setTimeout(drawZones, 60);
+  });
+
   setTimeout(drawZones, 150);
 
 })();
+
+function toggleChartFullscreen() {
+  var wrap = document.getElementById('chart-wrap');
+  if (!document.fullscreenElement) {
+    (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  }
+}
 
 /* ── Quick Trade Panel ──────────────────────────────────────────────────────*/
 var _tradePanelOpen = true;
@@ -1369,7 +1482,18 @@ function applyConnected(d) {
   /* Pre-fill SL/TP from chart data */
   document.getElementById('order-sl').value = D.sl;
   document.getElementById('order-tp').value = D.tp;
+  /* Show on-chart trade bar */
+  var disc = document.getElementById('ctb-disconnected');
+  var conn = document.getElementById('ctb-connected');
+  if (disc) disc.style.display = 'none';
+  if (conn) { conn.style.display = 'flex'; }
+  updateChartBalance(acct.balance);
   refreshTradeStatus();
+}
+
+function updateChartBalance(balance) {
+  var el = document.getElementById('ctb-balance');
+  if (el) el.textContent = '$' + (balance||0).toFixed(2);
 }
 
 function disconnectTrade() {
@@ -1379,7 +1503,17 @@ function disconnectTrade() {
     document.getElementById('positions-list').innerHTML = '';
     document.getElementById('trade-status-badge').className  = 'trade-badge trade-disconnected';
     document.getElementById('trade-status-badge').textContent = '● Disconnected';
+    /* Restore on-chart disconnect button */
+    var disc = document.getElementById('ctb-disconnected');
+    var conn = document.getElementById('ctb-connected');
+    if (disc) disc.style.display = '';
+    if (conn) conn.style.display = 'none';
   });
+}
+
+function scrollToTradePanel() {
+  var p = document.querySelector('.trade-panel');
+  if (p) p.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function placeOrder(action) {
@@ -1422,6 +1556,7 @@ function refreshTradeStatus() {
       document.getElementById('acct-balance').textContent    = '$' + (acct.balance||0).toFixed(2);
       document.getElementById('acct-equity').textContent     = '$' + (acct.equity||0).toFixed(2);
       document.getElementById('acct-pos-count').textContent  = (d.positions||[]).length;
+      updateChartBalance(acct.balance);
       renderPositions(d.positions || []);
     });
 }
