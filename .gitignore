@@ -1,16 +1,35 @@
+# OS
 .DS_Store
+Thumbs.db
+
+# Claude
 CLAUDE.md
 .claude/
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 *.log
 venv/
+.venv/
 .env
+.env.*
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Models and data (large binaries — generated locally)
+Saved/
+Saved Models/
+Data/
 
 # User databases
 instance/
 Data/users.db
 
-# Anaconda
-*.egg-info/
-.eggs/
+# IDE
+.vscode/
+.idea/
+*.swp
