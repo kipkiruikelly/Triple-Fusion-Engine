@@ -26,7 +26,68 @@ import ta
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
-YF_SYMBOL_MAP = {"NDX": "^NDX"}
+YF_SYMBOL_MAP = {
+    # ── Indices ───────────────────────────────────────────────────────────────
+    "NDX":      "^NDX",
+    "SPX":      "^GSPC",
+    "DJI":      "^DJI",
+    "VIX":      "^VIX",
+    "RUT":      "^RUT",
+    "FTSE":     "^FTSE",
+    "DAX":      "^GDAXI",
+    "NIKKEI":   "^N225",
+    "HSI":      "^HSI",
+
+    # ── Crypto ────────────────────────────────────────────────────────────────
+    "BTC":      "BTC-USD",
+    "ETH":      "ETH-USD",
+    "BNB":      "BNB-USD",
+    "SOL":      "SOL-USD",
+    "XRP":      "XRP-USD",
+    "ADA":      "ADA-USD",
+    "AVAX":     "AVAX-USD",
+    "DOGE":     "DOGE-USD",
+    "DOT":      "DOT-USD",
+    "LINK":     "LINK-USD",
+    "LTC":      "LTC-USD",
+    "MATIC":    "POL-USD",
+    "SHIB":     "SHIB-USD",
+    "UNI":      "UNI-USD",
+    "ATOM":     "ATOM-USD",
+
+    # ── Forex (spot) ──────────────────────────────────────────────────────────
+    "EURUSD":   "EURUSD=X",
+    "GBPUSD":   "GBPUSD=X",
+    "USDJPY":   "USDJPY=X",
+    "AUDUSD":   "AUDUSD=X",
+    "USDCAD":   "USDCAD=X",
+    "USDCHF":   "USDCHF=X",
+    "NZDUSD":   "NZDUSD=X",
+    "EURGBP":   "EURGBP=X",
+    "EURJPY":   "EURJPY=X",
+    "GBPJPY":   "GBPJPY=X",
+    "USDMXN":   "MXN=X",
+    "USDZAR":   "ZAR=X",
+    "XAUUSD":   "XAUUSD=X",
+    "XAGUSD":   "XAGUSD=X",
+
+    # ── Commodities (futures) ─────────────────────────────────────────────────
+    "GOLD":     "GC=F",
+    "SILVER":   "SI=F",
+    "OIL":      "CL=F",
+    "BRENT":    "BZ=F",
+    "NATGAS":   "NG=F",
+    "COPPER":   "HG=F",
+    "PLATINUM": "PL=F",
+    "PALLADIUM":"PA=F",
+    "WHEAT":    "ZW=F",
+    "CORN":     "ZC=F",
+    "SOYBEAN":  "ZS=F",
+    "COTTON":   "CT=F",
+    "SUGAR":    "SB=F",
+    "COCOA":    "CC=F",
+    "COFFEE":   "KC=F",
+}
 
 # Per-(ticker, interval) model cache so we only load from disk once
 _model_cache: dict = {}

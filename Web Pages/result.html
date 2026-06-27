@@ -692,11 +692,42 @@
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-label">Popular Tickers</div>
-      {% for sym, chg, up in [('AAPL','+1.24%',True),('TSLA','-2.31%',False),('MSFT','+0.64%',True),('GOOGL','+0.91%',True),('NVDA','+3.12%',True),('META','+1.55%',True)] %}
+      <div class="sidebar-label">US Stocks</div>
+      {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','XOM'] %}
       <div class="sidebar-price-row" onclick="window.location='/predict?ticker={{ sym }}'">
         <span class="sym">{{ sym }}</span>
-        <span class="chg {% if up %}up{% else %}down{% endif %}">{{ chg }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">ETFs</div>
+      {% for sym in ['SPY','QQQ','IWM','DIA','GLD','TLT','XLF'] %}
+      <div class="sidebar-price-row" onclick="window.location='/predict?ticker={{ sym }}'">
+        <span class="sym">{{ sym }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Crypto</div>
+      {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE'] %}
+      <div class="sidebar-price-row" onclick="window.location='/predict?ticker={{ sym }}'">
+        <span class="sym">{{ sym }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Forex</div>
+      {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD'] %}
+      <div class="sidebar-price-row" onclick="window.location='/predict?ticker={{ sym }}'">
+        <span class="sym">{{ sym }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Commodities</div>
+      {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT'] %}
+      <div class="sidebar-price-row" onclick="window.location='/predict?ticker={{ sym }}'">
+        <span class="sym">{{ sym }}</span>
       </div>
       {% endfor %}
     </div>

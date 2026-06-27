@@ -426,6 +426,34 @@
     .badge-rf   { background: rgba(234,179,8,0.15);  color: #FBBF24; }
     .badge-lstm { background: rgba(0,192,118,0.15);  color: var(--green); }
 
+    /* ── Market Browser ── */
+    .ac-tab {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); font-size: 9pt; font-weight: 600; font-family: 'Inter', sans-serif;
+      padding: 4px 12px; border-radius: 4px; cursor: pointer; transition: all 0.12s;
+    }
+    .ac-tab.active { background: var(--accent); color: var(--white); border-color: var(--accent); }
+    .ac-tab:hover:not(.active) { border-color: var(--accent); color: var(--text); }
+
+    .ac-subheading {
+      font-size: 8.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--muted); margin: 16px 0 8px; display: flex; align-items: center; gap: 8px;
+    }
+    .ac-subheading::after { content:''; flex:1; height:1px; background:var(--border); }
+    .ac-subheading:first-child { margin-top: 0; }
+
+    .ticker-grid {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;
+    }
+    .ticker-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 7px; padding: 8px 12px; cursor: pointer;
+      min-width: 72px; text-align: center; transition: all 0.12s;
+    }
+    .ticker-card:hover { border-color: var(--accent); background: var(--surface2); }
+    .tc-sym { font-size: 10pt; font-weight: 700; color: var(--white); letter-spacing: 0.3px; }
+    .tc-name { font-size: 7.5pt; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px; }
+
     /* ── Disclaimer ── */
     .disclaimer {
       background: rgba(255,107,53,0.07);
@@ -554,59 +582,52 @@
     </div>
 
     <div class="sidebar-section">
-      <div class="sidebar-label">Popular Tickers</div>
-      <div class="sidebar-item" onclick="setTicker('AAPL')">
-        <div class="dot"></div>
-        AAPL
-      </div>
-      <div class="sidebar-item" onclick="setTicker('TSLA')">
-        <div class="dot"></div>
-        TSLA
-      </div>
-      <div class="sidebar-item" onclick="setTicker('MSFT')">
-        <div class="dot"></div>
-        MSFT
-      </div>
-      <div class="sidebar-item" onclick="setTicker('GOOGL')">
-        <div class="dot"></div>
-        GOOGL
-      </div>
-      <div class="sidebar-item" onclick="setTicker('NVDA')">
-        <div class="dot"></div>
-        NVDA
-      </div>
-      <div class="sidebar-item" onclick="setTicker('META')">
-        <div class="dot"></div>
-        META
-      </div>
-      <div class="sidebar-item" onclick="setTicker('AMZN')">
-        <div class="dot"></div>
-        AMZN
-      </div>
-      <div class="sidebar-item" onclick="setTicker('NDX')">
-        <div class="dot"></div>
-        NDX
-      </div>
-      <div class="sidebar-item" onclick="setTicker('QQQ')">
-        <div class="dot"></div>
-        QQQ
-      </div>
+      <div class="sidebar-label">US Stocks</div>
+      {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT'] %}
+      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">ETFs</div>
+      {% for sym in ['SPY','QQQ','IWM','DIA','GLD','SLV','TLT','XLF','XLE'] %}
+      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Crypto</div>
+      {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','LINK'] %}
+      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Forex</div>
+      {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD','EURGBP'] %}
+      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Commodities</div>
+      {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT','BRENT'] %}
+      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      {% endfor %}
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Indices</div>
+      {% for sym in ['SPX','NDX','DJI','RUT','VIX','FTSE','DAX','NIKKEI'] %}
+      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      {% endfor %}
     </div>
 
     <div class="sidebar-section">
       <div class="sidebar-label">Models</div>
-      <div class="sidebar-item" onclick="showSection('lr')">
-        <div class="dot"></div>
-        Linear Regression
-      </div>
-      <div class="sidebar-item" onclick="showSection('rf')">
-        <div class="dot"></div>
-        Random Forest
-      </div>
-      <div class="sidebar-item" onclick="showSection('lstm')">
-        <div class="dot"></div>
-        LSTM Network
-      </div>
+      <div class="sidebar-item" onclick="showSection('lr')"><div class="dot"></div>Linear Regression</div>
+      <div class="sidebar-item" onclick="showSection('rf')"><div class="dot"></div>Random Forest</div>
+      <div class="sidebar-item" onclick="showSection('lstm')"><div class="dot"></div>LSTM Network</div>
     </div>
   </aside>
 
@@ -704,6 +725,216 @@
       </div>
     </div>
 
+    <!-- ── Market Browser ── -->
+    <div class="info-section" style="margin-bottom:20px;">
+      <div class="info-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span>Market Browser</span>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;" id="ac-tabs">
+          <button class="ac-tab active" onclick="switchTab('stocks')">US Stocks</button>
+          <button class="ac-tab" onclick="switchTab('etfs')">ETFs</button>
+          <button class="ac-tab" onclick="switchTab('crypto')">Crypto</button>
+          <button class="ac-tab" onclick="switchTab('forex')">Forex</button>
+          <button class="ac-tab" onclick="switchTab('commodities')">Commodities</button>
+          <button class="ac-tab" onclick="switchTab('indices')">Indices</button>
+        </div>
+      </div>
+
+      <!-- US Stocks -->
+      <div id="tab-stocks" class="ac-panel" style="padding:18px 20px;">
+        <div class="ac-subheading">Technology</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('AAPL','Apple'),('MSFT','Microsoft'),('GOOGL','Alphabet'),('AMZN','Amazon'),('META','Meta'),('NVDA','NVIDIA'),('TSLA','Tesla'),('AMD','AMD'),('NFLX','Netflix'),('INTC','Intel'),('CRM','Salesforce'),('ORCL','Oracle'),('ADBE','Adobe'),('PYPL','PayPal')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Finance</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('JPM','JPMorgan'),('GS','Goldman Sachs'),('BAC','Bank of America'),('MS','Morgan Stanley'),('V','Visa'),('MA','Mastercard'),('AXP','Amex'),('WFC','Wells Fargo'),('BRK-B','Berkshire'),('C','Citigroup'),('BLK','BlackRock'),('SCHW','Charles Schwab')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Healthcare</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('JNJ','J&J'),('PFE','Pfizer'),('UNH','UnitedHealth'),('ABBV','AbbVie'),('MRK','Merck'),('TMO','Thermo Fisher'),('LLY','Eli Lilly'),('BMY','Bristol-Myers'),('AMGN','Amgen'),('GILD','Gilead')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Energy</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('XOM','ExxonMobil'),('CVX','Chevron'),('BP','BP'),('SLB','Schlumberger'),('OXY','Occidental'),('COP','ConocoPhillips'),('PSX','Phillips 66'),('VLO','Valero')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Consumer &amp; Retail</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('WMT','Walmart'),('HD','Home Depot'),('COST','Costco'),('MCD','McDonald\'s'),('NKE','Nike'),('SBUX','Starbucks'),('TGT','Target'),('LOW','Lowe\'s'),('TJX','TJX Co'),('DG','Dollar General')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Industrials</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('BA','Boeing'),('CAT','Caterpillar'),('GE','GE'),('RTX','Raytheon'),('HON','Honeywell'),('MMM','3M'),('UPS','UPS'),('FDX','FedEx'),('DE','John Deere'),('LMT','Lockheed')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- ETFs -->
+      <div id="tab-etfs" class="ac-panel" style="display:none;padding:18px 20px;">
+        <div class="ac-subheading">Broad Market</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('SPY','S&P 500'),('QQQ','NASDAQ 100'),('IWM','Russell 2000'),('DIA','Dow Jones'),('VTI','Total Market'),('VOO','Vanguard S&P'),('ONEQ','NASDAQ Comp'),('MDY','S&P 400 Mid')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Sector ETFs</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('XLF','Financials'),('XLE','Energy'),('XLK','Technology'),('XLV','Healthcare'),('XLI','Industrials'),('XLY','Consumer Disc'),('XLP','Consumer Stpl'),('XLU','Utilities'),('XLRE','Real Estate'),('XLB','Materials'),('ARKK','ARK Innovation'),('ARKG','ARK Genomics')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Fixed Income &amp; Alternatives</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('TLT','20yr Treasury'),('SHY','1-3yr Treasury'),('LQD','Corp Bonds'),('HYG','High Yield'),('GLD','Gold'),('SLV','Silver'),('USO','Oil'),('PDBC','Commodities'),('VNQ','REITs')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Crypto -->
+      <div id="tab-crypto" class="ac-panel" style="display:none;padding:18px 20px;">
+        <div class="ac-subheading">Large Cap</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('BTC','Bitcoin'),('ETH','Ethereum'),('BNB','BNB'),('SOL','Solana'),('XRP','Ripple'),('ADA','Cardano'),('AVAX','Avalanche'),('DOT','Polkadot')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">DeFi &amp; Alt</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('LINK','Chainlink'),('DOGE','Dogecoin'),('MATIC','Polygon'),('LTC','Litecoin'),('UNI','Uniswap'),('ATOM','Cosmos'),('SHIB','Shiba Inu')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Forex -->
+      <div id="tab-forex" class="ac-panel" style="display:none;padding:18px 20px;">
+        <div class="ac-subheading">Majors</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('EURUSD','EUR/USD'),('GBPUSD','GBP/USD'),('USDJPY','USD/JPY'),('AUDUSD','AUD/USD'),('USDCAD','USD/CAD'),('USDCHF','USD/CHF'),('NZDUSD','NZD/USD')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Crosses</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('EURGBP','EUR/GBP'),('EURJPY','EUR/JPY'),('GBPJPY','GBP/JPY'),('AUDJPY','AUD/JPY'),('USDMXN','USD/MXN'),('USDZAR','USD/ZAR')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Metals Spot</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('XAUUSD','Gold Spot'),('XAGUSD','Silver Spot')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Commodities -->
+      <div id="tab-commodities" class="ac-panel" style="display:none;padding:18px 20px;">
+        <div class="ac-subheading">Metals</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('GOLD','Gold Futures'),('SILVER','Silver Futures'),('COPPER','Copper'),('PLATINUM','Platinum'),('PALLADIUM','Palladium')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Energy</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('OIL','WTI Crude'),('BRENT','Brent Crude'),('NATGAS','Natural Gas')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Agriculture</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('WHEAT','Wheat'),('CORN','Corn'),('SOYBEAN','Soybeans'),('COTTON','Cotton'),('SUGAR','Sugar'),('COFFEE','Coffee'),('COCOA','Cocoa')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Indices -->
+      <div id="tab-indices" class="ac-panel" style="display:none;padding:18px 20px;">
+        <div class="ac-subheading">US Indices</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('SPX','S&P 500'),('NDX','NASDAQ 100'),('DJI','Dow Jones'),('RUT','Russell 2000'),('VIX','VIX')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ac-subheading">Global Indices</div>
+        <div class="ticker-grid">
+          {% for sym,name in [('FTSE','FTSE 100'),('DAX','DAX'),('NIKKEI','Nikkei 225'),('HSI','Hang Seng')] %}
+          <div class="ticker-card" onclick="setTicker('{{ sym }}')">
+            <div class="tc-sym">{{ sym }}</div>
+            <div class="tc-name">{{ name }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
     <!-- How it works table -->
     <div class="info-section" style="margin-bottom: 20px;">
       <div class="info-header">Technical Features Used</div>
@@ -762,7 +993,7 @@
 </div>
 
 <footer>
-  BullLogic &nbsp;&middot;&nbsp; BullLogic &nbsp;&middot;&nbsp; 2026
+  BullLogic &nbsp;&middot;&nbsp; 2026
 </footer>
 
 <script>
@@ -815,6 +1046,15 @@
       body: '<div style="line-height:1.8;"><p style="color:var(--muted);margin-bottom:12px;">BullLogic is a production-grade machine learning platform for stock price prediction and algorithmic trading. Built with ICT concepts, multi-model ML fusion, and real-time market data.</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Developer</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">BullLogic</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Version</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">1.0.0</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Released</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">2026</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Stack</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">Python, Flask, Scikit-learn, Keras, Plotly</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;color:var(--muted);">Trading Engine</td><td style="padding:10px;text-align:right;color:var(--text);font-weight:600;">MetaApi · Paper Trading · MT5 Bridge</td></tr><tr><td style="padding:10px;color:var(--muted);">GitHub</td><td style="padding:10px;text-align:right;"><a href="https://github.com/kipkiruikelly/Stock-Market-Predictor" target="_blank" style="color:var(--accent);font-weight:600;">kipkiruikelly/Stock-Market-Predictor</a></td></tr></table></div>'
     }
   };
+
+  function switchTab(name) {
+    ['stocks','etfs','crypto','forex','commodities','indices'].forEach(t => {
+      document.getElementById('tab-' + t).style.display = t === name ? 'block' : 'none';
+    });
+    document.querySelectorAll('.ac-tab').forEach((btn, i) => {
+      btn.classList.toggle('active', btn.getAttribute('onclick').includes(name));
+    });
+  }
 
   function showSection(name) {
     var section = modalContents[name];
