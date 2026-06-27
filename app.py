@@ -610,6 +610,46 @@ def api_mtf(ticker):
         return jsonify({"ok": False, "error": str(e)}), 400
 
 
+# ── Backtest endpoints ───────────────────────────────────────────────────────
+
+@app.route("/backtest")
+@login_required
+def backtest():
+    return render_template("backtest.html")
+
+@app.route("/api/backtest", methods=["POST"])
+@login_required
+def api_backtest():
+    if not current_user.is_pro:
+        return jsonify({"ok": False, "error": "Backtesting requires a Pro plan."}), 403
+    data = request.get_json() or {}
+    ticker   = data.get("ticker", "AAPL").upper()
+    interval = data.get("interval", "1d")
+    period   = data.get("period", "2y")
+    capital  = float(data.get("initial_capital", 10_000))
+    risk_pct = float(data.get("risk_pct", 1.0))
+
+    if interval not in ("1d", "1h"):
+        return jsonify({"ok": False, "error": "interval must be 1d or 1h"}), 400
+    if period not in ("6mo", "1y", "2y"):
+        return jsonify({"ok": False, "error": "period must be 6mo, 1y, or 2y"}), 400
+    if not (100 <= capital <= 10_000_000):
+        return jsonify({"ok": False, "error": "Capital must be between $100 and $10,000,000"}), 400
+    if not (0.1 <= risk_pct <= 10):
+        return jsonify({"ok": False, "error": "Risk must be between 0.1% and 10%"}), 400
+
+    try:
+        from backtester import run_backtest
+        result = run_backtest(ticker, interval, period, capital, risk_pct)
+        result["ok"] = True
+        return jsonify(result)
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    except Exception as e:
+        logger.exception("Backtest error for %s", ticker)
+        return jsonify({"ok": False, "error": f"Backtest failed: {str(e)}"}), 500
+
+
 # ── Monitoring endpoints ─────────────────────────────────────────────────────
 
 @app.route("/health")

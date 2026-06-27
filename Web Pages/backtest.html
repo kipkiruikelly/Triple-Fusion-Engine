@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Backtest — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0F1217;
+      --surface:   #1A1F2E;
+      --surface2:  #222840;
+      --border:    #2A3150;
+      --text:      #E2E8F0;
+      --muted:     #7A8499;
+      --accent:    #FF6B35;
+      --green:     #00C076;
+      --red:       #FF4D4D;
+      --blue:      #3B82F6;
+      --white:     #FFFFFF;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 11pt;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
+    .logo span { color: var(--accent); }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .topbar-right a {
+      color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500;
+      padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s;
+    }
+    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
+
+    .layout { display: flex; flex: 1; }
+
+    /* ── Config sidebar ── */
+    .sidebar {
+      width: 240px; min-width: 240px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 20px 16px;
+      display: flex; flex-direction: column; gap: 20px;
+    }
+    .sidebar-label {
+      font-size: 8.5pt; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    .field-group label { font-size: 9.5pt; color: var(--muted); font-weight: 500; }
+    .field-group input, .field-group select {
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); border-radius: 6px; padding: 7px 10px;
+      font-size: 10pt; font-family: 'Inter', sans-serif; width: 100%;
+      outline: none; transition: border-color 0.15s;
+    }
+    .field-group input:focus, .field-group select:focus { border-color: var(--accent); }
+    .field-group select option { background: var(--surface); }
+
+    .run-btn {
+      background: var(--accent); color: var(--white);
+      border: none; border-radius: 6px; padding: 10px;
+      font-size: 10.5pt; font-weight: 700; cursor: pointer;
+      width: 100%; transition: opacity 0.15s; margin-top: 4px;
+    }
+    .run-btn:hover { opacity: 0.85; }
+    .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .sidebar-nav-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 8px; border-radius: 6px; cursor: pointer;
+      font-size: 10pt; color: var(--muted); transition: all 0.12s;
+    }
+    .sidebar-nav-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+
+    /* ── Main content ── */
+    .main-content {
+      flex: 1; padding: 28px 32px;
+      overflow-y: auto; min-width: 0;
+    }
+
+    /* ── Empty state ── */
+    #empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 60vh; gap: 16px; text-align: center;
+    }
+    .empty-icon { font-size: 56px; opacity: 0.3; line-height: 1; }
+    .empty-title { font-size: 18pt; font-weight: 700; color: var(--text); }
+    .empty-sub { font-size: 10.5pt; color: var(--muted); max-width: 380px; line-height: 1.6; }
+
+    /* ── Loading bar ── */
+    #loading-bar {
+      display: none; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 60vh; gap: 18px; text-align: center;
+    }
+    .spinner {
+      width: 40px; height: 40px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 11pt; color: var(--muted); }
+
+    /* ── Results ── */
+    #results { display: none; }
+
+    .result-header {
+      display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .result-ticker {
+      font-size: 20pt; font-weight: 800; color: var(--white); letter-spacing: -0.5px;
+    }
+    .result-meta { color: var(--muted); font-size: 9.5pt; line-height: 1.6; }
+    .result-meta span { color: var(--text); font-weight: 600; }
+
+    /* ── Metrics grid ── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .metric-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px;
+    }
+    .metric-card .m-label { font-size: 8.5pt; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .metric-card .m-value { font-size: 17pt; font-weight: 800; letter-spacing: -0.5px; }
+    .metric-card .m-sub { font-size: 8.5pt; color: var(--muted); margin-top: 3px; }
+    .m-green { color: var(--green); }
+    .m-red   { color: var(--red); }
+    .m-text  { color: var(--text); }
+    .m-accent { color: var(--accent); }
+    .m-blue  { color: var(--blue); }
+
+    /* ── Section title ── */
+    .section-title {
+      font-size: 11pt; font-weight: 700; color: var(--text);
+      margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    /* ── Chart container ── */
+    .chart-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; margin-bottom: 24px;
+    }
+    .chart-legend {
+      display: flex; gap: 18px; margin-bottom: 12px; font-size: 9.5pt;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 10px; height: 3px; border-radius: 2px; }
+    #equity-chart { width: 100%; height: 360px; }
+
+    /* ── Monthly returns ── */
+    .monthly-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; margin-bottom: 24px;
+    }
+    .monthly-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    .monthly-table th {
+      font-size: 8.5pt; font-weight: 600; color: var(--muted);
+      padding: 5px 8px; text-align: center; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .monthly-table td {
+      padding: 5px 6px; text-align: center; border-radius: 4px;
+      font-weight: 600; font-size: 9pt;
+    }
+    .mr-win  { background: rgba(0,192,118,0.18); color: var(--green); }
+    .mr-loss { background: rgba(255,77,77,0.18);  color: var(--red); }
+    .mr-zero { color: var(--muted); }
+
+    /* ── Trade log ── */
+    .trade-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 16px; margin-bottom: 24px;
+    }
+    .trade-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    .trade-table th {
+      text-align: left; padding: 8px 10px;
+      font-size: 8.5pt; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .trade-table td { padding: 7px 10px; border-bottom: 1px solid rgba(42,49,80,0.5); }
+    .trade-table tr:last-child td { border-bottom: none; }
+    .trade-table tr:hover td { background: var(--surface2); }
+    .badge-buy  { background: rgba(0,192,118,0.15); color: var(--green); padding: 2px 7px; border-radius: 4px; font-size: 8pt; font-weight: 700; }
+    .badge-sell { background: rgba(255,77,77,0.15);  color: var(--red);   padding: 2px 7px; border-radius: 4px; font-size: 8pt; font-weight: 700; }
+    .badge-win  { color: var(--green); font-weight: 700; }
+    .badge-loss { color: var(--red);   font-weight: 700; }
+    .badge-open { color: var(--muted); font-weight: 600; }
+    .pnl-pos { color: var(--green); font-weight: 700; }
+    .pnl-neg { color: var(--red);   font-weight: 700; }
+
+    .pagination { display: flex; gap: 6px; margin-top: 14px; justify-content: flex-end; }
+    .page-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--muted); font-size: 9pt; font-weight: 600;
+      padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    }
+    .page-btn.active { background: var(--accent); color: var(--white); border-color: var(--accent); }
+    .page-btn:hover:not(.active) { border-color: var(--accent); color: var(--white); }
+
+    /* ── Pro lock ── */
+    .pro-gate {
+      display: none; /* shown for non-pro users */
+      flex-direction: column; align-items: center; justify-content: center;
+      min-height: 60vh; gap: 16px; text-align: center;
+    }
+    .pro-gate .gate-icon { font-size: 48px; opacity: 0.35; }
+    .pro-gate .gate-title { font-size: 17pt; font-weight: 800; color: var(--text); }
+    .pro-gate .gate-sub { font-size: 10.5pt; color: var(--muted); max-width: 360px; line-height: 1.65; }
+    .upgrade-btn {
+      background: var(--accent); color: var(--white);
+      padding: 10px 28px; border-radius: 6px; text-decoration: none;
+      font-weight: 700; font-size: 10.5pt; margin-top: 4px;
+      display: inline-block; transition: opacity 0.15s;
+    }
+    .upgrade-btn:hover { opacity: 0.85; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 18px; font-size: 10pt;
+      max-width: 320px; z-index: 9999; display: none;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    #toast.show { display: block; animation: fadeInUp 0.2s ease; }
+    @keyframes fadeInUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:32px;">
+    <a href="/" class="logo">Market<span>Predict</span></a>
+  </div>
+  <div class="topbar-right">
+    {% if current_user.is_pro %}
+      <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:0.5px;">PRO</span>
+    {% else %}
+      <a href="/pricing" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">Upgrade to Pro</a>
+    {% endif %}
+    <a href="/">New Prediction</a>
+    <a href="/logout">Logout</a>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- Config sidebar -->
+  <aside class="sidebar">
+    <div>
+      <div class="sidebar-label">Navigation</div>
+      <div class="sidebar-nav-item" onclick="location.href='/'">
+        <div class="sidebar-dot"></div> Price Predictor
+      </div>
+      <div class="sidebar-nav-item" style="color:var(--accent);">
+        <div class="sidebar-dot" style="background:var(--accent);"></div> Backtesting
+      </div>
+    </div>
+
+    <div>
+      <div class="sidebar-label">Configuration</div>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div class="field-group">
+          <label>Ticker</label>
+          <input id="bt-ticker" type="text" value="AAPL" placeholder="AAPL, TSLA…" />
+        </div>
+        <div class="field-group">
+          <label>Timeframe</label>
+          <select id="bt-interval">
+            <option value="1d">Daily (1D)</option>
+            <option value="1h">Hourly (1H)</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>History</label>
+          <select id="bt-period">
+            <option value="1y">1 Year</option>
+            <option value="2y" selected>2 Years</option>
+            <option value="6mo">6 Months</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label>Capital ($)</label>
+          <input id="bt-capital" type="number" value="10000" min="100" />
+        </div>
+        <div class="field-group">
+          <label>Risk per trade (%)</label>
+          <input id="bt-risk" type="number" value="1" min="0.1" max="10" step="0.1" />
+        </div>
+        <button class="run-btn" id="run-btn" onclick="runBacktest()">
+          Run Backtest
+        </button>
+        {% if not current_user.is_pro %}
+        <div style="font-size:8.5pt;color:var(--muted);text-align:center;line-height:1.5;">
+          Backtesting requires a <a href="/pricing" style="color:var(--accent);">Pro plan</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <div class="main-content">
+
+    <!-- Empty state -->
+    <div id="empty-state">
+      <div class="empty-icon">📈</div>
+      <div class="empty-title">Strategy Backtesting</div>
+      <div class="empty-sub">
+        Configure a ticker and period, then run the backtest to see how the BullLogic ML + ICT strategy performed historically.
+      </div>
+      {% if not current_user.is_pro %}
+      <a href="/pricing" class="upgrade-btn" style="margin-top:8px;">Upgrade to Pro</a>
+      {% endif %}
+    </div>
+
+    <!-- Loading -->
+    <div id="loading-bar">
+      <div class="spinner"></div>
+      <div class="loading-text" id="loading-text">Fetching data and running backtest…</div>
+    </div>
+
+    <!-- Results -->
+    <div id="results">
+
+      <!-- Result header -->
+      <div class="result-header">
+        <div class="result-ticker" id="r-ticker">AAPL</div>
+        <div class="result-meta">
+          <span id="r-interval">1D</span> &nbsp;·&nbsp;
+          <span id="r-start">—</span> → <span id="r-end">—</span> &nbsp;·&nbsp;
+          <span id="r-bars">—</span> bars &nbsp;·&nbsp;
+          Capital: <span id="r-capital">—</span>
+        </div>
+      </div>
+
+      <!-- Metrics grid -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="m-label">Total Return</div>
+          <div class="m-value" id="m-total-return">—</div>
+          <div class="m-sub">vs Buy &amp; Hold: <span id="m-bh">—</span></div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Alpha</div>
+          <div class="m-value" id="m-alpha">—</div>
+          <div class="m-sub">vs passive benchmark</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Win Rate</div>
+          <div class="m-value" id="m-winrate">—</div>
+          <div class="m-sub"><span id="m-wins">—</span>W / <span id="m-losses">—</span>L of <span id="m-total">—</span> trades</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Profit Factor</div>
+          <div class="m-value" id="m-pf">—</div>
+          <div class="m-sub">Gross profit / Gross loss</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Max Drawdown</div>
+          <div class="m-value" id="m-dd">—</div>
+          <div class="m-sub">Worst peak-to-trough</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Sharpe Ratio</div>
+          <div class="m-value" id="m-sharpe">—</div>
+          <div class="m-sub">Annualized (daily ret)</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Avg Win</div>
+          <div class="m-value m-green" id="m-avgwin">—</div>
+          <div class="m-sub">Per winning trade</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Expectancy</div>
+          <div class="m-value" id="m-exp">—</div>
+          <div class="m-sub">Expected $ per trade</div>
+        </div>
+      </div>
+
+      <!-- Equity curve -->
+      <div class="section-title">Equity Curve</div>
+      <div class="chart-card">
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#3B82F6;"></div>
+            <span style="color:var(--muted);">Strategy</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#7A8499;"></div>
+            <span style="color:var(--muted);">Buy &amp; Hold</span>
+          </div>
+          <div class="legend-item" style="margin-left:auto;">
+            <span style="color:var(--muted);font-size:8.5pt;" id="chart-hover-val"></span>
+          </div>
+        </div>
+        <div id="equity-chart"></div>
+      </div>
+
+      <!-- Monthly returns -->
+      <div class="section-title">Monthly Returns</div>
+      <div class="monthly-card">
+        <table class="monthly-table" id="monthly-table">
+          <thead>
+            <tr>
+              <th>Year</th>
+              <th>Jan</th><th>Feb</th><th>Mar</th><th>Apr</th>
+              <th>May</th><th>Jun</th><th>Jul</th><th>Aug</th>
+              <th>Sep</th><th>Oct</th><th>Nov</th><th>Dec</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-body"></tbody>
+        </table>
+      </div>
+
+      <!-- Trade log -->
+      <div class="section-title">Trade Log</div>
+      <div class="trade-card">
+        <table class="trade-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Entry Date</th>
+              <th>Exit Date</th>
+              <th>Direction</th>
+              <th>Entry</th>
+              <th>Exit</th>
+              <th>SL</th>
+              <th>TP</th>
+              <th>Result</th>
+              <th>P&amp;L ($)</th>
+            </tr>
+          </thead>
+          <tbody id="trade-log-body"></tbody>
+        </table>
+        <div class="pagination" id="pagination"></div>
+      </div>
+
+    </div><!-- /results -->
+
+  </div><!-- /main-content -->
+</div><!-- /layout -->
+
+<div id="toast"></div>
+
+<script>
+  const _isPro = {{ current_user.is_pro | tojson }};
+  const ROWS_PER_PAGE = 30;
+  let _trades = [];
+  let _currentPage = 1;
+  let _equityChart = null;
+
+  function showToast(msg, ms) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), ms || 3500);
+  }
+
+  function fmt$(v) { return '$' + Number(v).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function fmtPct(v) { return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'; }
+  function colorClass(v) { return v > 0 ? 'm-green' : v < 0 ? 'm-red' : 'm-text'; }
+
+  function setVal(id, text, cls) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = (cls || '') + ' m-value';
+  }
+
+  function runBacktest() {
+    if (!_isPro) {
+      showToast('Backtesting is a Pro feature. Upgrade to run backtests.');
+      return;
+    }
+    const ticker  = document.getElementById('bt-ticker').value.trim().toUpperCase();
+    const interval = document.getElementById('bt-interval').value;
+    const period   = document.getElementById('bt-period').value;
+    const capital  = parseFloat(document.getElementById('bt-capital').value) || 10000;
+    const risk     = parseFloat(document.getElementById('bt-risk').value) || 1.0;
+
+    if (!ticker) { showToast('Enter a ticker symbol.'); return; }
+
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('loading-bar').style.display = 'flex';
+    document.getElementById('loading-text').textContent = `Fetching ${ticker} data and running backtest…`;
+    document.getElementById('run-btn').disabled = true;
+
+    fetch('/api/backtest', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ticker, interval, period, initial_capital: capital, risk_pct: risk})
+    })
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('loading-bar').style.display = 'none';
+      document.getElementById('run-btn').disabled = false;
+      if (!d.ok) { showToast(d.error || 'Backtest failed.'); document.getElementById('empty-state').style.display='flex'; return; }
+      renderResults(d);
+    })
+    .catch(e => {
+      document.getElementById('loading-bar').style.display = 'none';
+      document.getElementById('run-btn').disabled = false;
+      document.getElementById('empty-state').style.display = 'flex';
+      showToast('Network error: ' + e.message);
+    });
+  }
+
+  function renderResults(d) {
+    const m = d.metrics;
+    document.getElementById('results').style.display = 'block';
+
+    // Header
+    document.getElementById('r-ticker').textContent = d.ticker;
+    document.getElementById('r-interval').textContent = d.interval.toUpperCase();
+    document.getElementById('r-start').textContent = d.start;
+    document.getElementById('r-end').textContent = d.end;
+    document.getElementById('r-bars').textContent = d.bars;
+    document.getElementById('r-capital').textContent = fmt$(d.initial_capital);
+
+    // Metrics
+    setVal('m-total-return', fmtPct(m.total_return), colorClass(m.total_return));
+    document.getElementById('m-bh').textContent = fmtPct(m.bh_return);
+    document.getElementById('m-bh').style.color = m.bh_return >= 0 ? 'var(--green)' : 'var(--red)';
+
+    setVal('m-alpha', fmtPct(m.alpha), colorClass(m.alpha));
+
+    setVal('m-winrate', m.win_rate.toFixed(1) + '%',
+           m.win_rate >= 55 ? 'm-green' : m.win_rate >= 45 ? 'm-text' : 'm-red');
+    document.getElementById('m-wins').textContent = m.wins;
+    document.getElementById('m-losses').textContent = m.losses;
+    document.getElementById('m-total').textContent = m.total_trades;
+
+    setVal('m-pf', m.profit_factor.toFixed(2),
+           m.profit_factor >= 1.5 ? 'm-green' : m.profit_factor >= 1 ? 'm-accent' : 'm-red');
+
+    setVal('m-dd', '-' + m.max_drawdown.toFixed(2) + '%', 'm-red');
+
+    setVal('m-sharpe', m.sharpe.toFixed(2),
+           m.sharpe >= 1 ? 'm-green' : m.sharpe >= 0 ? 'm-text' : 'm-red');
+
+    setVal('m-avgwin', fmt$(m.avg_win), 'm-green');
+
+    setVal('m-exp', fmt$(m.expectancy), colorClass(m.expectancy));
+
+    // Equity chart
+    renderEquityChart(d.equity_curve, d.bh_curve);
+
+    // Monthly returns
+    renderMonthly(d.monthly_returns);
+
+    // Trade log
+    _trades = d.trades || [];
+    _currentPage = 1;
+    renderTradeLog();
+  }
+
+  function renderEquityChart(equity, bh) {
+    const wrap = document.getElementById('equity-chart');
+
+    if (_equityChart) { _equityChart.remove(); }
+    _equityChart = LightweightCharts.createChart(wrap, {
+      width: wrap.offsetWidth, height: 360,
+      layout: { background: { color: '#1A1F2E' }, textColor: '#7A8499' },
+      grid: { vertLines: { color: '#2A3150' }, horzLines: { color: '#2A3150' } },
+      rightPriceScale: { borderColor: '#2A3150' },
+      timeScale: { borderColor: '#2A3150', timeVisible: true },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      handleScroll: true, handleScale: true,
+    });
+
+    const strat = _equityChart.addAreaSeries({
+      lineColor: '#3B82F6', topColor: 'rgba(59,130,246,0.2)', bottomColor: 'rgba(59,130,246,0)',
+      lineWidth: 2, priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    });
+    strat.setData(equity.map(p => ({ time: p.date, value: p.equity })));
+
+    const bhSeries = _equityChart.addLineSeries({
+      color: '#7A8499', lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    });
+    bhSeries.setData(bh.map(p => ({ time: p.date, value: p.equity })));
+
+    _equityChart.timeScale().fitContent();
+
+    // hover value display
+    _equityChart.subscribeCrosshairMove(p => {
+      if (p.seriesData.size) {
+        const v = [...p.seriesData.values()][0];
+        if (v && v.value != null) {
+          document.getElementById('chart-hover-val').textContent = '$' + v.value.toLocaleString('en-US', {minimumFractionDigits:2});
+        }
+      }
+    });
+
+    new ResizeObserver(() => {
+      _equityChart.applyOptions({ width: wrap.offsetWidth });
+    }).observe(wrap);
+  }
+
+  function renderMonthly(monthly) {
+    const MONTHS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+    const MLABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    // Group by year
+    const years = {};
+    Object.entries(monthly).forEach(([ym, val]) => {
+      const [y, m] = ym.split('-');
+      if (!years[y]) years[y] = {};
+      years[y][m] = val;
+    });
+
+    const tbody = document.getElementById('monthly-body');
+    tbody.innerHTML = '';
+
+    Object.keys(years).sort().forEach(yr => {
+      const row = document.createElement('tr');
+      let yearTotal = 1;
+      let td = `<td style="font-weight:700;color:var(--text);">${yr}</td>`;
+      MONTHS.forEach(mo => {
+        const v = years[yr][mo];
+        if (v == null) {
+          td += `<td class="mr-zero">—</td>`;
+        } else {
+          const cls = v > 0 ? 'mr-win' : v < 0 ? 'mr-loss' : 'mr-zero';
+          td += `<td class="${cls}">${fmtPct(v)}</td>`;
+          yearTotal *= (1 + v / 100);
+        }
+      });
+      const ytotal = (yearTotal - 1) * 100;
+      const ycls = ytotal > 0 ? 'mr-win' : ytotal < 0 ? 'mr-loss' : 'mr-zero';
+      td += `<td class="${ycls}" style="font-weight:700;">${fmtPct(ytotal)}</td>`;
+      row.innerHTML = td;
+      tbody.appendChild(row);
+    });
+  }
+
+  function renderTradeLog() {
+    const tbody = document.getElementById('trade-log-body');
+    tbody.innerHTML = '';
+    const start = (_currentPage - 1) * ROWS_PER_PAGE;
+    const slice = _trades.slice(start, start + ROWS_PER_PAGE);
+
+    slice.forEach((t, i) => {
+      const n = start + i + 1;
+      const dirBadge = t.action === 'BUY'
+        ? '<span class="badge-buy">BUY</span>'
+        : '<span class="badge-sell">SELL</span>';
+      const resBadge = t.result === 'win' ? '<span class="badge-win">WIN</span>'
+        : t.result === 'loss' ? '<span class="badge-loss">LOSS</span>'
+        : '<span class="badge-open">OPEN</span>';
+      const pnlCls = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      const pnlSign = t.pnl >= 0 ? '+' : '';
+      tbody.innerHTML += `<tr>
+        <td style="color:var(--muted);">${n}</td>
+        <td>${t.entry_date}</td>
+        <td>${t.exit_date}</td>
+        <td>${dirBadge}</td>
+        <td>${t.entry}</td>
+        <td>${t.exit}</td>
+        <td style="color:var(--red);">${t.sl}</td>
+        <td style="color:var(--green);">${t.tp}</td>
+        <td>${resBadge}</td>
+        <td class="${pnlCls}">${pnlSign}${fmt$(t.pnl)}</td>
+      </tr>`;
+    });
+
+    renderPagination();
+  }
+
+  function renderPagination() {
+    const pages = Math.ceil(_trades.length / ROWS_PER_PAGE);
+    const div = document.getElementById('pagination');
+    div.innerHTML = '';
+    if (pages <= 1) return;
+    for (let p = 1; p <= pages; p++) {
+      const btn = document.createElement('button');
+      btn.textContent = p;
+      btn.className = 'page-btn' + (p === _currentPage ? ' active' : '');
+      btn.onclick = () => { _currentPage = p; renderTradeLog(); };
+      div.appendChild(btn);
+    }
+  }
+
+  // Allow Enter key to trigger backtest
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.activeElement.tagName !== 'BUTTON') {
+      runBacktest();
+    }
+  });
+</script>
+</body>
+</html>
