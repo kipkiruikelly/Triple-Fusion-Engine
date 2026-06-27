@@ -1,8 +1,8 @@
 # ML-based Quantitative Trading System
 
-**Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University**
+**Kelvin Kipkirui**
 
-A machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. Combines Linear Regression, Random Forest, and LSTM models with a live MT5 trading engine powered by MetaApi.
+A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. Combines Linear Regression, Random Forest, and LSTM models with a live MT5 trading engine powered by MetaApi.
 
 ---
 

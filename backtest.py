@@ -30,7 +30,7 @@ Signal modes:
     tech             — ICT gate + Technical only
     ict              — Pure ICT (no ML, no tech indicators)
 
-Author: Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
+Author: Kelvin Kipkirui
 """
 
 import os

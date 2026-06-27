@@ -10,7 +10,7 @@ Usage:
 
 Then open: http://127.0.0.1:5000
 
-Author: Kelvin Kipkirui | DAC-01-0010/2025 | Zetech University
+Author: Kelvin Kipkirui
 """
 
 import os
