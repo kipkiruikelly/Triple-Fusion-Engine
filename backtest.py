@@ -170,6 +170,29 @@ def _build_features(df: pd.DataFrame) -> pd.DataFrame:
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
+    # ICT 2022 — IPDA lookback levels (20 / 40 / 60 bars)
+    for n in [20, 40, 60]:
+        df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
+        df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
+
+    # ICT 2022 — Equal Highs / Equal Lows (liquidity pools)
+    tol  = close * 0.001
+    r10h = high.rolling(10).max().shift(1)
+    r10l = low.rolling(10).min().shift(1)
+    df["Equal_Highs"] = ((high - r10h).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
+    df["Equal_Lows"]  = ((low  - r10l).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
+
+    # ICT 2022 — OTE zone (Optimal Trade Entry: 0.62–0.79 Fibonacci of 20-bar swing)
+    rng20 = (sh20 - sl20).replace(0, np.nan)
+    df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
+    df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
+
+    # ICT 2022 — Consequent Encroachment (CE) of most recent FVG midpoint
+    bull_ce = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
+    bear_ce = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
+    df["CE_Bull_FVG_Dist"] = ((close - bull_ce) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+    df["CE_Bear_FVG_Dist"] = ((bear_ce - close)  / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+
     df.dropna(inplace=True)
     return df
 
@@ -285,9 +308,11 @@ def _ict_signal(lookback: pd.DataFrame) -> dict:
     st_bull = (close > ema20 > ema50)  # short-term uptrend
     st_bear = (close < ema20 < ema50)  # short-term downtrend
 
-    # Trend bias: 200 SMA + market structure + EMA alignment must agree
-    bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5) and st_bull
-    bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)  and st_bear
+    # Trend bias: 2 of 3 conditions must agree (relaxed from requiring all 3)
+    bull_conds   = int(above_200 >= 0.5) + int(struct_b >= 0.5) + int(st_bull)
+    bear_conds   = int(above_200 < 0.5)  + int(struct_b < 0.5)  + int(st_bear)
+    bullish_bias = bull_conds >= 2
+    bearish_bias = bear_conds >= 2
 
     buy = sell = 0
 
@@ -549,9 +574,13 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
     gross_loss = abs(sum(t["pnl$"] for t in losses))
     pf         = gross_win / gross_loss if gross_loss > 0 else float("inf")
 
-    daily_rets = eq_series.pct_change().dropna()
-    sharpe     = (daily_rets.mean() / daily_rets.std() * np.sqrt(252)
-                  if daily_rets.std() > 0 else 0.0)
+    daily_rets   = eq_series.pct_change().dropna()
+    sharpe       = (daily_rets.mean() / daily_rets.std() * np.sqrt(252)
+                    if daily_rets.std() > 0 else 0.0)
+    downside     = daily_rets[daily_rets < 0]
+    sortino      = (daily_rets.mean() / downside.std() * np.sqrt(252)
+                    if len(downside) > 1 and downside.std() > 0 else 0.0)
+    calmar       = ((equity - initial) / initial / (max_dd if max_dd > 0 else 1e-6))
 
     bh_start = float(test.iloc[0]["Close"])
     bh_end   = float(test.iloc[-1]["Close"])
@@ -568,6 +597,8 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
         "total_ret"    : round((equity - initial) / initial * 100, 2),
         "bh_ret"       : round(bh_ret, 2),
         "sharpe"       : round(sharpe, 3),
+        "sortino"      : round(sortino, 3),
+        "calmar"       : round(calmar, 3),
         "max_dd"       : round(max_dd * 100, 2),
         "n_trades"     : n,
         "win_rate"     : round(len(wins) / n * 100, 1) if n else 0.0,
@@ -595,6 +626,8 @@ def print_report(m, trades):
     print(f"  Buy & Hold      {m['bh_ret']:>+11.2f}%")
     print(f"  Alpha           {m['total_ret'] - m['bh_ret']:>+11.2f}%")
     print(f"  Sharpe Ratio    {m['sharpe']:>12.3f}")
+    print(f"  Sortino Ratio   {m['sortino']:>12.3f}")
+    print(f"  Calmar Ratio    {m['calmar']:>12.3f}")
     print(f"  Max Drawdown    {m['max_dd']:>11.2f}%")
     print()
     print(f"  Trades          {m['n_trades']:>12}")
@@ -694,6 +727,8 @@ def main():
     )
     p.add_argument("--ticker",      default="QQQ",        metavar="SYM",
                    help="Ticker symbol (default: QQQ)")
+    p.add_argument("--tickers",     nargs="+",            metavar="SYM",
+                   help="Multiple tickers — runs each and prints aggregated summary")
     p.add_argument("--start",       default="2022-01-01", metavar="DATE",
                    help="Test start date (default: 2022-01-01)")
     p.add_argument("--end",         default="2024-12-31", metavar="DATE",
@@ -714,34 +749,57 @@ def main():
                    help="Save chart to a PNG file")
     args = p.parse_args()
 
-    trades, eq_series, metrics = run_backtest(
-        ticker     = args.ticker.upper(),
-        start      = args.start,
-        end        = args.end,
-        initial    = args.initial,
-        risk_pct   = args.risk,
-        mode       = args.signal,
-        commission = args.commission,
-        verbose    = True,
-    )
+    symbols = [t.upper() for t in args.tickers] if args.tickers else [args.ticker.upper()]
 
-    print_report(metrics, trades)
-
-    if args.save_trades and trades:
-        pd.DataFrame(trades).to_csv(args.save_trades, index=False)
-        print(f"Trade log saved → {args.save_trades}")
-
-    if not args.no_plot or args.save_chart:
-        buf = (pd.Timestamp(args.start) - pd.DateOffset(months=8)).strftime("%Y-%m-%d")
-        raw = yf.download(args.ticker.upper(), start=buf, end=args.end,
-                          auto_adjust=True, progress=False)
-        if isinstance(raw.columns, pd.MultiIndex):
-            raw.columns = raw.columns.get_level_values(0)
-        plot_results(
-            args.ticker.upper(), eq_series, raw, trades, metrics,
-            show      = not args.no_plot,
-            save_path = args.save_chart,
+    all_metrics = []
+    for sym in symbols:
+        trades, eq_series, metrics = run_backtest(
+            ticker     = sym,
+            start      = args.start,
+            end        = args.end,
+            initial    = args.initial,
+            risk_pct   = args.risk,
+            mode       = args.signal,
+            commission = args.commission,
+            verbose    = len(symbols) == 1,
         )
+        print_report(metrics, trades)
+        all_metrics.append(metrics)
+
+        if args.save_trades and trades:
+            out = args.save_trades.replace(".csv", f"_{sym}.csv")
+            pd.DataFrame(trades).to_csv(out, index=False)
+            print(f"Trade log saved → {out}")
+
+        if len(symbols) == 1 and (not args.no_plot or args.save_chart):
+            buf = (pd.Timestamp(args.start) - pd.DateOffset(months=8)).strftime("%Y-%m-%d")
+            raw = yf.download(sym, start=buf, end=args.end,
+                              auto_adjust=True, progress=False)
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            plot_results(
+                sym, eq_series, raw, trades, metrics,
+                show      = not args.no_plot,
+                save_path = args.save_chart,
+            )
+
+    if len(all_metrics) > 1:
+        total_trades = sum(m["n_trades"] for m in all_metrics)
+        total_wins   = sum(int(m["win_rate"] * m["n_trades"] / 100) for m in all_metrics)
+        avg_pf  = float(np.mean([m["profit_factor"] for m in all_metrics if m["profit_factor"] != float("inf")]))
+        avg_sh  = float(np.mean([m["sharpe"]  for m in all_metrics]))
+        avg_so  = float(np.mean([m["sortino"] for m in all_metrics]))
+        avg_dd  = float(np.mean([m["max_dd"]  for m in all_metrics]))
+        print("\n" + "═" * 62)
+        print(f"  AGGREGATE  ·  {len(all_metrics)} tickers  ·  {args.start} → {args.end}")
+        print("═" * 62)
+        print(f"  Total Trades    {total_trades:>12}")
+        print(f"  Win Rate        {total_wins/total_trades*100 if total_trades else 0:>11.1f}%")
+        print(f"  Avg Profit Factor {avg_pf:>10.2f}")
+        print(f"  Avg Sharpe      {avg_sh:>12.3f}")
+        print(f"  Avg Sortino     {avg_so:>12.3f}")
+        print(f"  Avg Max DD      {avg_dd:>11.2f}%")
+        print("═" * 62)
 
 
 if __name__ == "__main__":

@@ -89,6 +89,32 @@ YF_SYMBOL_MAP = {
     "COFFEE":   "KC=F",
 }
 
+# ── Ticker → sector ETF mapping ───────────────────────────────────────────────
+
+_TICKER_SECTOR_MAP = {
+    "AAPL": "XLK", "MSFT": "XLK", "GOOGL": "XLK", "META": "XLK",
+    "NVDA": "XLK", "AMD": "XLK", "NFLX": "XLK", "CRM": "XLK", "ADBE": "XLK",
+    "AMZN": "XLY", "TSLA": "XLY", "HD": "XLY", "DIS": "XLY", "NKE": "XLY",
+    "JPM": "XLF", "GS": "XLF", "BAC": "XLF", "V": "XLF", "MA": "XLF",
+    "JNJ": "XLV", "PFE": "XLV", "UNH": "XLV", "ABBV": "XLV", "MRK": "XLV",
+    "XOM": "XLE", "CVX": "XLE", "COP": "XLE",
+    "WMT": "XLP", "COST": "XLP", "PG": "XLP", "KO": "XLP",
+    "BA": "XLI", "GE": "XLI", "CAT": "XLI",
+    "QQQ": "SPY", "IWM": "SPY", "DIA": "SPY",
+}
+
+_EQUITY_TICKERS = {
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD",
+    "NFLX", "JPM", "GS", "BAC", "V", "MA", "JNJ", "PFE", "UNH",
+    "XOM", "CVX", "WMT", "HD", "COST", "BA", "DIS", "CRM", "ADBE",
+    "ABBV", "MRK", "PG", "KO", "NKE", "CAT", "GE", "COP",
+}
+
+_VIX_COLS      = ["VIX_Level", "VIX_Change", "VIX_Percentile_252", "VIX_Regime", "VIX_MA_Ratio"]
+_SECTOR_COLS   = ["Sector_RS_20", "Sector_RS_60", "Sector_vs_SPY_20", "Sector_Momentum"]
+_EARNINGS_COLS = ["Days_To_Earnings", "Days_Since_Earnings", "Pre_Earnings_Window", "Post_Earnings_Window"]
+_AUX_COLS      = _VIX_COLS + _SECTOR_COLS + _EARNINGS_COLS
+
 # Per-(ticker, interval) model cache so we only load from disk once
 _model_cache: dict = {}
 
@@ -98,7 +124,7 @@ def _model_suffix(interval: str) -> str:
 
 
 def _load_models(ticker: str, interval: str = "1d"):
-    """Return (lr, rf, scaler, feature_cols) — cached after first load."""
+    """Return (lr, rf, scaler, feature_cols, xgb) — cached after first load. xgb may be None."""
     key = (ticker.upper(), interval)
     if key in _model_cache:
         return _model_cache[key]
@@ -109,12 +135,14 @@ def _load_models(ticker: str, interval: str = "1d"):
     rf    = joblib.load(os.path.join(MODELS_DIR, f"rf_model_{t}{suffix}.pkl"))
     sc    = joblib.load(os.path.join(MODELS_DIR, f"scaler_sklearn_{t}{suffix}.pkl"))
     feat  = joblib.load(os.path.join(MODELS_DIR, f"feature_cols_sklearn_{t}{suffix}.pkl"))
-    _model_cache[key] = (lr, rf, sc, feat)
-    return lr, rf, sc, feat
+    xgb_path = os.path.join(MODELS_DIR, f"xgb_model_{t}{suffix}.pkl")
+    xgb   = joblib.load(xgb_path) if os.path.exists(xgb_path) else None
+    _model_cache[key] = (lr, rf, sc, feat, xgb)
+    return lr, rf, sc, feat, xgb
 
 
 _FETCH_PERIOD = {
-    "1d":  "1y",
+    "1d":  "18mo",
     "1h":  "730d",
     "15m": "60d",
     "5m":  "60d",
@@ -309,10 +337,117 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def build_features(df: pd.DataFrame, interval: str = "1d") -> pd.DataFrame:
+def _fetch_aux(ticker: str, interval: str = "1d") -> dict:
+    period = _FETCH_PERIOD.get(interval, "18mo")
+    # Use 18 months for daily so VIX 252-day rolling has enough history
+    if interval == "1d":
+        period = "18mo"
+
+    def _dl(sym):
+        try:
+            d = yf.download(sym, period=period, interval=interval,
+                            auto_adjust=True, progress=False)
+            if isinstance(d.columns, pd.MultiIndex):
+                d.columns = d.columns.get_level_values(0)
+            return d if not d.empty else None
+        except Exception:
+            return None
+
+    vix    = _dl("^VIX")
+    spy    = _dl("SPY") if ticker != "SPY" else None
+    sec_id = _TICKER_SECTOR_MAP.get(ticker.upper())
+    sector = _dl(sec_id) if sec_id and sec_id not in (ticker, "SPY") else None
+
+    earnings = pd.DatetimeIndex([])
+    if ticker.upper() in _EQUITY_TICKERS:
+        try:
+            raw = yf.Ticker(ticker).earnings_dates
+            if raw is not None and not raw.empty:
+                idx = raw.index.tz_localize(None) if raw.index.tz else raw.index
+                earnings = idx.normalize()
+        except Exception:
+            pass
+
+    return {"vix": vix, "spy": spy, "sector": sector, "earnings": earnings}
+
+
+def _apply_vix(df: pd.DataFrame, vix_df) -> pd.DataFrame:
+    if vix_df is None or vix_df.empty:
+        return df.assign(**{c: 0.0 for c in _VIX_COLS})
+    idx = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
+    vc  = vix_df["Close"].copy()
+    vc.index = vc.index.normalize() if vc.index.tz is None else vc.index.tz_localize(None).normalize()
+    vix = pd.Series(vc.reindex(idx, method="ffill").values, index=df.index).fillna(20.0)
+    df["VIX_Level"]          = vix
+    df["VIX_Change"]         = vix.pct_change().fillna(0) * 100
+    df["VIX_Percentile_252"] = vix.rolling(252, min_periods=60).rank(pct=True).fillna(0.5)
+    df["VIX_Regime"]         = pd.cut(df["VIX_Level"], bins=[0, 15, 25, 200],
+                                       labels=[0, 1, 2]).astype(float).fillna(1.0)
+    vma = vix.rolling(20, min_periods=5).mean()
+    df["VIX_MA_Ratio"]       = (vix / vma.replace(0, np.nan)).fillna(1.0).clip(0.5, 2.0)
+    return df
+
+
+def _apply_sector(df: pd.DataFrame, sector_df, spy_df) -> pd.DataFrame:
+    def _align(src):
+        if src is None or src.empty:
+            return None
+        s = src["Close"].copy()
+        s.index = s.index.normalize() if s.index.tz is None else s.index.tz_localize(None).normalize()
+        ix = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
+        return s.reindex(ix, method="ffill")
+
+    sec = _align(sector_df)
+    spy = _align(spy_df)
+    ref = sec if sec is not None else spy
+    if ref is None:
+        return df.assign(**{c: 0.0 for c in _SECTOR_COLS})
+
+    tick = df["Close"]
+    df["Sector_RS_20"]     = (tick.pct_change(20) - ref.pct_change(20)).fillna(0).clip(-0.5, 0.5)
+    df["Sector_RS_60"]     = (tick.pct_change(60) - ref.pct_change(60)).fillna(0).clip(-0.5, 0.5)
+    if sec is not None and spy is not None:
+        df["Sector_vs_SPY_20"] = (sec.pct_change(20) - spy.pct_change(20)).fillna(0).clip(-0.3, 0.3)
+    else:
+        df["Sector_vs_SPY_20"] = 0.0
+    df["Sector_Momentum"]  = ta.momentum.rsi(ref.ffill(), window=14).fillna(50)
+    return df
+
+
+def _apply_earnings(df: pd.DataFrame, earnings: pd.DatetimeIndex) -> pd.DataFrame:
+    if earnings is None or len(earnings) == 0:
+        return df.assign(**{c: 0.0 for c in _EARNINGS_COLS})
+    dates_arr = np.array(sorted(set(pd.DatetimeIndex(earnings).normalize())), dtype="datetime64[D]")
+    ix_vals   = pd.DatetimeIndex(
+        df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
+    ).values.astype("datetime64[D]")
+    dt, ds = [], []
+    for d_np in ix_vals:
+        future = dates_arr[dates_arr > d_np]
+        past   = dates_arr[dates_arr <= d_np]
+        dt.append(int((future[0] - d_np).astype(int)) if len(future) else 90)
+        ds.append(int((d_np - past[-1]).astype(int)) if len(past) else 90)
+    dt_s = pd.Series(dt, index=df.index, dtype=float).clip(0, 90)
+    ds_s = pd.Series(ds, index=df.index, dtype=float).clip(0, 90)
+    df["Days_To_Earnings"]     = dt_s
+    df["Days_Since_Earnings"]  = ds_s
+    df["Pre_Earnings_Window"]  = (dt_s <= 5).astype(float)
+    df["Post_Earnings_Window"] = (ds_s <= 2).astype(float)
+    return df
+
+
+def build_features(df: pd.DataFrame, interval: str = "1d",
+                   ticker: str = "", aux: dict = None) -> pd.DataFrame:
     df = _add_base_ta(df)
     if interval != "1d":
         df = _add_intraday_ict(df)
+    if aux:
+        df = _apply_vix(df, aux.get("vix"))
+        df = _apply_sector(df, aux.get("sector"), aux.get("spy"))
+        df = _apply_earnings(df, aux.get("earnings", pd.DatetimeIndex([])))
+    else:
+        for c in _AUX_COLS:
+            df[c] = 0.0
     df.dropna(inplace=True)
     return df
 
@@ -331,11 +466,12 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
             "Check the ticker symbol."
         )
 
-    df = build_features(df, interval)
+    aux = _fetch_aux(ticker, interval)
+    df = build_features(df, interval, ticker, aux)
     if df.empty:
         raise ValueError("Feature engineering failed — insufficient data history.")
 
-    lr_model, rf_model, scaler, feature_cols = _load_models(ticker, interval)
+    lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
 
     current_price = float(df["Close"].iloc[-1])
     X             = scaler.transform(df[feature_cols].iloc[-1:].values)
@@ -344,10 +480,18 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     rf_pred       = current_price * (1 + rf_ret / 100)
 
     price_change = lr_pred - current_price
-    direction    = "Up" if price_change > 0 else "Down"
-    recent_vol   = float(df["Daily_Return"].tail(20).std())
-    change_pct   = abs(price_change / current_price * 100)
-    confidence   = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
+
+    if xgb_model is not None:
+        xgb_prob  = float(xgb_model.predict_proba(X)[0][1])   # P(up)
+        direction = "Up" if xgb_prob > 0.5 else "Down"
+        confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
+    else:
+        direction  = "Up" if price_change > 0 else "Down"
+        recent_vol = float(df["Daily_Return"].tail(20).std())
+        change_pct = abs(price_change / current_price * 100)
+        confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
+
+    change_pct = abs(price_change / current_price * 100)
 
     # Chart data (last 90 bars)
     chart_df     = df.tail(90)
@@ -551,11 +695,12 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
         if df.empty or len(df) < 70:
             return {"action": "HOLD", "error": "Insufficient data", "confidence": 0}
 
-        df = build_features(df, interval)
+        aux = _fetch_aux(ticker, interval)
+        df = build_features(df, interval, ticker, aux)
         if df.empty:
             return {"action": "HOLD", "error": "Feature build failed", "confidence": 0}
 
-        lr_model, rf_model, scaler, feature_cols = _load_models(ticker, interval)
+        lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
 
         current_price = float(df["Close"].iloc[-1])
         X             = scaler.transform(df[feature_cols].iloc[-1:].values)
@@ -566,16 +711,23 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
         lr_up = lr_pred > current_price
         rf_up = rf_ret  > 0
 
-        if lr_up and rf_up:
-            action = "BUY"
-        elif not lr_up and not rf_up:
-            action = "SELL"
+        if xgb_model is not None:
+            xgb_prob = float(xgb_model.predict_proba(X)[0][1])
+            xgb_up   = xgb_prob > 0.5
+            votes_up = sum([lr_up, rf_up, xgb_up])
+            votes_dn = 3 - votes_up
+            if votes_up >= 2:   action = "BUY"
+            elif votes_dn >= 2: action = "SELL"
+            else:               action = "HOLD"
+            confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
         else:
-            action = "HOLD"
-
-        recent_vol = float(df["Daily_Return"].tail(20).std())
-        change_pct = abs(lr_pred - current_price) / current_price * 100
-        confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
+            xgb_prob = 0.5
+            if lr_up and rf_up:           action = "BUY"
+            elif not lr_up and not rf_up: action = "SELL"
+            else:                          action = "HOLD"
+            recent_vol = float(df["Daily_Return"].tail(20).std())
+            change_pct = abs(lr_pred - current_price) / current_price * 100
+            confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
 
         rsi       = float(df["RSI_14"].iloc[-1])
         macd_hist = float(df["MACD_Hist"].iloc[-1])

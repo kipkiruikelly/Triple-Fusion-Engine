@@ -36,7 +36,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.metrics import mean_absolute_error, r2_score, accuracy_score, roc_auc_score
+from sklearn.model_selection import TimeSeriesSplit
+
+try:
+    from xgboost import XGBClassifier
+    _XGB_AVAILABLE = True
+except ImportError:
+    _XGB_AVAILABLE = False
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
@@ -139,6 +146,43 @@ YF_SYMBOL_MAP = {
 MAX_HISTORY_TICKERS = {"NDX", "QQQ", "SPX", "DJI", "RUT", "FTSE", "DAX", "NIKKEI", "HSI",
                         "SPY", "IWM", "DIA", "GLD", "SLV", "TLT", "XLF", "XLE"}
 
+# ── Ticker → sector ETF mapping ───────────────────────────────────────────────
+
+TICKER_SECTOR_MAP = {
+    "AAPL": "XLK", "MSFT": "XLK", "GOOGL": "XLK", "META": "XLK",
+    "NVDA": "XLK", "AMD": "XLK", "NFLX": "XLK", "CRM": "XLK", "ADBE": "XLK",
+    "AMZN": "XLY", "TSLA": "XLY", "HD": "XLY", "DIS": "XLY", "NKE": "XLY",
+    "JPM": "XLF", "GS": "XLF", "BAC": "XLF", "V": "XLF", "MA": "XLF",
+    "JNJ": "XLV", "PFE": "XLV", "UNH": "XLV", "ABBV": "XLV", "MRK": "XLV",
+    "XOM": "XLE", "CVX": "XLE", "COP": "XLE",
+    "WMT": "XLP", "COST": "XLP", "PG": "XLP", "KO": "XLP",
+    "BA": "XLI", "GE": "XLI", "CAT": "XLI",
+    "QQQ": "SPY", "IWM": "SPY", "DIA": "SPY",
+}
+
+EQUITY_TICKERS = {
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AMD",
+    "NFLX", "JPM", "GS", "BAC", "V", "MA", "JNJ", "PFE", "UNH",
+    "XOM", "CVX", "WMT", "HD", "COST", "BA", "DIS", "CRM", "ADBE",
+    "ABBV", "MRK", "PG", "KO", "NKE", "CAT", "GE", "COP",
+}
+
+# ── Macro / sector / earnings feature columns (defined before DAILY_FEATURE_COLS) ─
+
+VIX_FEATURE_COLS = [
+    "VIX_Level", "VIX_Change", "VIX_Percentile_252",
+    "VIX_Regime", "VIX_MA_Ratio",
+]
+
+SECTOR_FEATURE_COLS = [
+    "Sector_RS_20", "Sector_RS_60", "Sector_vs_SPY_20", "Sector_Momentum",
+]
+
+EARNINGS_FEATURE_COLS = [
+    "Days_To_Earnings", "Days_Since_Earnings",
+    "Pre_Earnings_Window", "Post_Earnings_Window",
+]
+
 # ── Feature lists ──────────────────────────────────────────────────────────────
 
 DAILY_FEATURE_COLS = [
@@ -166,6 +210,12 @@ DAILY_FEATURE_COLS = [
     "Equal_Highs", "Equal_Lows",
     "In_OTE_Buy", "In_OTE_Sell",
     "CE_Bull_FVG_Dist", "CE_Bear_FVG_Dist",
+    # Macro
+    *VIX_FEATURE_COLS,
+    # Sector rotation
+    *SECTOR_FEATURE_COLS,
+    # Earnings proximity
+    *EARNINGS_FEATURE_COLS,
 ]
 
 # Intraday adds kill-zone, session, and 2022 Silver Bullet / Asia range features
@@ -202,6 +252,43 @@ def fetch_data(ticker: str, interval: str = "1d") -> pd.DataFrame:
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
+
+
+def fetch_aux_data(ticker: str, interval: str = "1d") -> dict:
+    """Fetch VIX, sector ETF, SPY, and earnings dates for a ticker."""
+    if interval == "1d":
+        period = "max" if ticker in MAX_HISTORY_TICKERS else "5y"
+    elif interval == "1h":
+        period = "730d"
+    else:
+        period = "60d"
+
+    def _dl(sym):
+        try:
+            df = yf.download(sym, period=period, interval=interval,
+                             auto_adjust=True, progress=False)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            return df if not df.empty else None
+        except Exception:
+            return None
+
+    vix    = _dl("^VIX")
+    spy    = _dl("SPY") if ticker != "SPY" else None
+    sec_id = TICKER_SECTOR_MAP.get(ticker.upper())
+    sector = _dl(sec_id) if sec_id and sec_id not in (ticker, "SPY") else None
+
+    earnings = pd.DatetimeIndex([])
+    if ticker.upper() in EQUITY_TICKERS:
+        try:
+            raw = yf.Ticker(ticker).earnings_dates
+            if raw is not None and not raw.empty:
+                idx = raw.index.tz_localize(None) if raw.index.tz else raw.index
+                earnings = idx.normalize()
+        except Exception:
+            pass
+
+    return {"vix": vix, "spy": spy, "sector": sector, "earnings": earnings}
 
 
 # ── Feature engineering ────────────────────────────────────────────────────────
@@ -400,10 +487,110 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def engineer_features(df: pd.DataFrame, interval: str = "1d") -> pd.DataFrame:
+def _add_vix_features(df: pd.DataFrame, vix_df) -> pd.DataFrame:
+    _zero = {c: 0.0 for c in VIX_FEATURE_COLS}
+    if vix_df is None or vix_df.empty:
+        return df.assign(**_zero)
+
+    # Align VIX to ticker's trading days
+    idx = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
+    vix_close = vix_df["Close"].copy()
+    vix_close.index = vix_close.index.normalize() if vix_close.index.tz is None else vix_close.index.tz_localize(None).normalize()
+    vix = vix_close.reindex(idx, method="ffill").values
+
+    vix_s = pd.Series(vix, index=df.index)
+    df["VIX_Level"]          = vix_s.fillna(20.0)
+    df["VIX_Change"]         = vix_s.pct_change().fillna(0) * 100
+    df["VIX_Percentile_252"] = vix_s.rolling(252, min_periods=60).rank(pct=True).fillna(0.5)
+    df["VIX_Regime"]         = pd.cut(df["VIX_Level"], bins=[0, 15, 25, 200],
+                                       labels=[0, 1, 2]).astype(float).fillna(1.0)
+    vma20 = vix_s.rolling(20, min_periods=5).mean()
+    df["VIX_MA_Ratio"]       = (vix_s / vma20.replace(0, np.nan)).fillna(1.0).clip(0.5, 2.0)
+    return df
+
+
+def _add_sector_features(df: pd.DataFrame, sector_df, spy_df) -> pd.DataFrame:
+    _zero = {c: 0.0 for c in SECTOR_FEATURE_COLS}
+
+    def _align(src_df):
+        if src_df is None or src_df.empty:
+            return None
+        s = src_df["Close"].copy()
+        s.index = s.index.normalize() if s.index.tz is None else s.index.tz_localize(None).normalize()
+        idx = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
+        return s.reindex(idx, method="ffill")
+
+    sec = _align(sector_df)
+    spy = _align(spy_df)
+
+    if sec is None and spy is None:
+        return df.assign(**_zero)
+
+    tick = df["Close"]
+    ref  = sec if sec is not None else spy   # fallback to SPY when no sector ETF
+
+    # Ticker relative strength vs sector (or SPY)
+    tr20 = tick.pct_change(20).fillna(0)
+    rr20 = ref.pct_change(20).fillna(0)
+    df["Sector_RS_20"] = (tr20 - rr20).clip(-0.5, 0.5)
+
+    tr60 = tick.pct_change(60).fillna(0)
+    rr60 = ref.pct_change(60).fillna(0)
+    df["Sector_RS_60"] = (tr60 - rr60).clip(-0.5, 0.5)
+
+    # Sector vs broad market
+    if sec is not None and spy is not None:
+        sr20 = sec.pct_change(20).fillna(0)
+        mr20 = spy.pct_change(20).fillna(0)
+        df["Sector_vs_SPY_20"] = (sr20 - mr20).clip(-0.3, 0.3)
+        # Sector RSI (14-day momentum)
+        df["Sector_Momentum"]  = ta.momentum.rsi(ref.fillna(method="ffill"), window=14).fillna(50)
+    else:
+        df["Sector_vs_SPY_20"] = 0.0
+        df["Sector_Momentum"]  = ta.momentum.rsi(ref.fillna(method="ffill"), window=14).fillna(50)
+
+    return df
+
+
+def _add_earnings_features(df: pd.DataFrame, earnings: pd.DatetimeIndex) -> pd.DataFrame:
+    _zero = {c: 0.0 for c in EARNINGS_FEATURE_COLS}
+    if earnings is None or len(earnings) == 0:
+        return df.assign(**_zero)
+
+    dates_arr = np.array(sorted(set(pd.DatetimeIndex(earnings).normalize())), dtype="datetime64[D]")
+    idx_norm  = pd.DatetimeIndex(
+        df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
+    ).values.astype("datetime64[D]")
+
+    days_to, days_since = [], []
+    for d_np in idx_norm:
+        future = dates_arr[dates_arr > d_np]
+        past   = dates_arr[dates_arr <= d_np]
+        days_to.append(int((future[0] - d_np).astype(int)) if len(future) else 90)
+        days_since.append(int((d_np - past[-1]).astype(int)) if len(past) else 90)
+
+    dt_s = pd.Series(days_to,   index=df.index, dtype=float).clip(0, 90)
+    ds_s = pd.Series(days_since, index=df.index, dtype=float).clip(0, 90)
+    df["Days_To_Earnings"]     = dt_s
+    df["Days_Since_Earnings"]  = ds_s
+    df["Pre_Earnings_Window"]  = (dt_s <= 5).astype(float)
+    df["Post_Earnings_Window"] = (ds_s <= 2).astype(float)
+    return df
+
+
+def engineer_features(df: pd.DataFrame, interval: str = "1d",
+                      ticker: str = "", aux: dict = None) -> pd.DataFrame:
     df = _add_base_ta(df)
     if interval != "1d":
         df = _add_intraday_ict(df)
+    if aux:
+        df = _add_vix_features(df, aux.get("vix"))
+        df = _add_sector_features(df, aux.get("sector"), aux.get("spy"))
+        df = _add_earnings_features(df, aux.get("earnings", pd.DatetimeIndex([])))
+    else:
+        # Zero-fill new columns so feature list is always consistent
+        for c in VIX_FEATURE_COLS + SECTOR_FEATURE_COLS + EARNINGS_FEATURE_COLS:
+            df[c] = 0.0
 
     df["Next_Close"]  = df["Close"].shift(-1)
     df["Next_Return"] = (df["Next_Close"] / df["Close"] - 1) * 100
@@ -431,8 +618,11 @@ def train_ticker(ticker: str, interval: str = "1d",
     if df.empty or len(df) < min_rows:
         return {"ticker": ticker, "status": "skipped", "elapsed": 0}
 
-    df   = engineer_features(df, interval)
+    aux  = fetch_aux_data(ticker, interval)
+    df   = engineer_features(df, interval, ticker, aux)
     feat = [c for c in _feature_list(interval) if c in df.columns]
+
+    suffix = model_suffix(interval)
 
     X      = df[feat].values
     y_px   = df["Next_Close"].values
@@ -464,7 +654,44 @@ def train_ticker(ticker: str, interval: str = "1d",
     rf_mae = mean_absolute_error(y_px_test, rf_price_pred)
     rf_r2  = r2_score(y_px_test, rf_price_pred)
 
-    suffix = model_suffix(interval)
+    # ── XGBoost direction classifier ───────────────────────────────────────────
+    xgb_cv_acc = xgb_test_acc = xgb_auc = None
+    if _XGB_AVAILABLE:
+        X_raw = df[feat].values          # unscaled — rescaled per CV fold
+        y_dir = (df["Next_Return"].values > 0).astype(int)
+
+        # 5-fold walk-forward CV on training portion (no data leakage)
+        X_cv  = X_raw[:split1]
+        y_cv  = y_dir[:split1]
+        tscv  = TimeSeriesSplit(n_splits=5)
+        fold_accs = []
+        for tr_idx, val_idx in tscv.split(X_cv):
+            sc_tmp = MinMaxScaler().fit(X_cv[tr_idx])
+            Xtr = sc_tmp.transform(X_cv[tr_idx])
+            Xvl = sc_tmp.transform(X_cv[val_idx])
+            m = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.05,
+                              subsample=0.8, colsample_bytree=0.8,
+                              random_state=42, eval_metric="logloss", verbosity=0)
+            m.fit(Xtr, y_cv[tr_idx])
+            fold_accs.append(accuracy_score(y_cv[val_idx], m.predict(Xvl)))
+        xgb_cv_acc = float(np.mean(fold_accs))
+
+        # Final model trained on full training split
+        xgb = XGBClassifier(n_estimators=200, max_depth=4, learning_rate=0.05,
+                             subsample=0.8, colsample_bytree=0.8,
+                             random_state=42, eval_metric="logloss", verbosity=0)
+        xgb.fit(X_train, y_dir[:split1])      # X_train already scaled by scaler
+        y_dir_test = y_dir[split2:]
+        xgb_preds  = xgb.predict(X_test)
+        xgb_proba  = xgb.predict_proba(X_test)[:, 1]
+        xgb_test_acc = float(accuracy_score(y_dir_test, xgb_preds))
+        try:
+            xgb_auc = float(roc_auc_score(y_dir_test, xgb_proba))
+        except Exception:
+            xgb_auc = 0.5
+
+        joblib.dump(xgb, os.path.join(MODELS_DIR, f"xgb_model_{ticker}{suffix}.pkl"))
+
     os.makedirs(MODELS_DIR, exist_ok=True)
     joblib.dump(lr,     os.path.join(MODELS_DIR, f"lr_model_{ticker}{suffix}.pkl"))
     joblib.dump(rf,     os.path.join(MODELS_DIR, f"rf_model_{ticker}{suffix}.pkl"))
@@ -472,15 +699,18 @@ def train_ticker(ticker: str, interval: str = "1d",
     joblib.dump(feat,   os.path.join(MODELS_DIR, f"feature_cols_sklearn_{ticker}{suffix}.pkl"))
 
     return {
-        "ticker":  ticker,
-        "status":  "ok",
-        "rows":    len(df),
-        "feat":    len(feat),
-        "lr_mae":  round(lr_mae, 4),
-        "lr_r2":   round(lr_r2, 4),
-        "rf_mae":  round(rf_mae, 4),
-        "rf_r2":   round(rf_r2, 4),
-        "elapsed": round(time.time() - t0, 1),
+        "ticker":       ticker,
+        "status":       "ok",
+        "rows":         len(df),
+        "feat":         len(feat),
+        "lr_mae":       round(lr_mae, 4),
+        "lr_r2":        round(lr_r2, 4),
+        "rf_mae":       round(rf_mae, 4),
+        "rf_r2":        round(rf_r2, 4),
+        "xgb_cv_acc":   round(xgb_cv_acc,   4) if xgb_cv_acc   is not None else None,
+        "xgb_test_acc": round(xgb_test_acc,  4) if xgb_test_acc is not None else None,
+        "xgb_auc":      round(xgb_auc,       4) if xgb_auc      is not None else None,
+        "elapsed":      round(time.time() - t0, 1),
     }
 
 
@@ -540,9 +770,14 @@ def main():
             results.append(r)
             t = r["ticker"]
             if r["status"] == "ok":
+                xgb_str = ""
+                if r.get("xgb_cv_acc") is not None:
+                    xgb_str = (f"  XGB cv={r['xgb_cv_acc']:.3f}"
+                               f" test={r['xgb_test_acc']:.3f}"
+                               f" auc={r['xgb_auc']:.3f}")
                 print(f"  [{t:6s}] {r['rows']:,} bars  {r['feat']} feats  "
-                      f"LR MAE=${r['lr_mae']:.2f}  RF MAE=${r['rf_mae']:.2f}  "
-                      f"({r['elapsed']}s)")
+                      f"LR MAE=${r['lr_mae']:.2f}  RF MAE=${r['rf_mae']:.2f}"
+                      f"{xgb_str}  ({r['elapsed']}s)")
             else:
                 print(f"  [{t:6s}] {r['status']}")
 
@@ -551,11 +786,19 @@ def main():
     print(f"\n=== Finished {len(tickers)} tickers in {wall:.1f}s ===")
 
     if ok:
-        print(f"\n{'Ticker':<8} {'LR MAE':>10} {'RF MAE':>10} {'LR R2':>8} {'Bars':>8}")
-        print("-" * 50)
+        has_xgb = any(r.get("xgb_cv_acc") is not None for r in ok)
+        hdr = f"{'Ticker':<8} {'LR MAE':>10} {'RF MAE':>10} {'LR R2':>8} {'Bars':>8}"
+        if has_xgb:
+            hdr += f"  {'XGB CV':>8} {'XGB Test':>9} {'AUC':>7}"
+        print(f"\n{hdr}")
+        print("-" * (50 + (28 if has_xgb else 0)))
         for r in sorted(ok, key=lambda x: x["ticker"]):
-            print(f"{r['ticker']:<8} ${r['lr_mae']:>9.2f} ${r['rf_mae']:>9.2f} "
-                  f"{r['lr_r2']:>8.4f} {r['rows']:>8,}")
+            line = (f"{r['ticker']:<8} ${r['lr_mae']:>9.2f} ${r['rf_mae']:>9.2f} "
+                    f"{r['lr_r2']:>8.4f} {r['rows']:>8,}")
+            if has_xgb and r.get("xgb_cv_acc") is not None:
+                line += (f"  {r['xgb_cv_acc']:>8.3f} {r['xgb_test_acc']:>9.3f}"
+                         f" {r['xgb_auc']:>7.3f}")
+            print(line)
 
     if args.upload:
         from azure_storage import upload_models_to_azure

@@ -612,6 +612,62 @@ def api_mtf(ticker):
 
 # ── Backtest endpoints ───────────────────────────────────────────────────────
 
+@app.route("/performance")
+def performance():
+    """Public live track record page — no login required."""
+    import sqlite3, json as _json
+    db_path = os.path.join(BASE_DIR, "Data", "paper_trades.db")
+    stats = {
+        "started": None, "total_ret": 0, "n_trades": 0, "win_rate": 0,
+        "profit_factor": 0, "sharpe": 0, "sortino": 0, "max_dd": 0,
+        "equity": 10_000, "trades": [], "equity_dates": "[]", "equity_vals": "[]",
+    }
+    if os.path.exists(db_path):
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            closed = conn.execute(
+                "SELECT * FROM paper_positions WHERE status='closed' ORDER BY exit_date"
+            ).fetchall()
+            eq_rows = conn.execute(
+                "SELECT date, equity FROM paper_equity ORDER BY date"
+            ).fetchall()
+            conn.close()
+
+            if eq_rows:
+                import numpy as _np, pandas as _pd
+                eq_s = _pd.Series(
+                    [r["equity"] for r in eq_rows],
+                    index=_pd.to_datetime([r["date"] for r in eq_rows])
+                )
+                stats["equity"]      = round(float(eq_s.iloc[-1]), 2)
+                stats["total_ret"]   = round((eq_s.iloc[-1] - 10_000) / 10_000 * 100, 2)
+                stats["started"]     = eq_rows[0]["date"]
+                stats["equity_dates"] = _json.dumps([r["date"] for r in eq_rows])
+                stats["equity_vals"]  = _json.dumps([round(r["equity"], 2) for r in eq_rows])
+                dr     = eq_s.pct_change().dropna()
+                if dr.std() > 0:
+                    stats["sharpe"]  = round(float(dr.mean() / dr.std() * _np.sqrt(252)), 3)
+                dside  = dr[dr < 0]
+                if len(dside) > 1 and dside.std() > 0:
+                    stats["sortino"] = round(float(dr.mean() / dside.std() * _np.sqrt(252)), 3)
+                peak   = eq_s.cummax()
+                stats["max_dd"]      = round(float(((eq_s - peak) / peak).min() * 100), 2)
+
+            if closed:
+                wins   = [r for r in closed if (r["pnl"] or 0) > 0]
+                losses = [r for r in closed if (r["pnl"] or 0) <= 0]
+                gw     = sum(r["pnl"] for r in wins)
+                gl     = abs(sum(r["pnl"] for r in losses))
+                stats["n_trades"]      = len(closed)
+                stats["win_rate"]      = round(len(wins) / len(closed) * 100, 1)
+                stats["profit_factor"] = round(gw / gl if gl > 0 else 0, 2)
+                stats["trades"]        = [dict(r) for r in closed[-20:]]
+        except Exception:
+            pass
+    return render_template("performance.html", **stats)
+
+
 @app.route("/backtest")
 @login_required
 def backtest():
