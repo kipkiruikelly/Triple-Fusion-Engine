@@ -136,10 +136,50 @@
   </div>
 
   {% if n_trades == 0 %}
+
+  {% if backtest_tickers %}
+  <div style="background:rgba(255,107,53,0.06);border:1px solid rgba(255,107,53,0.2);border-radius:8px;padding:14px 18px;margin-bottom:24px;font-size:9.5pt;color:var(--muted)">
+    <strong style="color:var(--text)">Backtested performance shown below</strong> — live paper trading begins accumulating from {{ "2026-06-28" }}.
+    Backtested results are historical simulations, not live trades.
+  </div>
+
+  <div class="section">
+    <div class="section-title">Backtested Equity Curve — Combined Portfolio (2 Years)</div>
+    <div id="equity-chart"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Per-Ticker Backtest Results (2Y, Daily)</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Ticker</th><th>Trades</th><th>Win Rate</th><th>Profit Factor</th><th>Sharpe</th><th>Return</th><th>vs B&amp;H</th></tr>
+        </thead>
+        <tbody>
+          {% for t in backtest_tickers | sort(attribute='profit_factor', reverse=True) %}
+          <tr>
+            <td style="font-weight:700;color:var(--white)">{{ t.ticker }}</td>
+            <td>{{ t.n_trades }}</td>
+            <td>{{ t.win_rate }}%</td>
+            <td class="{% if t.profit_factor >= 1.5 %}pnl-pos{% elif t.profit_factor >= 1 %}{% else %}pnl-neg{% endif %}">{{ "%.2f"|format(t.profit_factor) }}</td>
+            <td class="{% if t.sharpe >= 0.5 %}pnl-pos{% elif t.sharpe >= 0 %}{% else %}pnl-neg{% endif %}">{{ "%.3f"|format(t.sharpe) }}</td>
+            <td class="{% if t.total_return >= 0 %}pnl-pos{% else %}pnl-neg{% endif %}">{{ "%+.1f"|format(t.total_return) }}%</td>
+            <td class="{% if t.total_return >= t.bh_return %}pnl-pos{% else %}pnl-neg{% endif %}">
+              {{ "%+.1f"|format(t.total_return - t.bh_return) }}%
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
   <div class="no-data">
     <strong>Track record not started yet</strong>
-    Run <code>python paper_trader.py --scan --close</code> daily to begin accumulating live signals.
+    Live paper trading begins each weekday at market close. Check back Monday.
   </div>
+  {% endif %}
+
   {% else %}
 
   <div class="metric-grid">
@@ -238,14 +278,23 @@
   </div>
 </div>
 
-{% if n_trades > 0 %}
 <script>
 (function() {
+  var el = document.getElementById('equity-chart');
+  if (!el) return;
+
+  {% if n_trades > 0 %}
   var dates = {{ equity_dates|safe }};
   var vals  = {{ equity_vals|safe }};
-  if (!dates.length) return;
+  {% elif backtest_dates != '[]' %}
+  var dates = {{ backtest_dates|safe }};
+  var vals  = {{ backtest_vals|safe }};
+  {% else %}
+  return;
+  {% endif %}
 
-  var el = document.getElementById('equity-chart');
+  if (!dates || !dates.length) return;
+
   var chart = LightweightCharts.createChart(el, {
     layout: { background: { color: '#1A1F2E' }, textColor: '#7A8499' },
     grid:   { vertLines: { color: '#2A3150' }, horzLines: { color: '#2A3150' } },
@@ -259,16 +308,11 @@
     bottomColor: 'rgba(255,107,53,0.02)', lineWidth: 2,
   });
 
-  var data = dates.map(function(d, i) { return { time: d, value: vals[i] }; });
-  series.setData(data);
+  series.setData(dates.map(function(d, i) { return { time: d, value: vals[i] }; }));
   chart.timeScale().fitContent();
-
-  window.addEventListener('resize', function() {
-    chart.applyOptions({ width: el.clientWidth });
-  });
+  window.addEventListener('resize', function() { chart.applyOptions({ width: el.clientWidth }); });
 })();
 </script>
-{% endif %}
 
 </body>
 </html>

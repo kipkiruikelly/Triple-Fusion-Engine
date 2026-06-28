@@ -29,6 +29,19 @@ from predictor import run_prediction, ml_signal
 from mt5_trading import trader as mt5_trader
 from azure_storage import download_models_from_azure, azure_enabled
 
+try:
+    import stripe as _stripe
+    _stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+    _STRIPE_OK = bool(_stripe.api_key)
+except ImportError:
+    _stripe = None
+    _STRIPE_OK = False
+
+STRIPE_PUB_KEY          = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+STRIPE_PRICE_MONTHLY    = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
+STRIPE_PRICE_ANNUAL     = os.environ.get("STRIPE_PRICE_ID_ANNUAL", "")
+STRIPE_WEBHOOK_SECRET   = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -55,13 +68,16 @@ FREE_DAILY_LIMIT = 5
 # ── User model ──────────────────────────────────────────────────────────────
 
 class User(UserMixin, db.Model):
-    id                   = db.Column(db.Integer, primary_key=True)
-    username             = db.Column(db.String(80), unique=True, nullable=False)
-    email                = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash        = db.Column(db.String(256), nullable=False)
-    plan                 = db.Column(db.String(20), default='free')
-    predictions_today    = db.Column(db.Integer, default=0)
-    last_prediction_date = db.Column(db.Date, nullable=True)
+    id                      = db.Column(db.Integer, primary_key=True)
+    username                = db.Column(db.String(80), unique=True, nullable=False)
+    email                   = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash           = db.Column(db.String(256), nullable=False)
+    plan                    = db.Column(db.String(20), default='free')
+    predictions_today       = db.Column(db.Integer, default=0)
+    last_prediction_date    = db.Column(db.Date, nullable=True)
+    stripe_customer_id      = db.Column(db.String(64), nullable=True)
+    stripe_subscription_id  = db.Column(db.String(64), nullable=True)
+    alerts_enabled          = db.Column(db.Boolean, default=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -130,7 +146,19 @@ def consume_quota(user):
 
 os.makedirs(os.path.join(BASE_DIR, 'instance'), exist_ok=True)
 with app.app_context():
-    db.create_all()  # creates User, PredictionHistory, WatchlistItem tables
+    db.create_all()
+    # Migrate: add new columns if they don't exist yet
+    import sqlite3 as _sqlite3
+    _conn = _sqlite3.connect(os.path.join(BASE_DIR, 'instance', 'users.db'))
+    _cols = {r[1] for r in _conn.execute("PRAGMA table_info(user)")}
+    for _col, _ddl in [
+        ("stripe_customer_id",     "ALTER TABLE user ADD COLUMN stripe_customer_id TEXT"),
+        ("stripe_subscription_id", "ALTER TABLE user ADD COLUMN stripe_subscription_id TEXT"),
+        ("alerts_enabled",         "ALTER TABLE user ADD COLUMN alerts_enabled INTEGER DEFAULT 1"),
+    ]:
+        if _col not in _cols:
+            _conn.execute(_ddl)
+    _conn.commit(); _conn.close()
 
 
 # ── Auth routes ─────────────────────────────────────────────────────────────
@@ -197,15 +225,100 @@ def logout():
 
 @app.route("/pricing")
 def pricing():
-    return render_template("pricing.html")
+    return render_template("pricing.html",
+                           stripe_pub_key=STRIPE_PUB_KEY,
+                           stripe_enabled=_STRIPE_OK)
 
 
-@app.route("/upgrade", methods=["POST"])
+@app.route("/stripe/checkout", methods=["POST"])
 @login_required
-def upgrade():
-    current_user.plan = 'pro'
-    db.session.commit()
-    return redirect(url_for('home'))
+def stripe_checkout():
+    if not _STRIPE_OK:
+        # Fallback: free upgrade (dev mode)
+        current_user.plan = 'pro'
+        db.session.commit()
+        return redirect(url_for('home'))
+    price_id = request.form.get("price_id", STRIPE_PRICE_MONTHLY)
+    if price_id not in (STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL):
+        return redirect(url_for('pricing'))
+    base_url = request.host_url.rstrip("/")
+    session = _stripe.checkout.Session.create(
+        customer_email=current_user.email,
+        payment_method_types=["card"],
+        line_items=[{"price": price_id, "quantity": 1}],
+        mode="subscription",
+        success_url=base_url + url_for("stripe_success") + "?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url=base_url + url_for("stripe_cancel"),
+        metadata={"user_id": str(current_user.id)},
+    )
+    return redirect(session.url, code=303)
+
+
+@app.route("/stripe/success")
+@login_required
+def stripe_success():
+    session_id = request.args.get("session_id")
+    if session_id and _STRIPE_OK:
+        try:
+            session = _stripe.checkout.Session.retrieve(session_id)
+            current_user.stripe_customer_id     = session.customer
+            current_user.stripe_subscription_id = session.subscription
+            current_user.plan = 'pro'
+            db.session.commit()
+        except Exception:
+            pass
+    return render_template("stripe_success.html")
+
+
+@app.route("/stripe/cancel")
+def stripe_cancel():
+    return redirect(url_for('pricing'))
+
+
+@app.route("/stripe/portal", methods=["POST"])
+@login_required
+def stripe_portal():
+    if not _STRIPE_OK or not current_user.stripe_customer_id:
+        return redirect(url_for('profile'))
+    session = _stripe.billing_portal.Session.create(
+        customer=current_user.stripe_customer_id,
+        return_url=request.host_url.rstrip("/") + url_for("profile"),
+    )
+    return redirect(session.url, code=303)
+
+
+@app.route("/stripe/webhook", methods=["POST"])
+def stripe_webhook():
+    if not _STRIPE_OK:
+        return jsonify({"ok": True})
+    payload = request.get_data()
+    sig     = request.headers.get("Stripe-Signature", "")
+    try:
+        event = _stripe.Webhook.construct_event(payload, sig, STRIPE_WEBHOOK_SECRET)
+    except Exception:
+        return jsonify({"error": "invalid signature"}), 400
+
+    if event["type"] in ("customer.subscription.deleted", "customer.subscription.paused"):
+        sub = event["data"]["object"]
+        user = User.query.filter_by(stripe_subscription_id=sub["id"]).first()
+        if user:
+            user.plan = 'free'
+            db.session.commit()
+    elif event["type"] == "customer.subscription.updated":
+        sub = event["data"]["object"]
+        user = User.query.filter_by(stripe_subscription_id=sub["id"]).first()
+        if user:
+            user.plan = 'pro' if sub["status"] == "active" else 'free'
+            db.session.commit()
+    elif event["type"] == "invoice.payment_failed":
+        sub_id = event["data"]["object"].get("subscription")
+        if sub_id:
+            user = User.query.filter_by(stripe_subscription_id=sub_id).first()
+            if user:
+                user.plan = 'free'
+                db.session.commit()
+
+    return jsonify({"ok": True})
 
 
 # ── Main routes ─────────────────────────────────────────────────────────────
@@ -265,6 +378,11 @@ def predict():
         return render_template("result.html", **result)
     except ValueError as e:
         return render_template("index.html", error=str(e), interval=interval)
+    except FileNotFoundError:
+        return render_template("index.html",
+                               error=f'No trained model for "{ticker}". '
+                                     'Supported: AAPL, MSFT, TSLA, NVDA, GOOGL, AMZN, META, QQQ, SPY, DIA, ADBE, NFLX, AMD, V, JPM, CRM.',
+                               interval=interval)
     except Exception:
         return render_template("index.html",
                                error=f'Could not fetch data for "{ticker}". Please check the symbol and try again.',
@@ -374,6 +492,14 @@ def change_password():
     db.session.commit()
     return render_template("profile.html", total_predictions=total,
                            pw_success="Password updated successfully.")
+
+
+@app.route("/profile/alerts", methods=["POST"])
+@login_required
+def toggle_alerts():
+    current_user.alerts_enabled = not current_user.alerts_enabled
+    db.session.commit()
+    return jsonify({"ok": True, "alerts_enabled": current_user.alerts_enabled})
 
 
 # ── MT5 routes (Pro only) ───────────────────────────────────────────────────
@@ -616,17 +742,24 @@ def api_mtf(ticker):
 def performance():
     """Public live track record page — no login required."""
     import sqlite3, json as _json
+    import numpy as _np, pandas as _pd
+
     db_path = os.path.join(BASE_DIR, "Data", "paper_trades.db")
+    bt_path = os.path.join(BASE_DIR, "Data", "backtest_summary.json")
+
     stats = {
         "started": None, "total_ret": 0, "n_trades": 0, "win_rate": 0,
         "profit_factor": 0, "sharpe": 0, "sortino": 0, "max_dd": 0,
         "equity": 10_000, "trades": [], "equity_dates": "[]", "equity_vals": "[]",
+        "backtest_dates": "[]", "backtest_vals": "[]", "backtest_tickers": "[]",
     }
+
+    # ── Live paper-trade equity ──
     if os.path.exists(db_path):
         try:
             conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
-            closed = conn.execute(
+            closed  = conn.execute(
                 "SELECT * FROM paper_positions WHERE status='closed' ORDER BY exit_date"
             ).fetchall()
             eq_rows = conn.execute(
@@ -635,24 +768,23 @@ def performance():
             conn.close()
 
             if eq_rows:
-                import numpy as _np, pandas as _pd
                 eq_s = _pd.Series(
                     [r["equity"] for r in eq_rows],
                     index=_pd.to_datetime([r["date"] for r in eq_rows])
                 )
-                stats["equity"]      = round(float(eq_s.iloc[-1]), 2)
-                stats["total_ret"]   = round((eq_s.iloc[-1] - 10_000) / 10_000 * 100, 2)
-                stats["started"]     = eq_rows[0]["date"]
+                stats["equity"]       = round(float(eq_s.iloc[-1]), 2)
+                stats["total_ret"]    = round((eq_s.iloc[-1] - 10_000) / 10_000 * 100, 2)
+                stats["started"]      = eq_rows[0]["date"]
                 stats["equity_dates"] = _json.dumps([r["date"] for r in eq_rows])
                 stats["equity_vals"]  = _json.dumps([round(r["equity"], 2) for r in eq_rows])
-                dr     = eq_s.pct_change().dropna()
+                dr    = eq_s.pct_change().dropna()
                 if dr.std() > 0:
-                    stats["sharpe"]  = round(float(dr.mean() / dr.std() * _np.sqrt(252)), 3)
-                dside  = dr[dr < 0]
+                    stats["sharpe"]   = round(float(dr.mean() / dr.std() * _np.sqrt(252)), 3)
+                dside = dr[dr < 0]
                 if len(dside) > 1 and dside.std() > 0:
-                    stats["sortino"] = round(float(dr.mean() / dside.std() * _np.sqrt(252)), 3)
-                peak   = eq_s.cummax()
-                stats["max_dd"]      = round(float(((eq_s - peak) / peak).min() * 100), 2)
+                    stats["sortino"]  = round(float(dr.mean() / dside.std() * _np.sqrt(252)), 3)
+                peak  = eq_s.cummax()
+                stats["max_dd"]       = round(float(((eq_s - peak) / peak).min() * 100), 2)
 
             if closed:
                 wins   = [r for r in closed if (r["pnl"] or 0) > 0]
@@ -665,6 +797,34 @@ def performance():
                 stats["trades"]        = [dict(r) for r in closed[-20:]]
         except Exception:
             pass
+
+    # ── Backtested equity curves ──
+    if os.path.exists(bt_path):
+        try:
+            with open(bt_path) as f:
+                bt = _json.load(f)
+            combined = bt.get("combined", [])
+            if combined:
+                stats["backtest_dates"] = _json.dumps([p["date"] for p in combined])
+                stats["backtest_vals"]  = _json.dumps([p["value"] for p in combined])
+            tickers_data = bt.get("tickers", {})
+            ticker_rows  = []
+            for t, td in tickers_data.items():
+                m = td.get("metrics", {})
+                if m.get("n_trades", 0) > 0:
+                    ticker_rows.append({
+                        "ticker":        t,
+                        "n_trades":      m["n_trades"],
+                        "win_rate":      m["win_rate"],
+                        "profit_factor": m["profit_factor"],
+                        "sharpe":        m["sharpe"],
+                        "total_return":  m["total_return"],
+                        "bh_return":     m["bh_return"],
+                    })
+            stats["backtest_tickers"] = ticker_rows
+        except Exception:
+            pass
+
     return render_template("performance.html", **stats)
 
 

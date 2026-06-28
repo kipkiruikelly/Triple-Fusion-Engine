@@ -356,7 +356,7 @@ def run_backtest(ticker: str, interval: str = "1d",
     if df.empty or len(df) < 30:
         raise ValueError("Feature engineering produced insufficient rows.")
 
-    lr, rf, scaler, feat_cols = _load_models(ticker, interval)
+    lr, rf, scaler, feat_cols, _xgb = _load_models(ticker, interval)
 
     signals, meta  = _generate_signals(df, lr, rf, scaler, feat_cols)
     trades, equity = _simulate(df, signals, meta, initial_capital, risk_pct)
