@@ -201,17 +201,24 @@
 
       {% if current_user.is_authenticated %}
         {% if current_user.is_pro %}
-          <span class="btn-plan btn-pro current">Current Plan</span>
+          <span class="btn-plan btn-pro current">Current Plan ✓</span>
         {% else %}
           {% if stripe_enabled %}
-            <form method="POST" action="/stripe/checkout" id="checkout-form">
-              <input type="hidden" name="price_id" id="price-id-input" value="{{ '' }}">
-              <button type="submit" class="btn-plan btn-pro">Upgrade to Pro →</button>
-            </form>
+          <form method="POST" action="/stripe/checkout" id="checkout-form" style="margin-bottom:10px">
+            <input type="hidden" name="price_id" id="price-id-input" value="">
+            <button type="submit" class="btn-plan btn-pro">Pay with Card →</button>
+          </form>
+          {% endif %}
+          {% if mpesa_enabled %}
+          <button class="btn-plan" id="mpesa-btn"
+            onclick="openMpesa()"
+            style="background:#4CAF50;color:#fff;border:none;margin-top:{% if stripe_enabled %}0{% else %}0{% endif %}">
+            Pay with M-Pesa 📱
+          </button>
           {% else %}
-            <form method="POST" action="/stripe/checkout">
-              <button type="submit" class="btn-plan btn-pro">Upgrade to Pro →</button>
-            </form>
+          <form method="POST" action="/stripe/checkout">
+            <button type="submit" class="btn-plan btn-pro">Upgrade to Pro →</button>
+          </form>
           {% endif %}
         {% endif %}
       {% else %}
@@ -283,11 +290,60 @@
 
 </div>
 
+<!-- M-Pesa modal -->
+<div id="mpesa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center">
+  <div style="background:#1A1F2E;border:1px solid #2A3150;border-radius:14px;padding:32px 28px;width:100%;max-width:400px;margin:16px">
+    <div style="font-size:14pt;font-weight:800;color:#fff;margin-bottom:6px">Pay with M-Pesa 📱</div>
+    <div id="mpesa-subtitle" style="color:#7A8499;font-size:9.5pt;margin-bottom:20px">
+      KES {{ pro_monthly_kes }} / 30 days
+    </div>
+
+    <div id="mpesa-form-section">
+      <label style="font-size:9.5pt;color:#7A8499;display:block;margin-bottom:6px">Safaricom phone number</label>
+      <input id="mpesa-phone" type="tel" placeholder="07XXXXXXXX"
+        style="width:100%;padding:11px 14px;background:#0F1217;border:1px solid #2A3150;border-radius:6px;
+               color:#E2E8F0;font-size:11pt;font-family:Inter,sans-serif;margin-bottom:16px;outline:none">
+      <div id="mpesa-error" style="color:#FF4D4D;font-size:9pt;margin-bottom:10px;display:none"></div>
+      <button onclick="submitMpesa()"
+        style="width:100%;padding:12px;background:#4CAF50;color:#fff;border:none;border-radius:6px;
+               font-size:11pt;font-weight:700;cursor:pointer;font-family:Inter,sans-serif">
+        Send STK Push
+      </button>
+    </div>
+
+    <div id="mpesa-waiting" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:28px;margin-bottom:12px">📲</div>
+      <div style="color:#E2E8F0;font-size:11pt;font-weight:600;margin-bottom:8px">Check your phone!</div>
+      <div style="color:#7A8499;font-size:9.5pt;margin-bottom:20px">Enter your M-Pesa PIN when prompted.</div>
+      <div id="mpesa-poll-msg" style="color:#7A8499;font-size:9pt">Waiting for confirmation…</div>
+    </div>
+
+    <div id="mpesa-success" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:36px;margin-bottom:12px">🎉</div>
+      <div style="color:#00C076;font-size:12pt;font-weight:700;margin-bottom:8px">Payment confirmed!</div>
+      <div id="mpesa-success-msg" style="color:#7A8499;font-size:9.5pt;margin-bottom:20px"></div>
+      <a href="/" style="display:inline-block;padding:10px 24px;background:#FF6B35;color:#fff;text-decoration:none;border-radius:6px;font-weight:700;font-size:10.5pt">Go to Dashboard</a>
+    </div>
+
+    <button onclick="closeMpesa()"
+      style="margin-top:16px;width:100%;padding:9px;background:transparent;color:#7A8499;
+             border:1px solid #2A3150;border-radius:6px;font-size:10pt;cursor:pointer;font-family:Inter,sans-serif">
+      Cancel
+    </button>
+  </div>
+</div>
+
 <script>
 var PRICE_MONTHLY = "{{ stripe_price_monthly if stripe_price_monthly is defined else '' }}";
 var PRICE_ANNUAL  = "{{ stripe_price_annual  if stripe_price_annual  is defined else '' }}";
+var MONTHLY_KES   = {{ pro_monthly_kes if pro_monthly_kes is defined else 3500 }};
+var ANNUAL_KES    = {{ pro_annual_kes  if pro_annual_kes  is defined else 23000 }};
+var _billingMode  = 'monthly';
+var _checkoutId   = null;
+var _pollTimer    = null;
 
 function setBilling(mode) {
+  _billingMode = mode;
   var isAnnual = mode === 'annual';
   document.getElementById('btn-monthly').classList.toggle('active', !isAnnual);
   document.getElementById('btn-annual').classList.toggle('active',  isAnnual);
@@ -295,14 +351,84 @@ function setBilling(mode) {
   if (isAnnual) {
     document.getElementById('price-display').innerHTML = '$199 <span class="per">/ year</span>';
     document.getElementById('billed-display').textContent = 'Billed $199 once per year — save $149';
+    document.getElementById('mpesa-subtitle').textContent = 'KES ' + ANNUAL_KES + ' / 1 year';
   } else {
     document.getElementById('price-display').innerHTML = '$29 <span class="per">/ month</span>';
     document.getElementById('billed-display').textContent = 'Billed $29/month — cancel anytime';
+    document.getElementById('mpesa-subtitle').textContent = 'KES ' + MONTHLY_KES + ' / 30 days';
   }
-
   var inp = document.getElementById('price-id-input');
   if (inp) inp.value = isAnnual ? PRICE_ANNUAL : PRICE_MONTHLY;
 }
+
+function openMpesa() {
+  document.getElementById('mpesa-modal').style.display = 'flex';
+  document.getElementById('mpesa-form-section').style.display = 'block';
+  document.getElementById('mpesa-waiting').style.display = 'none';
+  document.getElementById('mpesa-success').style.display = 'none';
+  document.getElementById('mpesa-error').style.display = 'none';
+  document.getElementById('mpesa-phone').value = '';
+}
+
+function closeMpesa() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  document.getElementById('mpesa-modal').style.display = 'none';
+}
+
+function submitMpesa() {
+  var phone = document.getElementById('mpesa-phone').value.trim();
+  var errEl = document.getElementById('mpesa-error');
+  errEl.style.display = 'none';
+
+  fetch('/mpesa/pay', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({phone: phone, plan: _billingMode})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.ok) {
+      errEl.textContent = d.error || 'Payment failed.';
+      errEl.style.display = 'block';
+      return;
+    }
+    _checkoutId = d.checkout_request_id;
+    document.getElementById('mpesa-form-section').style.display = 'none';
+    document.getElementById('mpesa-waiting').style.display = 'block';
+    _pollTimer = setInterval(pollPayment, 4000);
+  })
+  .catch(function() {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  });
+}
+
+function pollPayment() {
+  if (!_checkoutId) return;
+  fetch('/mpesa/status', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({checkout_request_id: _checkoutId})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.paid) {
+      clearInterval(_pollTimer);
+      document.getElementById('mpesa-waiting').style.display = 'none';
+      document.getElementById('mpesa-success').style.display = 'block';
+      document.getElementById('mpesa-success-msg').textContent = d.message || 'Pro access activated!';
+    } else if (d.cancelled) {
+      clearInterval(_pollTimer);
+      document.getElementById('mpesa-waiting').style.display = 'none';
+      document.getElementById('mpesa-form-section').style.display = 'block';
+      document.getElementById('mpesa-error').textContent = d.message;
+      document.getElementById('mpesa-error').style.display = 'block';
+    } else {
+      document.getElementById('mpesa-poll-msg').textContent = d.message || 'Waiting for confirmation…';
+    }
+  });
+}
+
 setBilling('monthly');
 </script>
 

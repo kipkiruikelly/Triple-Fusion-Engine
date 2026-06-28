@@ -19,7 +19,7 @@ import logging
 import warnings
 warnings.filterwarnings("ignore")
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from flask import Flask, render_template, request, jsonify, redirect, url_for, g, flash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
@@ -41,6 +41,15 @@ STRIPE_PUB_KEY          = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_PRICE_MONTHLY    = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
 STRIPE_PRICE_ANNUAL     = os.environ.get("STRIPE_PRICE_ID_ANNUAL", "")
 STRIPE_WEBHOOK_SECRET   = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+try:
+    from mpesa import stk_push, query_status, MPESA_OK, PRO_MONTHLY_KES, PRO_ANNUAL_KES
+except Exception:
+    MPESA_OK = False
+    PRO_MONTHLY_KES = 3500
+    PRO_ANNUAL_KES  = 23000
+    def stk_push(*a, **kw): raise RuntimeError("M-Pesa not configured")
+    def query_status(*a, **kw): raise RuntimeError("M-Pesa not configured")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -78,6 +87,7 @@ class User(UserMixin, db.Model):
     stripe_customer_id      = db.Column(db.String(64), nullable=True)
     stripe_subscription_id  = db.Column(db.String(64), nullable=True)
     alerts_enabled          = db.Column(db.Boolean, default=True)
+    pro_expires_at          = db.Column(db.Date, nullable=True)   # for M-Pesa time-limited Pro
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -87,7 +97,13 @@ class User(UserMixin, db.Model):
 
     @property
     def is_pro(self):
-        return self.plan == 'pro'
+        if self.plan == 'pro':
+            # Stripe plan: no expiry
+            if self.pro_expires_at is None:
+                return True
+            # M-Pesa plan: check expiry date
+            return self.pro_expires_at >= date.today()
+        return False
 
     @property
     def predictions_remaining(self):
@@ -155,6 +171,7 @@ with app.app_context():
         ("stripe_customer_id",     "ALTER TABLE user ADD COLUMN stripe_customer_id TEXT"),
         ("stripe_subscription_id", "ALTER TABLE user ADD COLUMN stripe_subscription_id TEXT"),
         ("alerts_enabled",         "ALTER TABLE user ADD COLUMN alerts_enabled INTEGER DEFAULT 1"),
+        ("pro_expires_at",         "ALTER TABLE user ADD COLUMN pro_expires_at DATE"),
     ]:
         if _col not in _cols:
             _conn.execute(_ddl)
@@ -221,13 +238,6 @@ def register():
 def logout():
     logout_user()
     return redirect(url_for('login'))
-
-
-@app.route("/pricing")
-def pricing():
-    return render_template("pricing.html",
-                           stripe_pub_key=STRIPE_PUB_KEY,
-                           stripe_enabled=_STRIPE_OK)
 
 
 @app.route("/stripe/checkout", methods=["POST"])
@@ -319,6 +329,118 @@ def stripe_webhook():
                 db.session.commit()
 
     return jsonify({"ok": True})
+
+
+# ── M-Pesa routes ────────────────────────────────────────────────────────────
+
+# In-memory store for pending STK Push requests {checkout_request_id: user_id, plan}
+# (A real deployment would use Redis or a DB table)
+_mpesa_pending = {}
+
+
+@app.route("/mpesa/pay", methods=["POST"])
+@login_required
+def mpesa_pay():
+    if not MPESA_OK:
+        return jsonify({"ok": False, "error": "M-Pesa payments are not configured yet."}), 503
+    data  = request.get_json() or {}
+    phone = data.get("phone", "").strip().replace(" ", "").replace("-", "")
+    plan  = data.get("plan", "monthly")   # "monthly" or "annual"
+
+    # Normalise phone: 07XXXXXXXX → 2547XXXXXXXX
+    if phone.startswith("0"):
+        phone = "254" + phone[1:]
+    if not phone.startswith("254") or len(phone) != 12 or not phone.isdigit():
+        return jsonify({"ok": False, "error": "Enter a valid Safaricom number (07XXXXXXXX)."}), 400
+
+    amount = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
+    days   = 365 if plan == "annual" else 30
+    desc   = f"BullLogic Pro {'1 year' if plan == 'annual' else '30 days'}"
+
+    try:
+        resp = stk_push(phone, amount, "BullLogicPro", desc)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+    if resp.get("ResponseCode") != "0":
+        return jsonify({"ok": False,
+                        "error": resp.get("ResponseDescription", "STK push failed")}), 400
+
+    checkout_id = resp["CheckoutRequestID"]
+    _mpesa_pending[checkout_id] = {"user_id": current_user.id, "days": days}
+
+    return jsonify({
+        "ok":                True,
+        "checkout_request_id": checkout_id,
+        "message":           f"Check your phone ({phone}) and enter your M-Pesa PIN.",
+    })
+
+
+@app.route("/mpesa/status", methods=["POST"])
+@login_required
+def mpesa_status():
+    """Poll: has the STK Push been paid yet?"""
+    checkout_id = (request.get_json() or {}).get("checkout_request_id", "")
+    if not checkout_id:
+        return jsonify({"ok": False, "paid": False, "error": "Missing checkout_request_id"}), 400
+    try:
+        resp = query_status(checkout_id)
+    except Exception as e:
+        return jsonify({"ok": False, "paid": False, "error": str(e)}), 500
+
+    result_code = str(resp.get("ResultCode", "-1"))
+    if result_code == "0":
+        # Payment confirmed — grant Pro
+        pending = _mpesa_pending.pop(checkout_id, {})
+        uid   = pending.get("user_id", current_user.id)
+        days  = pending.get("days", 30)
+        user  = db.session.get(User, uid)
+        if user:
+            user.plan = 'pro'
+            user.pro_expires_at = date.today() + timedelta(days=days)
+            db.session.commit()
+        return jsonify({"ok": True, "paid": True,
+                        "message": f"Payment confirmed! Pro access granted for {days} days."})
+    elif result_code == "1032":
+        # User cancelled
+        _mpesa_pending.pop(checkout_id, None)
+        return jsonify({"ok": True, "paid": False, "cancelled": True,
+                        "message": "You cancelled the payment on your phone."})
+    else:
+        # Still pending or failed
+        return jsonify({"ok": True, "paid": False,
+                        "result_code": result_code,
+                        "message": resp.get("ResultDesc", "Waiting for payment…")})
+
+
+@app.route("/mpesa/callback", methods=["POST"])
+def mpesa_callback():
+    """Safaricom sends payment confirmation here (server-to-server)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        body   = data["Body"]["stkCallback"]
+        code   = body.get("ResultCode", -1)
+        chk_id = body.get("CheckoutRequestID", "")
+        if code == 0 and chk_id in _mpesa_pending:
+            pending = _mpesa_pending.pop(chk_id)
+            user    = db.session.get(User, pending["user_id"])
+            if user:
+                user.plan = 'pro'
+                user.pro_expires_at = date.today() + timedelta(days=pending["days"])
+                db.session.commit()
+    except Exception:
+        pass
+    return jsonify({"ResultCode": 0, "ResultDesc": "Accepted"})
+
+
+@app.route("/pricing")
+def pricing():
+    return render_template("pricing.html",
+                           stripe_pub_key=STRIPE_PUB_KEY,
+                           stripe_enabled=_STRIPE_OK,
+                           mpesa_enabled=MPESA_OK,
+                           pro_monthly_kes=PRO_MONTHLY_KES,
+                           pro_annual_kes=PRO_ANNUAL_KES)
 
 
 # ── Main routes ─────────────────────────────────────────────────────────────
