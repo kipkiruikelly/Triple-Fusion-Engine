@@ -346,8 +346,9 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
     df["P3_Distrib"]= df["Displacement"].rolling(3, min_periods=1).sum()
 
     # ── Calendar / cyclical ───────────────────────────────────────────────────
-    df["DayOfWeek"]   = df.index.dayofweek
-    m = df.index.month;  q = df.index.quarter
+    df["DayOfWeek"]   = np.array(df.index.dayofweek, dtype=np.int32)
+    m = np.array(df.index.month,   dtype=np.int32)
+    q = np.array(df.index.quarter, dtype=np.int32)
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
     df["Quarter_Sin"] = np.sin(2 * np.pi * q / 4)
@@ -363,7 +364,9 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
     if is_intraday:
         idx = df.index
         et  = idx.tz_convert("America/New_York") if idx.tz else idx.tz_localize("UTC").tz_convert("America/New_York")
-        hour, minute, dow = et.hour, et.minute, et.dayofweek
+        hour   = np.array(et.hour,      dtype=np.int32)
+        minute = np.array(et.minute,    dtype=np.int32)
+        dow    = np.array(et.dayofweek, dtype=np.int32)
 
         df["KZ_London"]       = ((hour >= 2)  & (hour < 5)).astype(int)
         df["KZ_NY_Open"]      = ((hour >= 9)  & (hour < 11)).astype(int)
@@ -372,7 +375,7 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
         df["KZ_SB_AM"]        = ((hour == 10) | ((hour == 9) & (minute >= 50))).astype(int)
         df["KZ_SB_PM"]        = ((hour >= 14) & (hour < 15)).astype(int)
 
-        mins_in          = ((hour - 9) * 60 + minute - 30).clip(0, 390)
+        mins_in          = np.clip((hour - 9) * 60 + minute - 30, 0, 390)
         df["Session_Pct"]= mins_in / 390
         df["Hour_Sin"]   = np.sin(2 * np.pi * hour / 24)
         df["Hour_Cos"]   = np.cos(2 * np.pi * hour / 24)
@@ -388,10 +391,10 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
         df["Sess_H_Dist"] = ((sess_hi - c) / (atr14 + 1e-8)).clip(-10, 10)
         df["Sess_L_Dist"] = ((c - sess_lo) / (atr14 + 1e-8)).clip(-10, 10)
 
-        # Asia session range (8 PM – 2 AM ET)
-        is_asia  = (hour >= 20) | (hour < 2)
-        asia_h   = h.where(is_asia).rolling(14, min_periods=1).max().ffill()
-        asia_l   = l.where(is_asia).rolling(14, min_periods=1).min().ffill()
+        # Asia session range (8 PM – 2 AM ET)  — use Series for .where() alignment
+        is_asia_s = pd.Series((hour >= 20) | (hour < 2), index=df.index)
+        asia_h    = h.where(is_asia_s).rolling(14, min_periods=1).max().ffill()
+        asia_l    = l.where(is_asia_s).rolling(14, min_periods=1).min().ffill()
         df["Asia_H_Dist"] = ((asia_h - c) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
         df["Asia_L_Dist"] = ((c - asia_l) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
         df["Asia_Range"]  = ((asia_h - asia_l) / (atr14 + 1e-8)).clip(0, 20).fillna(0)
@@ -399,14 +402,14 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
         df["Below_AsiaL"] = (c < asia_l).astype(int)
 
         # NWOG — New Week Opening Gap (Monday open vs prior Friday close)
-        is_mon     = (dow == 0)
+        is_mon_s   = pd.Series(dow == 0, index=df.index)
         prev_close = c.shift(1)
-        nwog_open  = df["Open"].where(is_mon).ffill()
-        nwog_prev  = prev_close.where(is_mon).ffill()
+        nwog_open  = df["Open"].where(is_mon_s).ffill()
+        nwog_prev  = prev_close.where(is_mon_s).ffill()
         lo = nwog_prev.clip(lower=0)
         df["In_NWOG"]   = (nwog_open.notna() & nwog_prev.notna() &
                            c.between(lo, nwog_open, inclusive="both")).astype(int)
-        week_gap         = (df["Open"] - prev_close).where(is_mon).ffill().fillna(0)
+        week_gap         = (df["Open"] - prev_close).where(is_mon_s).ffill().fillna(0)
         df["NWOG_Norm"]  = (week_gap / (atr14 + 1e-8)).clip(-5, 5)
 
     return df
