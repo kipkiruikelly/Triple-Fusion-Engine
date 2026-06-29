@@ -122,45 +122,97 @@
       flex-shrink: 0;
     }
 
+    /* ── Sidebar search ── */
+    .sidebar-search {
+      margin: 0 14px 14px;
+      position: relative;
+    }
+    .sidebar-search input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 12px 8px 32px;
+      font-family: 'Inter', sans-serif;
+      font-size: 9.5pt;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .sidebar-search input:focus { border-color: var(--accent); }
+    .sidebar-search input::placeholder { color: var(--muted); }
+    .sidebar-search .icon {
+      position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%); font-size: 12px; color: var(--muted);
+    }
+
     .sidebar-section {
-      padding: 0 16px;
-      margin-bottom: 24px;
+      padding: 0 14px;
+      margin-bottom: 20px;
     }
 
     .sidebar-label {
-      font-size: 8.5pt;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 8pt;
       font-weight: 700;
       color: var(--muted);
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
+      padding: 0 2px;
     }
 
     .sidebar-item {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
+      gap: 0;
+      padding: 6px 8px;
       border-radius: 6px;
       cursor: pointer;
-      font-size: 10pt;
+      font-size: 9.5pt;
       color: var(--muted);
       font-weight: 500;
-      transition: all 0.15s;
-      margin-bottom: 2px;
+      transition: all 0.12s;
+      margin-bottom: 1px;
+      justify-content: space-between;
     }
 
-    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
-    .sidebar-item.active { background: var(--surface2); color: var(--white); }
+    .sidebar-item:hover { background: var(--surface2); color: var(--white); }
+    .sidebar-item.active { background: rgba(255,107,53,0.12); color: var(--accent); }
 
+    .sidebar-item .sym-name {
+      display: flex; align-items: center; gap: 7px; flex: 1;
+    }
     .sidebar-item .dot {
-      width: 6px; height: 6px;
+      width: 5px; height: 5px;
       border-radius: 50%;
       background: var(--muted);
       flex-shrink: 0;
     }
-
     .sidebar-item.active .dot { background: var(--accent); }
+
+    .sidebar-item .live-data {
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: 0; flex-shrink: 0; margin-left: 4px;
+    }
+    .sidebar-item .live-price {
+      font-size: 8.5pt; font-weight: 600; color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .sidebar-item .live-chg {
+      font-size: 7.5pt; font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .live-chg.up   { color: var(--green); }
+    .live-chg.down { color: var(--red); }
+
+    .sidebar-item .sym-label { font-weight: 600; color: var(--text); font-size: 9.5pt; }
+    .sidebar-item:hover .sym-label { color: var(--white); }
+    .sidebar-item.active .sym-label { color: var(--accent); }
+
+    .sidebar-hidden { display: none !important; }
 
     /* ── Content ── */
     .content {
@@ -573,74 +625,111 @@
 
   <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Navigation</div>
+
+    <!-- Search -->
+    <div class="sidebar-search">
+      <span class="icon">🔍</span>
+      <input id="sidebarSearch" type="text" placeholder="Search ticker…"
+             oninput="filterSidebar(this.value)" autocomplete="off" />
+    </div>
+
+    <!-- Navigation -->
+    <div class="sidebar-section" id="sec-nav">
+      <div class="sidebar-label">⚡ Quick Nav</div>
       <div class="sidebar-item active" onclick="window.scrollTo({top:0,behavior:'smooth'})">
-        <div class="dot"></div>
-        Price Predictor
+        <div class="sym-name"><div class="dot"></div><span>Price Predictor</span></div>
       </div>
       <div class="sidebar-item" onclick="showSection('markets')">
-        <div class="dot"></div>
-        Market Overview
+        <div class="sym-name"><div class="dot"></div><span>Market Overview</span></div>
       </div>
       <div class="sidebar-item" onclick="showSection('movers')">
-        <div class="dot"></div>
-        Top Movers
+        <div class="sym-name"><div class="dot"></div><span>Top Movers</span></div>
       </div>
       <div class="sidebar-item" onclick="showSection('watchlist')">
-        <div class="dot"></div>
-        Watchlist
+        <div class="sym-name"><div class="dot"></div><span>Watchlist</span></div>
       </div>
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">US Stocks</div>
+    <!-- US Stocks -->
+    <div class="sidebar-section" id="sec-stocks">
+      <div class="sidebar-label">🇺🇸 US Stocks</div>
       {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT'] %}
-      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+        <div class="live-data" id="ld-{{ sym }}"></div>
+      </div>
       {% endfor %}
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">ETFs</div>
+    <!-- ETFs -->
+    <div class="sidebar-section" id="sec-etfs">
+      <div class="sidebar-label">📦 ETFs</div>
       {% for sym in ['SPY','QQQ','IWM','DIA','GLD','SLV','TLT','XLF','XLE'] %}
-      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+        <div class="live-data" id="ld-{{ sym }}"></div>
+      </div>
       {% endfor %}
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Crypto</div>
+    <!-- Crypto -->
+    <div class="sidebar-section" id="sec-crypto">
+      <div class="sidebar-label">₿ Crypto</div>
       {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','LINK'] %}
-      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+        <div class="live-data" id="ld-{{ sym }}"></div>
+      </div>
       {% endfor %}
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Forex</div>
+    <!-- Forex -->
+    <div class="sidebar-section" id="sec-forex">
+      <div class="sidebar-label">💱 Forex</div>
       {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD','EURGBP'] %}
-      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+        <div class="live-data" id="ld-{{ sym }}"></div>
+      </div>
       {% endfor %}
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Commodities</div>
+    <!-- Commodities -->
+    <div class="sidebar-section" id="sec-commodities">
+      <div class="sidebar-label">🛢️ Commodities</div>
       {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT','BRENT'] %}
-      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+        <div class="live-data" id="ld-{{ sym }}"></div>
+      </div>
       {% endfor %}
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Indices</div>
+    <!-- Indices -->
+    <div class="sidebar-section" id="sec-indices">
+      <div class="sidebar-label">📊 Indices</div>
       {% for sym in ['SPX','NDX','DJI','RUT','VIX','FTSE','DAX','NIKKEI'] %}
-      <div class="sidebar-item" onclick="setTicker('{{ sym }}')"><div class="dot"></div>{{ sym }}</div>
+      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+        <div class="live-data" id="ld-{{ sym }}"></div>
+      </div>
       {% endfor %}
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">Models</div>
-      <div class="sidebar-item" onclick="showSection('lr')"><div class="dot"></div>Linear Regression</div>
-      <div class="sidebar-item" onclick="showSection('rf')"><div class="dot"></div>Random Forest</div>
-      <div class="sidebar-item" onclick="showSection('lstm')"><div class="dot"></div>LSTM Network</div>
+    <!-- Models -->
+    <div class="sidebar-section" id="sec-models">
+      <div class="sidebar-label">🤖 Models</div>
+      <div class="sidebar-item" onclick="showSection('lr')">
+        <div class="sym-name"><div class="dot"></div><span>Linear Regression</span></div>
+      </div>
+      <div class="sidebar-item" onclick="showSection('rf')">
+        <div class="sym-name"><div class="dot"></div><span>Random Forest</span></div>
+      </div>
+      <div class="sidebar-item" onclick="showSection('lstm')">
+        <div class="sym-name"><div class="dot"></div><span>LSTM Network</span></div>
+      </div>
     </div>
+
   </aside>
 
   <!-- Main content -->
@@ -1237,6 +1326,71 @@ document.addEventListener('click', e => {
 // Poll notification count every 60s
 loadNotifications();
 setInterval(loadNotifications, 60000);
+
+// ── Sidebar: search filter ────────────────────────────────────────────────
+function filterSidebar(q) {
+  q = q.trim().toUpperCase();
+  document.querySelectorAll('.sidebar-item[data-sym]').forEach(el => {
+    const sym = el.dataset.sym || '';
+    el.classList.toggle('sidebar-hidden', q.length > 0 && !sym.includes(q));
+  });
+  // show/hide section headers based on whether any children visible
+  document.querySelectorAll('.sidebar-section').forEach(sec => {
+    if (!sec.id || sec.id === 'sec-nav' || sec.id === 'sec-models') return;
+    const anyVisible = [...sec.querySelectorAll('.sidebar-item[data-sym]')]
+      .some(el => !el.classList.contains('sidebar-hidden'));
+    sec.style.display = (q.length > 0 && !anyVisible) ? 'none' : '';
+  });
+}
+
+// ── Sidebar: live prices ──────────────────────────────────────────────────
+const _SIDEBAR_TICKERS = [
+  'AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT',
+  'SPY','QQQ','IWM','DIA','GLD','SLV','TLT','XLF','XLE',
+  'BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','LINK',
+  'EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD','EURGBP',
+  'GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT','BRENT',
+  'SPX','NDX','DJI','RUT','VIX','FTSE','DAX','NIKKEI'
+];
+
+function _fmtPrice(p) {
+  if (!p && p !== 0) return '—';
+  if (p >= 1000) return p.toLocaleString('en-US', {maximumFractionDigits: 2});
+  if (p >= 1)    return p.toFixed(2);
+  return p.toFixed(4);
+}
+
+function _applyLiveData(sym, price, chg) {
+  const el = document.getElementById('ld-' + sym);
+  if (!el) return;
+  const up = chg >= 0;
+  el.innerHTML = `
+    <div class="live-price">$${_fmtPrice(price)}</div>
+    <div class="live-chg ${up ? 'up' : 'down'}">${up ? '+' : ''}${chg.toFixed(2)}%</div>`;
+}
+
+async function _loadSidebarBatch(batch) {
+  try {
+    const params = batch.map(s => 't=' + encodeURIComponent(s)).join('&');
+    const r = await fetch('/api/prices/batch?' + params);
+    if (!r.ok) return;
+    const data = await r.json();
+    Object.entries(data).forEach(([sym, v]) => {
+      if (v && v.price != null) _applyLiveData(sym, v.price, v.change_pct ?? 0);
+    });
+  } catch(e) {}
+}
+
+async function loadSidebarPrices() {
+  // Load in chunks of 15 to avoid overloading one request
+  const chunk = 15;
+  for (let i = 0; i < _SIDEBAR_TICKERS.length; i += chunk) {
+    _loadSidebarBatch(_SIDEBAR_TICKERS.slice(i, i + chunk));
+  }
+}
+
+loadSidebarPrices();
+setInterval(loadSidebarPrices, 30000);
 </script>
 </body>
 </html>

@@ -2232,6 +2232,30 @@ def stream_prices():
     )
 
 
+# ── Batch price snapshot (sidebar live prices) ───────────────────────────────
+
+@app.route("/api/prices/batch")
+@login_required
+def api_prices_batch():
+    import yfinance as yf
+    tickers = request.args.getlist("t") or []
+    tickers = [t.upper() for t in tickers[:60]]
+    result = {}
+    def _fetch(t):
+        try:
+            fi = yf.Ticker(t).fast_info
+            lp = float(fi.last_price or 0)
+            pc = float(fi.previous_close or 0)
+            pct = round((lp - pc) / pc * 100 if pc else 0, 2)
+            result[t] = {"price": round(lp, 4), "change_pct": pct}
+        except Exception:
+            result[t] = None
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        ex.map(_fetch, tickers)
+    return jsonify(result)
+
+
 # ── Fear & Greed Index ────────────────────────────────────────────────────────
 
 @app.route("/api/fear-greed")
