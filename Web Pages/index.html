@@ -505,6 +505,8 @@
       <a href="/watchlist">Watchlist</a>
       <a href="/alerts">Alerts</a>
       <a href="/portfolio">Portfolio</a>
+      <a href="/scanner">Scanner</a>
+      <a href="/journal">Journal</a>
       <a href="/history">History</a>
       <a href="/pricing">Pricing</a>
     </nav>
@@ -517,6 +519,11 @@
       <span style="color:var(--muted);font-size:9.5pt;">{{ current_user.predictions_remaining }}/5 left</span>
       <a href="/pricing" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">Upgrade</a>
     {% endif %}
+    <!-- Notification Bell -->
+    <div style="position:relative;cursor:pointer" onclick="toggleNotifPanel()" title="Notifications">
+      <span style="font-size:16px">🔔</span>
+      <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-5px;background:var(--accent);color:#fff;font-size:7.5pt;font-weight:700;min-width:16px;height:16px;border-radius:8px;text-align:center;line-height:16px;padding:0 3px">0</span>
+    </div>
     <a href="/profile" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Profile</a>
     <a href="/logout" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Logout</a>
   </div>
@@ -706,6 +713,42 @@
         <div class="stat-label">Best Model MAE</div>
         <div class="stat-value">$1.09</div>
         <div class="stat-sub">Linear Regression on AAPL 1h</div>
+      </div>
+    </div>
+
+    <!-- Fear & Greed Index + Live Prices -->
+    <div style="display:grid;grid-template-columns:220px 1fr;gap:16px;margin-bottom:20px">
+      <!-- Fear & Greed Gauge -->
+      <div id="fg-card" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center">
+        <div style="font-size:9pt;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">Fear &amp; Greed</div>
+        <div id="fg-score" style="font-size:36pt;font-weight:700;color:var(--white)">—</div>
+        <div id="fg-label" style="font-size:11pt;font-weight:600;margin-bottom:10px;color:var(--muted)">Loading…</div>
+        <div style="background:var(--surface2);border-radius:6px;overflow:hidden;height:8px;margin-bottom:10px">
+          <div id="fg-bar" style="height:100%;width:50%;background:var(--accent);border-radius:6px;transition:width 0.5s,background 0.5s"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:8.5pt;color:var(--muted)">
+          <div>VIX: <span id="fg-vix" style="color:var(--text)">—</span></div>
+          <div>RSI: <span id="fg-rsi" style="color:var(--text)">—</span></div>
+        </div>
+      </div>
+      <!-- Live SSE Prices -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:9pt;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px">Live Prices</div>
+          <span id="stream-status" style="font-size:8pt;color:var(--muted)">connecting…</span>
+        </div>
+        <div id="live-prices" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px"></div>
+      </div>
+    </div>
+
+    <!-- Notification dropdown panel -->
+    <div id="notif-panel" style="display:none;position:fixed;top:58px;right:16px;width:340px;max-height:480px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:999;padding:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span style="font-weight:700;color:var(--white)">Notifications</span>
+        <button onclick="clearAllNotifs()" style="background:none;border:none;color:var(--muted);font-size:9pt;cursor:pointer">Clear all</button>
+      </div>
+      <div id="notif-list" style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">Loading…</div>
       </div>
     </div>
 
@@ -1088,6 +1131,112 @@
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+
+// ── Fear & Greed Index ─────────────────────────────────────────────────────
+(async function loadFearGreed() {
+  try {
+    const r = await fetch('/api/fear-greed');
+    const d = await r.json();
+    if (!d.ok) return;
+    document.getElementById('fg-score').textContent = d.score;
+    document.getElementById('fg-score').style.color = d.color;
+    document.getElementById('fg-label').textContent = d.label;
+    document.getElementById('fg-label').style.color = d.color;
+    document.getElementById('fg-bar').style.width   = d.score + '%';
+    document.getElementById('fg-bar').style.background = d.color;
+    document.getElementById('fg-vix').textContent = d.vix;
+    document.getElementById('fg-rsi').textContent = d.rsi;
+  } catch(e) {}
+})();
+
+// ── Live SSE prices ────────────────────────────────────────────────────────
+(function startStream() {
+  const tickers = ['AAPL','MSFT','NVDA','TSLA','SPY','QQQ','AMZN','META'];
+  const qs = tickers.map(t => 't=' + t).join('&');
+  const es = new EventSource('/api/stream/prices?' + qs);
+  const container = document.getElementById('live-prices');
+  const status    = document.getElementById('stream-status');
+
+  es.onopen = () => { status.textContent = '● live'; status.style.color = 'var(--green)'; };
+  es.onerror = () => { status.textContent = '○ reconnecting'; status.style.color = 'var(--muted)'; };
+
+  es.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    let html = '';
+    for (const [sym, info] of Object.entries(data)) {
+      const pct = info.pct;
+      const col = pct >= 0 ? 'var(--green)' : 'var(--red)';
+      const sign = pct >= 0 ? '+' : '';
+      html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;text-align:center">
+        <div style="font-size:9pt;font-weight:700;color:var(--muted)">${sym}</div>
+        <div style="font-size:12pt;font-weight:700;color:var(--white);margin:2px 0">$${info.price.toFixed(2)}</div>
+        <div style="font-size:9pt;color:${col};font-weight:600">${sign}${pct.toFixed(2)}%</div>
+      </div>`;
+    }
+    container.innerHTML = html;
+  };
+})();
+
+// ── Notification bell ──────────────────────────────────────────────────────
+let _notifOpen = false;
+async function loadNotifications() {
+  try {
+    const r = await fetch('/api/notifications');
+    const d = await r.json();
+    if (!d.ok) return;
+    const badge = document.getElementById('notif-badge');
+    badge.textContent = d.unread;
+    badge.style.display = d.unread > 0 ? 'block' : 'none';
+
+    const list = document.getElementById('notif-list');
+    if (!d.notifications.length) {
+      list.innerHTML = '<div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">No notifications</div>';
+      return;
+    }
+    const icons = {alert:'🔔',signal:'📊',system:'ℹ️',gift:'🎁'};
+    list.innerHTML = d.notifications.map(n => `
+      <div onclick="markRead(${n.id}${n.link ? ',\''+n.link+'\'':',null'})"
+           style="padding:10px 12px;border-radius:7px;background:${n.read?'transparent':'rgba(255,107,53,0.07)'};border:1px solid var(--border);cursor:pointer;transition:background .15s">
+        <div style="display:flex;gap:8px;align-items:flex-start">
+          <span>${icons[n.type]||'ℹ️'}</span>
+          <div>
+            <div style="font-size:10pt;font-weight:${n.read?500:700};color:${n.read?'var(--muted)':'var(--white)'}">${n.title}</div>
+            ${n.body ? `<div style="font-size:8.5pt;color:var(--muted);margin-top:2px">${n.body}</div>` : ''}
+            <div style="font-size:8pt;color:var(--muted);margin-top:3px">${n.created_at}</div>
+          </div>
+        </div>
+      </div>`).join('');
+  } catch(e) {}
+}
+
+function toggleNotifPanel() {
+  _notifOpen = !_notifOpen;
+  document.getElementById('notif-panel').style.display = _notifOpen ? 'block' : 'none';
+  if (_notifOpen) loadNotifications();
+}
+
+async function markRead(id, link) {
+  await fetch('/api/notifications/read', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
+  if (link) window.location.href = link;
+  else loadNotifications();
+}
+
+async function clearAllNotifs() {
+  await fetch('/api/notifications/clear', {method:'POST'});
+  loadNotifications();
+}
+
+document.addEventListener('click', e => {
+  if (_notifOpen && !e.target.closest('#notif-panel') && !e.target.closest('[onclick*="toggleNotifPanel"]')) {
+    _notifOpen = false;
+    document.getElementById('notif-panel').style.display = 'none';
+  }
+});
+
+// Poll notification count every 60s
+loadNotifications();
+setInterval(loadNotifications, 60000);
 </script>
 </body>
 </html>

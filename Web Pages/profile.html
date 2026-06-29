@@ -334,6 +334,88 @@
       <div id="accuracyBlock"><div style="color:var(--muted);font-size:9.5pt">Loading accuracy stats…</div></div>
     </div>
 
+    <!-- Discord Alerts -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="section-title">Discord Alerts</div>
+        <span id="discordStatus" style="font-size:9.5pt">Loading…</span>
+      </div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Receive BullLogic alerts directly in your Discord server. <a href="https://support.discord.com/hc/en-us/articles/228383668" target="_blank" style="color:var(--accent)">How to create a webhook →</a></p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="discordWebhookUrl" type="text" placeholder="https://discord.com/api/webhooks/..." style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;width:340px;font-family:'Inter',sans-serif"/>
+        <button onclick="saveDiscord()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">Connect</button>
+        <button onclick="testDiscord()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:6px;font-size:9pt;cursor:pointer">Test</button>
+        <button id="discordRemoveBtn" onclick="removeDiscord()" style="display:none;background:none;border:1px solid var(--border);color:var(--red);padding:7px 12px;border-radius:6px;font-size:9pt;cursor:pointer">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- 2FA -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="section-title">Two-Factor Authentication (2FA)</div>
+        <span id="twofa-status" style="font-size:9.5pt">Loading…</span>
+      </div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Add an extra layer of security. Requires an authenticator app (Google Authenticator, Authy, etc.)</p>
+      <button id="twofa-setup-btn" onclick="setup2FA()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">Set Up 2FA</button>
+      <div id="twofa-setup-panel" style="display:none;margin-top:14px">
+        <div style="display:flex;gap:20px;align-items:flex-start;flex-wrap:wrap">
+          <img id="twofa-qr" src="" alt="QR code" style="width:150px;height:150px;border-radius:8px;border:2px solid var(--border)" />
+          <div>
+            <div style="color:var(--muted);font-size:9.5pt;margin-bottom:8px">Or enter this secret manually:</div>
+            <code id="twofa-secret-display" style="background:var(--surface2);padding:6px 10px;border-radius:5px;font-size:11pt;letter-spacing:2px"></code>
+            <div style="margin-top:14px;color:var(--muted);font-size:9.5pt;margin-bottom:6px">Enter the 6-digit code from your app:</div>
+            <div style="display:flex;gap:8px">
+              <input id="twofa-code" type="text" maxlength="6" placeholder="123456" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:13pt;width:120px;font-family:monospace;letter-spacing:4px"/>
+              <button onclick="enable2FA()" style="background:var(--green);color:#000;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:700;cursor:pointer">Enable 2FA</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="twofa-disable-section" style="display:none;margin-top:14px">
+        <div style="color:var(--muted);font-size:9.5pt;margin-bottom:10px">To disable 2FA, enter your password and current authenticator code:</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="twofa-disable-pw" type="password" placeholder="Password" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;font-family:'Inter',sans-serif;width:160px"/>
+          <input id="twofa-disable-code" type="text" maxlength="6" placeholder="123456" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;font-family:monospace;width:100px"/>
+          <button onclick="disable2FA()" style="background:none;border:1px solid var(--red);color:var(--red);padding:7px 14px;border-radius:6px;font-size:9.5pt;cursor:pointer">Disable 2FA</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Webhooks -->
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Custom Webhooks</div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Receive BullLogic signals at your own URL. We'll POST JSON with a HMAC-SHA256 signature.</p>
+      <div id="webhooks-list" style="margin-bottom:14px"><div style="color:var(--muted);font-size:9.5pt">Loading…</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="webhook-name" type="text" placeholder="Webhook name" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;width:160px;font-family:'Inter',sans-serif"/>
+        <input id="webhook-url" type="text" placeholder="https://your-server.com/hook" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;width:280px;font-family:'Inter',sans-serif"/>
+        <button onclick="addWebhook()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">Add Webhook</button>
+      </div>
+    </div>
+
+    <!-- Gift Code -->
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Redeem Gift Code</div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Have a BullLogic Pro gift code? Redeem it here to extend your Pro access.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="giftCodeInput" type="text" placeholder="XXXXXX (6-char code)" maxlength="12" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:6px;font-size:11pt;font-family:monospace;letter-spacing:3px;width:200px;text-transform:uppercase"/>
+        <button onclick="redeemGiftCode()" style="background:var(--accent);color:#fff;border:none;padding:7px 18px;border-radius:6px;font-size:9.5pt;font-weight:700;cursor:pointer">Redeem</button>
+      </div>
+    </div>
+
+    <!-- Daily Digest -->
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Daily Market Digest</div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Receive a morning email with top ML signals from BullLogic's screener. Requires email to be configured on the server.</p>
+      <button onclick="sendDigest()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">Send Digest Now</button>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Account Activity</div>
+      <div id="activity-log-body"><div style="color:var(--muted);font-size:9.5pt">Loading…</div></div>
+    </div>
+
     <!-- Danger zone -->
     <div class="danger-zone">
       <div class="danger-title">Danger Zone</div>
@@ -445,6 +527,133 @@ function removeTelegram() {
 }
 
 loadTelegram();
+
+// ── Discord Webhook ──────────────────────────────────────────────────────────
+function loadDiscord() {
+  fetch('/api/discord/status').then(r=>r.json()).then(d=>{
+    const el = document.getElementById('discordStatus');
+    if (!el) return;
+    if (d.configured && d.enabled) {
+      el.innerHTML = '<span style="color:var(--green)">● Connected</span>';
+      if(document.getElementById('discordRemoveBtn')) document.getElementById('discordRemoveBtn').style.display = 'inline-block';
+    } else {
+      el.innerHTML = '<span style="color:var(--muted)">○ Not configured</span>';
+      if(document.getElementById('discordRemoveBtn')) document.getElementById('discordRemoveBtn').style.display = 'none';
+    }
+  });
+}
+function saveDiscord() {
+  const url = (document.getElementById('discordWebhookUrl')||{}).value||'';
+  if (!url.trim()) { alert('Enter a Discord webhook URL'); return; }
+  fetch('/api/discord/configure', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({webhook_url:url.trim()})})
+    .then(r=>r.json()).then(d=>{ if(d.ok){alert('Discord connected!');loadDiscord();}else alert(d.error); });
+}
+function removeDiscord() {
+  if(!confirm('Disconnect Discord?'))return;
+  fetch('/api/discord/remove',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.ok){alert('Disconnected.');loadDiscord();}});
+}
+function testDiscord() {
+  fetch('/api/discord/test',{method:'POST'}).then(r=>r.json()).then(d=>alert(d.ok?'Test sent!':d.error));
+}
+
+// ── Gift Code ─────────────────────────────────────────────────────────────────
+function redeemGiftCode() {
+  const code=(document.getElementById('giftCodeInput')||{}).value||'';
+  if(!code.trim()){alert('Enter a gift code');return;}
+  fetch('/api/gift-codes/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code.trim().toUpperCase()})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){alert(`Redeemed! ${d.days_added} Pro days added until ${d.pro_until}`);window.location.reload();}
+      else alert(d.error);
+    });
+}
+
+// ── 2FA ───────────────────────────────────────────────────────────────────────
+function load2FAStatus() {
+  fetch('/api/2fa/status').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('twofa-status');
+    if(!el)return;
+    if(!d.available){el.innerHTML='<span style="color:var(--muted)">pyotp not installed</span>';return;}
+    if(d.enabled){
+      el.innerHTML='<span style="color:var(--green)">● Enabled</span>';
+      if(document.getElementById('twofa-setup-btn')) document.getElementById('twofa-setup-btn').style.display='none';
+      if(document.getElementById('twofa-disable-section')) document.getElementById('twofa-disable-section').style.display='block';
+    }else{
+      el.innerHTML='<span style="color:var(--muted)">○ Disabled</span>';
+      if(document.getElementById('twofa-setup-btn')) document.getElementById('twofa-setup-btn').style.display='inline-block';
+      if(document.getElementById('twofa-disable-section')) document.getElementById('twofa-disable-section').style.display='none';
+    }
+  });
+}
+async function setup2FA() {
+  const r=await fetch('/api/2fa/setup');const d=await r.json();
+  if(!d.ok){alert(d.error);return;}
+  if(document.getElementById('twofa-secret-display')) document.getElementById('twofa-secret-display').textContent=d.secret;
+  if(document.getElementById('twofa-setup-panel')) document.getElementById('twofa-setup-panel').style.display='block';
+  if(document.getElementById('twofa-qr')) document.getElementById('twofa-qr').src='https://api.qrserver.com/v1/create-qr-code/?size=150x150&data='+encodeURIComponent(d.uri);
+}
+async function enable2FA() {
+  const code=(document.getElementById('twofa-code')||{}).value||'';
+  const r=await fetch('/api/2fa/enable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code})});
+  const d=await r.json();
+  if(d.ok){if(document.getElementById('twofa-setup-panel'))document.getElementById('twofa-setup-panel').style.display='none';alert('2FA enabled!\n\nBackup codes:\n'+d.backup_codes.join('\n'));load2FAStatus();}
+  else alert(d.error);
+}
+async function disable2FA() {
+  const code=(document.getElementById('twofa-disable-code')||{}).value||'';
+  const pw=(document.getElementById('twofa-disable-pw')||{}).value||'';
+  const r=await fetch('/api/2fa/disable',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,password:pw})});
+  const d=await r.json();
+  if(d.ok){alert('2FA disabled.');load2FAStatus();}else alert(d.error);
+}
+
+// ── Webhooks ──────────────────────────────────────────────────────────────────
+function loadWebhooks() {
+  fetch('/api/webhooks').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('webhooks-list');
+    if(!el)return;
+    if(!d.webhooks.length){el.innerHTML='<div style="color:var(--muted);font-size:9.5pt">No webhooks configured</div>';return;}
+    el.innerHTML=d.webhooks.map(h=>`<div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:11px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-weight:600;color:var(--white)">${h.name}</div><div style="font-size:8.5pt;color:var(--muted)">${h.url} · Fires: ${h.fire_count}</div></div>
+      <div style="display:flex;gap:6px">
+        <button onclick="testWebhook(${h.id})" style="background:none;border:1px solid var(--border);color:var(--muted);padding:3px 9px;border-radius:5px;font-size:8.5pt;cursor:pointer">Test</button>
+        <button onclick="deleteWebhook(${h.id})" style="background:none;border:1px solid rgba(255,77,77,.3);color:var(--red);padding:3px 9px;border-radius:5px;font-size:8.5pt;cursor:pointer">Remove</button>
+      </div></div>`).join('');
+  });
+}
+function addWebhook() {
+  const url=(document.getElementById('webhook-url')||{}).value||'';
+  const name=(document.getElementById('webhook-name')||{}).value||'My Webhook';
+  if(!url.trim()){alert('Enter a URL');return;}
+  fetch('/api/webhooks/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:url.trim(),name})})
+    .then(r=>r.json()).then(d=>{if(d.ok){alert('Webhook added! Secret: '+d.secret);if(document.getElementById('webhook-url'))document.getElementById('webhook-url').value='';loadWebhooks();}else alert(d.error);});
+}
+function deleteWebhook(id) {
+  if(!confirm('Remove?'))return;
+  fetch('/api/webhooks/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}).then(r=>r.json()).then(d=>{if(d.ok)loadWebhooks();});
+}
+function testWebhook(id) {
+  fetch('/api/webhooks/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}).then(r=>r.json()).then(d=>alert(d.ok?'Fired!':d.error));
+}
+
+// ── Activity Log ──────────────────────────────────────────────────────────────
+function loadActivityLog() {
+  fetch('/api/activity-log').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('activity-log-body');
+    if(!el)return;
+    if(!d.entries.length){el.innerHTML='<div style="color:var(--muted);font-size:9.5pt">No activity recorded yet</div>';return;}
+    el.innerHTML=d.entries.slice(0,8).map(e=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:9.5pt"><div><strong style="color:var(--white)">${e.action}</strong>${e.detail?' — '+e.detail:''}<span style="color:var(--muted);font-size:8.5pt;margin-left:8px">${e.ip||''}</span></div><div style="color:var(--muted);font-size:8.5pt;flex-shrink:0;margin-left:12px">${e.created_at}</div></div>`).join('');
+  });
+}
+
+// ── Daily Digest ──────────────────────────────────────────────────────────────
+function sendDigest() {
+  fetch('/api/digest/send',{method:'POST'}).then(r=>r.json()).then(d=>alert(d.ok?d.message:d.error));
+}
+
+load2FAStatus();
+loadDiscord();
+loadWebhooks();
+loadActivityLog();
 </script>
 </body>
 </html>

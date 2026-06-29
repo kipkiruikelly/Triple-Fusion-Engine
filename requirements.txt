@@ -19,3 +19,4 @@ anthropic>=0.34.0
 requests>=2.31.0
 mt5linux
 metaapi-cloud-sdk
+pyotp>=2.9.0

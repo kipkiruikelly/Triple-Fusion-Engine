@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trade Journal — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
+      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
+      --accent: #FF6B35; --green: #00C853; --red: #FF4D4D;
+      --yellow: #FFD54F; --white: #FFFFFF;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    .topbar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
+    .logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 20px; align-items: center; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; }
+    .nav-links a:hover, .nav-links a.active { color: var(--white); }
+    .main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; flex-wrap: wrap; gap: 16px; }
+    .page-title { font-size: 22pt; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .page-sub { color: var(--muted); font-size: 10.5pt; }
+    .btn {
+      padding: 10px 20px; border-radius: 7px; font-family: 'Inter', sans-serif;
+      font-size: 10.5pt; font-weight: 600; cursor: pointer; border: none; transition: opacity 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: var(--white); }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { color: var(--white); border-color: var(--accent); }
+    .btn-danger { background: rgba(255,77,77,0.12); border: 1px solid rgba(255,77,77,0.3); color: var(--red); }
+    .btn-danger:hover { background: rgba(255,77,77,0.2); }
+    .layout { display: grid; grid-template-columns: 380px 1fr; gap: 24px; }
+    @media(max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 22px;
+    }
+    .card-title { font-size: 12pt; font-weight: 700; color: var(--white); margin-bottom: 18px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block; font-size: 9.5pt; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;
+    }
+    .form-input, .form-select, .form-textarea {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 10px 13px; font-family: 'Inter', sans-serif;
+      font-size: 10.5pt; color: var(--white); outline: none; transition: border-color 0.2s;
+    }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+    .form-input::placeholder, .form-textarea::placeholder { color: var(--muted); }
+    .form-textarea { resize: vertical; min-height: 110px; }
+    .form-select option { background: var(--surface); }
+    .mood-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin-bottom: 14px; }
+    .mood-btn {
+      padding: 8px 4px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--muted); font-family: 'Inter', sans-serif;
+      font-size: 18px; cursor: pointer; text-align: center; transition: all 0.15s;
+    }
+    .mood-btn:hover { border-color: var(--accent); }
+    .mood-btn.selected { border-color: var(--accent); background: rgba(255,107,53,0.12); }
+    .tag-input { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; background: var(--bg);
+                 border: 1px solid var(--border); border-radius: 6px; min-height: 44px; }
+    .tag { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px;
+           background: rgba(255,107,53,0.15); border-radius: 20px; font-size: 9pt; color: var(--accent); }
+    .tag button { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 0; }
+    .tag button:hover { color: var(--red); }
+    .tag-field { border: none; background: transparent; color: var(--text); font-family: 'Inter', sans-serif;
+                 font-size: 10pt; outline: none; min-width: 100px; flex: 1; }
+    .tag-field::placeholder { color: var(--muted); }
+    .entry-list { display: flex; flex-direction: column; gap: 12px; }
+    .entry-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px 18px; transition: border-color 0.15s;
+    }
+    .entry-card:hover { border-color: rgba(255,107,53,0.35); }
+    .entry-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .entry-title { font-size: 11pt; font-weight: 700; color: var(--white); }
+    .entry-meta  { font-size: 9pt; color: var(--muted); margin-bottom: 8px; display: flex; gap: 10px; flex-wrap: wrap; }
+    .entry-body  { font-size: 10pt; color: var(--text); line-height: 1.6; white-space: pre-wrap; }
+    .entry-tags  { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+    .entry-tag   { padding: 2px 8px; border-radius: 20px; background: rgba(79,195,247,0.1);
+                   color: #4FC3F7; font-size: 8.5pt; }
+    .mood-icon   { font-size: 18px; }
+    .filter-bar  { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
+    .filter-input {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 10pt;
+      color: var(--white); outline: none;
+    }
+    .filter-input:focus { border-color: var(--accent); }
+    .filter-input::placeholder { color: var(--muted); }
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
+    @media(max-width:600px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+    .stat-card { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; text-align: center; }
+    .stat-val  { font-size: 18pt; font-weight: 700; color: var(--white); }
+    .stat-lbl  { font-size: 9pt; color: var(--muted); margin-top: 2px; }
+    .divider   { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+    .loading   { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .trade-type-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; margin-bottom: 14px; }
+    .type-btn {
+      padding: 8px 6px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--bg); color: var(--muted); font-family: 'Inter', sans-serif;
+      font-size: 9pt; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s;
+    }
+    .type-btn:hover { border-color: var(--accent); }
+    .type-btn.selected { border-color: var(--accent); background: rgba(255,107,53,0.12); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" class="logo" style="text-decoration:none;">Bull<span>Logic</span></a>
+  <div class="nav-links">
+    <a href="/">Dashboard</a>
+    <a href="/screener">Screener</a>
+    <a href="/scanner">Scanner</a>
+    <a href="/portfolio">Portfolio</a>
+    <a href="/journal" class="active">Journal</a>
+    <a href="/alerts">Alerts</a>
+    <a href="/profile">Profile</a>
+  </div>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Trade Journal</div>
+      <div class="page-sub">Document your setups, learnings, and market observations</div>
+    </div>
+  </div>
+
+  <div id="stats-row" class="stats-row" style="display:none">
+    <div class="stat-card"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">Total Entries</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-mood-avg">—</div><div class="stat-lbl">Avg Mood</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-tickers">0</div><div class="stat-lbl">Tickers Tracked</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-tags">0</div><div class="stat-lbl">Unique Tags</div></div>
+  </div>
+
+  <div class="layout">
+    <!-- New Entry Form -->
+    <div>
+      <div class="card" style="position:sticky;top:20px">
+        <div class="card-title">New Entry</div>
+
+        <div class="form-group">
+          <label class="form-label">Title</label>
+          <input id="j-title" class="form-input" placeholder="e.g. AAPL breakout above $200" maxlength="100" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Ticker (optional)</label>
+          <input id="j-ticker" class="form-input" placeholder="AAPL" maxlength="12" style="text-transform:uppercase" />
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Trade Type</label>
+          <div class="trade-type-row">
+            <button class="type-btn selected" data-type="long"    onclick="selectType(this)">Long</button>
+            <button class="type-btn"           data-type="short"   onclick="selectType(this)">Short</button>
+            <button class="type-btn"           data-type="paper"   onclick="selectType(this)">Paper</button>
+            <button class="type-btn"           data-type="insight" onclick="selectType(this)">Insight</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Mood</label>
+          <div class="mood-grid">
+            <button class="mood-btn" title="Great"    data-mood="great"    onclick="selectMood(this)">😄</button>
+            <button class="mood-btn" title="Good"     data-mood="good"     onclick="selectMood(this)">🙂</button>
+            <button class="mood-btn selected" title="Neutral" data-mood="neutral" onclick="selectMood(this)">😐</button>
+            <button class="mood-btn" title="Bad"      data-mood="bad"      onclick="selectMood(this)">🙁</button>
+            <button class="mood-btn" title="Terrible" data-mood="terrible" onclick="selectMood(this)">😤</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea id="j-body" class="form-textarea" placeholder="Describe your setup, reasoning, entry/exit levels, lessons learned..." rows="6"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tags (press Enter)</label>
+          <div class="tag-input" id="tag-container">
+            <input class="tag-field" id="tag-field" placeholder="Add tag..." onkeydown="addTag(event)" />
+          </div>
+        </div>
+
+        <div id="add-error" style="color:var(--red);font-size:9.5pt;margin-bottom:10px;display:none"></div>
+
+        <button class="btn btn-primary" style="width:100%" onclick="submitEntry()">Save Entry</button>
+      </div>
+    </div>
+
+    <!-- Entries List -->
+    <div>
+      <div class="filter-bar">
+        <input class="filter-input" id="filter-ticker" placeholder="Filter by ticker..." style="width:140px" oninput="filterEntries()" />
+        <input class="filter-input" id="filter-tag"    placeholder="Filter by tag..."    style="width:140px" oninput="filterEntries()" />
+        <span id="entry-count" style="color:var(--muted);font-size:9.5pt;margin-left:4px"></span>
+      </div>
+      <div id="entries-body">
+        <div class="loading">Loading entries...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _selectedMood = 'neutral';
+let _selectedType = 'long';
+let _tags = [];
+let _allEntries = [];
+
+const MOOD_ICONS = { great:'😄', good:'🙂', neutral:'😐', bad:'🙁', terrible:'😤' };
+
+function selectMood(btn) {
+  document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  _selectedMood = btn.dataset.mood;
+}
+
+function selectType(btn) {
+  document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  _selectedType = btn.dataset.type;
+}
+
+function addTag(e) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const val = e.target.value.trim().replace(/[^a-zA-Z0-9\-_]/g, '').toLowerCase();
+  if (!val || _tags.includes(val) || _tags.length >= 10) { e.target.value = ''; return; }
+  _tags.push(val);
+  renderTags();
+  e.target.value = '';
+}
+
+function removeTag(tag) {
+  _tags = _tags.filter(t => t !== tag);
+  renderTags();
+}
+
+function renderTags() {
+  const container = document.getElementById('tag-container');
+  const field     = document.getElementById('tag-field');
+  container.innerHTML = '';
+  _tags.forEach(t => {
+    const el = document.createElement('span');
+    el.className = 'tag';
+    el.innerHTML = `${t}<button onclick="removeTag('${t}')" title="Remove">×</button>`;
+    container.appendChild(el);
+  });
+  container.appendChild(field);
+}
+
+async function submitEntry() {
+  const title = document.getElementById('j-title').value.trim();
+  const body  = document.getElementById('j-body').value.trim();
+  const ticker= document.getElementById('j-ticker').value.trim().toUpperCase();
+  const errEl = document.getElementById('add-error');
+  errEl.style.display = 'none';
+
+  if (!title) { errEl.textContent = 'Title is required'; errEl.style.display='block'; return; }
+  if (!body)  { errEl.textContent = 'Notes are required'; errEl.style.display='block'; return; }
+
+  const payload = {
+    title, body, ticker: ticker || null, mood: _selectedMood,
+    trade_type: _selectedType, tags: _tags.join(','),
+  };
+
+  try {
+    const r = await fetch('/api/journal/add', { method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const d = await r.json();
+    if (!d.ok) { errEl.textContent = d.error; errEl.style.display='block'; return; }
+    document.getElementById('j-title').value = '';
+    document.getElementById('j-body').value  = '';
+    document.getElementById('j-ticker').value = '';
+    _tags = []; renderTags();
+    loadEntries();
+  } catch(e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteEntry(id) {
+  if (!confirm('Delete this journal entry?')) return;
+  const r = await fetch('/api/journal/delete', { method:'POST',
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({id}) });
+  const d = await r.json();
+  if (d.ok) loadEntries();
+}
+
+async function loadEntries() {
+  const el = document.getElementById('entries-body');
+  el.innerHTML = '<div class="loading">Loading entries...</div>';
+  try {
+    const r = await fetch('/api/journal');
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = `<div class="loading" style="color:var(--red)">${d.error}</div>`; return; }
+    _allEntries = d.entries;
+    updateStats();
+    renderEntries(_allEntries);
+  } catch(e) {
+    el.innerHTML = `<div class="loading" style="color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function filterEntries() {
+  const ticker = document.getElementById('filter-ticker').value.toUpperCase();
+  const tag    = document.getElementById('filter-tag').value.toLowerCase();
+  const filtered = _allEntries.filter(e => {
+    const matchTicker = !ticker || (e.ticker || '').includes(ticker);
+    const matchTag    = !tag    || (e.tags || '').toLowerCase().includes(tag);
+    return matchTicker && matchTag;
+  });
+  renderEntries(filtered);
+}
+
+function renderEntries(entries) {
+  const el = document.getElementById('entries-body');
+  const countEl = document.getElementById('entry-count');
+  countEl.textContent = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}`;
+
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📔</div><div>No journal entries yet.<br>Write your first entry to get started.</div></div>';
+    return;
+  }
+
+  const html = entries.map(e => {
+    const mood  = e.mood ? MOOD_ICONS[e.mood] : '';
+    const typeColor = {long:'var(--green)',short:'var(--red)',paper:'var(--blue)',insight:'var(--yellow)'}[e.trade_type] || 'var(--muted)';
+    const typeLbl  = e.trade_type ? `<span style="color:${typeColor};font-weight:600;text-transform:uppercase;font-size:8.5pt">${e.trade_type}</span>` : '';
+    const tickerBadge = e.ticker ? `<a href="/predict?ticker=${e.ticker}" style="color:var(--accent);font-weight:700;text-decoration:none">${e.ticker}</a>` : '';
+    const tags = (e.tags || '').split(',').filter(Boolean).map(t =>
+      `<span class="entry-tag">#${t.trim()}</span>`).join('');
+    const bodyPreview = (e.body || '').slice(0, 250) + ((e.body || '').length > 250 ? '...' : '');
+    return `<div class="entry-card">
+      <div class="entry-header">
+        <div class="entry-title">${e.title}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <span class="mood-icon">${mood}</span>
+          <button class="btn btn-danger" style="padding:4px 10px;font-size:8.5pt" onclick="deleteEntry(${e.id})">Delete</button>
+        </div>
+      </div>
+      <div class="entry-meta">
+        ${tickerBadge}
+        ${typeLbl}
+        <span>${e.created_at}</span>
+      </div>
+      <div class="entry-body">${bodyPreview}</div>
+      ${tags ? `<div class="entry-tags">${tags}</div>` : ''}
+    </div>`;
+  }).join('');
+  el.innerHTML = `<div class="entry-list">${html}</div>`;
+}
+
+function updateStats() {
+  const total   = _allEntries.length;
+  const tickers = new Set(_allEntries.map(e => e.ticker).filter(Boolean)).size;
+  const allTags = _allEntries.flatMap(e => (e.tags||'').split(',').filter(Boolean));
+  const uniqueTags = new Set(allTags).size;
+  const moodMap = {great:5,good:4,neutral:3,bad:2,terrible:1};
+  const moodVals = _allEntries.map(e => moodMap[e.mood]).filter(Boolean);
+  const avgMood  = moodVals.length ? moodVals.reduce((a,b)=>a+b,0)/moodVals.length : 3;
+  const avgMoodIcon = avgMood >= 4.5 ? '😄' : avgMood >= 3.5 ? '🙂' : avgMood >= 2.5 ? '😐' : avgMood >= 1.5 ? '🙁' : '😤';
+
+  document.getElementById('stat-total').textContent    = total;
+  document.getElementById('stat-mood-avg').textContent = avgMoodIcon;
+  document.getElementById('stat-tickers').textContent  = tickers;
+  document.getElementById('stat-tags').textContent     = uniqueTags;
+  if (total > 0) document.getElementById('stats-row').style.display = 'grid';
+}
+
+// Initialize
+loadEntries();
+</script>
+</body>
+</html>

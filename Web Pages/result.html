@@ -1267,6 +1267,67 @@
       </div>
     </div>
 
+    <!-- News Sentiment + Feature Importance Row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+      <!-- Sentiment -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <h3 style="font-size:11pt;font-weight:600">News Sentiment</h3>
+            <div style="font-size:8.5pt;color:var(--muted);margin-top:2px">Keyword analysis across latest headlines</div>
+          </div>
+          <button id="sentBtn" onclick="loadSentiment()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:6px 13px;border-radius:6px;font-size:9.5pt;cursor:pointer">Analyze</button>
+        </div>
+        <div id="sentResult" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <div id="sent-score" style="font-size:28pt;font-weight:700">—</div>
+            <div>
+              <div id="sent-label" style="font-size:12pt;font-weight:700">—</div>
+              <div id="sent-meta" style="font-size:9pt;color:var(--muted)"></div>
+            </div>
+          </div>
+          <div id="sent-headlines" style="display:flex;flex-direction:column;gap:6px"></div>
+        </div>
+      </div>
+      <!-- Feature Importance -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <h3 style="font-size:11pt;font-weight:600">Model Drivers</h3>
+            <div style="font-size:8.5pt;color:var(--muted);margin-top:2px">Random Forest feature importance</div>
+          </div>
+          <button id="featBtn" onclick="loadFeatureImportance()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:6px 13px;border-radius:6px;font-size:9.5pt;cursor:pointer">Load</button>
+        </div>
+        <div id="featResult" style="display:none;font-size:9pt;color:var(--muted)">
+          <div id="feat-bars" style="display:flex;flex-direction:column;gap:7px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Short Interest + Analyst Targets Row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
+      <!-- Short Interest -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3 style="font-size:11pt;font-weight:600">Short Interest</h3>
+          <button onclick="loadShortInterest()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:6px 13px;border-radius:6px;font-size:9.5pt;cursor:pointer">Load</button>
+        </div>
+        <div id="short-result">
+          <div style="color:var(--muted);font-size:9.5pt">Click Load to fetch data</div>
+        </div>
+      </div>
+      <!-- Analyst Targets -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3 style="font-size:11pt;font-weight:600">Analyst Targets</h3>
+          <button onclick="loadAnalystTargets()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:6px 13px;border-radius:6px;font-size:9.5pt;cursor:pointer">Load</button>
+        </div>
+        <div id="analyst-result">
+          <div style="color:var(--muted);font-size:9.5pt">Click Load to fetch data</div>
+        </div>
+      </div>
+    </div>
+
     <!-- AI Market Analyst -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -1710,6 +1771,110 @@ if (_isPro) {
     });
 })();
 {% endif %}
+
+// ── Sentiment Analysis ─────────────────────────────────────────────────────
+async function loadSentiment() {
+  const btn = document.getElementById('sentBtn');
+  btn.textContent = '...';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/sentiment/{{ ticker }}');
+    const d = await r.json();
+    if (!d.ok) { btn.textContent = 'Error'; btn.disabled = false; return; }
+    document.getElementById('sent-score').textContent = d.label;
+    document.getElementById('sent-score').style.color = d.color;
+    document.getElementById('sent-label').textContent = (d.score >= 0 ? '+' : '') + d.score.toFixed(2);
+    document.getElementById('sent-label').style.color = d.color;
+    document.getElementById('sent-meta').textContent  = `${d.analyzed} articles analyzed`;
+    const hl = document.getElementById('sent-headlines');
+    hl.innerHTML = (d.headlines || []).map(h => {
+      const c = h.score > 0 ? '#69F0AE' : h.score < 0 ? '#FF5252' : '#7A8499';
+      return `<a href="${h.url}" target="_blank" rel="noopener" style="display:block;text-decoration:none;background:var(--surface2);border-radius:5px;padding:7px 10px;border:1px solid var(--border)">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c};margin-right:6px"></span>
+        <span style="font-size:9pt;color:var(--text)">${h.title}</span>
+      </a>`;
+    }).join('');
+    document.getElementById('sentResult').style.display = 'block';
+    btn.textContent = 'Refresh'; btn.disabled = false;
+  } catch(e) { btn.textContent = 'Error'; btn.disabled = false; }
+}
+
+// ── Feature Importance ─────────────────────────────────────────────────────
+async function loadFeatureImportance() {
+  const btn = document.getElementById('featBtn');
+  btn.textContent = '...'; btn.disabled = true;
+  try {
+    const r = await fetch('/api/feature-importance/{{ ticker }}');
+    const d = await r.json();
+    if (!d.ok) {
+      document.getElementById('feat-bars').innerHTML = `<div style="color:var(--muted)">${d.error}</div>`;
+      document.getElementById('featResult').style.display = 'block';
+      btn.textContent = 'Load'; btn.disabled = false; return;
+    }
+    const maxImp = Math.max(...d.features.map(f => f.importance));
+    document.getElementById('feat-bars').innerHTML = d.features.map(f => {
+      const pct = (f.importance / maxImp * 100).toFixed(1);
+      return `<div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="color:var(--text)">${f.name}</span>
+          <span style="color:var(--muted)">${(f.importance*100).toFixed(2)}%</span>
+        </div>
+        <div style="background:var(--border);border-radius:3px;height:5px">
+          <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:3px"></div>
+        </div>
+      </div>`;
+    }).join('');
+    document.getElementById('featResult').style.display = 'block';
+    btn.textContent = 'Refresh'; btn.disabled = false;
+  } catch(e) { btn.textContent = 'Load'; btn.disabled = false; }
+}
+
+// ── Short Interest ─────────────────────────────────────────────────────────
+async function loadShortInterest() {
+  const el = document.getElementById('short-result');
+  el.innerHTML = '<span style="color:var(--muted)">Loading…</span>';
+  try {
+    const r = await fetch('/api/short-interest/{{ ticker }}');
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">${d.error}</span>`; return; }
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:9.5pt;margin-bottom:10px">
+        <div><span style="color:var(--muted)">Short Float:</span><br><strong>${d.short_pct}%</strong></div>
+        <div><span style="color:var(--muted)">Days to Cover:</span><br><strong>${d.short_ratio}</strong></div>
+        <div><span style="color:var(--muted)">Institutional:</span><br><strong>${d.institutional_pct}%</strong></div>
+        <div><span style="color:var(--muted)">Insider Hold:</span><br><strong>${d.insider_pct}%</strong></div>
+      </div>
+      ${d.top_holders.length ? '<div style="font-size:8.5pt;color:var(--muted);margin-bottom:4px">TOP HOLDERS</div>' + d.top_holders.map(h =>
+        `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:9pt">
+          <span style="color:var(--text)">${h.holder.slice(0,28)}</span>
+          <span style="color:var(--muted)">${h.pct.toFixed(1)}%</span>
+        </div>`).join('') : ''}`;
+  } catch(e) { el.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`; }
+}
+
+// ── Analyst Targets ────────────────────────────────────────────────────────
+async function loadAnalystTargets() {
+  const el = document.getElementById('analyst-result');
+  el.innerHTML = '<span style="color:var(--muted)">Loading…</span>';
+  try {
+    const r = await fetch('/api/analyst-targets/{{ ticker }}');
+    const d = await r.json();
+    if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">${d.error}</span>`; return; }
+    const recColor = {buy:'#69F0AE',strong_buy:'#00C853',hold:'#FFD54F',sell:'#FF5252',underperform:'#FF8A65'}[d.recommendation] || '#7A8499';
+    const upside = d.current_price > 0 ? ((d.target_mean / d.current_price - 1) * 100).toFixed(1) : '—';
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+        <span style="font-size:18pt;font-weight:700;color:${recColor}">${(d.recommendation||'—').toUpperCase().replace('_',' ')}</span>
+        <div style="font-size:9pt;color:var(--muted)">${d.analyst_count} analysts</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:9.5pt">
+        <div><span style="color:var(--muted)">Low</span><br><strong>$${d.target_low}</strong></div>
+        <div><span style="color:var(--muted)">Mean</span><br><strong style="color:var(--accent)">$${d.target_mean}</strong></div>
+        <div><span style="color:var(--muted)">High</span><br><strong>$${d.target_high}</strong></div>
+      </div>
+      <div style="margin-top:10px;font-size:9pt;color:var(--muted)">Upside to mean: <strong style="color:${upside>0?'var(--green)':'var(--red)'}">${upside}%</strong></div>`;
+  } catch(e) { el.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`; }
+}
 </script>
 
 </body>

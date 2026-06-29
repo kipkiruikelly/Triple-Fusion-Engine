@@ -26,7 +26,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from datetime import date, datetime, timedelta
-from flask import Flask, render_template, request, jsonify, redirect, url_for, g, flash, Response, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, g, flash, Response, make_response, stream_with_context
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -226,6 +226,88 @@ class TelegramConfig(db.Model):
     enabled  = db.Column(db.Boolean, default=True)
 
 
+class Notification(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    type       = db.Column(db.String(20), nullable=False, default='info')
+    title      = db.Column(db.String(100), nullable=False)
+    body       = db.Column(db.String(300), nullable=True)
+    read       = db.Column(db.Boolean, default=False)
+    link       = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TradeJournal(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    ticker     = db.Column(db.String(12), nullable=True)
+    title      = db.Column(db.String(100), nullable=False)
+    body       = db.Column(db.Text, nullable=False)
+    mood       = db.Column(db.String(10), nullable=True)
+    tags       = db.Column(db.String(200), nullable=True)
+    trade_type = db.Column(db.String(10), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class DiscordConfig(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
+    webhook_url = db.Column(db.String(400), nullable=False)
+    enabled     = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class GiftCode(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    code       = db.Column(db.String(24), unique=True, nullable=False)
+    days       = db.Column(db.Integer, nullable=False, default=30)
+    used       = db.Column(db.Boolean, default=False)
+    used_by    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    used_at    = db.Column(db.DateTime, nullable=True)
+    note       = db.Column(db.String(100), nullable=True)
+
+
+class UserWebhook(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    url        = db.Column(db.String(500), nullable=False)
+    name       = db.Column(db.String(50), nullable=False, default='My Webhook')
+    events     = db.Column(db.String(100), nullable=True)
+    secret     = db.Column(db.String(32), nullable=True)
+    active     = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_fired = db.Column(db.DateTime, nullable=True)
+    fire_count = db.Column(db.Integer, default=0)
+
+
+class ActivityLog(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    action     = db.Column(db.String(50), nullable=False)
+    detail     = db.Column(db.String(200), nullable=True)
+    ip         = db.Column(db.String(45), nullable=True)
+    ua         = db.Column(db.String(200), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TwoFactorAuth(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
+    secret       = db.Column(db.String(32), nullable=False)
+    enabled      = db.Column(db.Boolean, default=False)
+    backup_codes = db.Column(db.String(300), nullable=True)
+
+
+class UserPreferences(db.Model):
+    id             = db.Column(db.Integer, primary_key=True)
+    user_id        = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)
+    digest_enabled = db.Column(db.Boolean, default=False)
+    theme          = db.Column(db.String(10), default='dark')
+    default_ticker = db.Column(db.String(12), default='AAPL')
+    timezone       = db.Column(db.String(50), default='UTC')
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -282,6 +364,30 @@ with app.app_context():
     ]:
         _c2.execute(_ddl)
     _c2.commit(); _c2.close()
+
+    # Wave-3 migrations
+    import sqlite3 as _sqlite3c
+    _c3 = _sqlite3c.connect(os.path.join(BASE_DIR, 'instance', 'users.db'))
+    for _tbl3, _ddl3 in [
+        ("notification",
+         "CREATE TABLE IF NOT EXISTS notification (id INTEGER PRIMARY KEY, user_id INTEGER, type TEXT DEFAULT 'info', title TEXT, body TEXT, read INTEGER DEFAULT 0, link TEXT, created_at DATETIME, FOREIGN KEY(user_id) REFERENCES user(id))"),
+        ("trade_journal",
+         "CREATE TABLE IF NOT EXISTS trade_journal (id INTEGER PRIMARY KEY, user_id INTEGER, ticker TEXT, title TEXT, body TEXT, mood TEXT, tags TEXT, trade_type TEXT, created_at DATETIME, FOREIGN KEY(user_id) REFERENCES user(id))"),
+        ("discord_config",
+         "CREATE TABLE IF NOT EXISTS discord_config (id INTEGER PRIMARY KEY, user_id INTEGER UNIQUE, webhook_url TEXT, enabled INTEGER DEFAULT 1, created_at DATETIME, FOREIGN KEY(user_id) REFERENCES user(id))"),
+        ("gift_code",
+         "CREATE TABLE IF NOT EXISTS gift_code (id INTEGER PRIMARY KEY, code TEXT UNIQUE, days INTEGER DEFAULT 30, used INTEGER DEFAULT 0, used_by INTEGER, created_at DATETIME, used_at DATETIME, note TEXT)"),
+        ("user_webhook",
+         "CREATE TABLE IF NOT EXISTS user_webhook (id INTEGER PRIMARY KEY, user_id INTEGER, url TEXT, name TEXT DEFAULT 'My Webhook', events TEXT, secret TEXT, active INTEGER DEFAULT 1, created_at DATETIME, last_fired DATETIME, fire_count INTEGER DEFAULT 0, FOREIGN KEY(user_id) REFERENCES user(id))"),
+        ("activity_log",
+         "CREATE TABLE IF NOT EXISTS activity_log (id INTEGER PRIMARY KEY, user_id INTEGER, action TEXT, detail TEXT, ip TEXT, ua TEXT, created_at DATETIME, FOREIGN KEY(user_id) REFERENCES user(id))"),
+        ("two_factor_auth",
+         "CREATE TABLE IF NOT EXISTS two_factor_auth (id INTEGER PRIMARY KEY, user_id INTEGER UNIQUE, secret TEXT, enabled INTEGER DEFAULT 0, backup_codes TEXT, FOREIGN KEY(user_id) REFERENCES user(id))"),
+        ("user_preferences",
+         "CREATE TABLE IF NOT EXISTS user_preferences (id INTEGER PRIMARY KEY, user_id INTEGER UNIQUE, digest_enabled INTEGER DEFAULT 0, theme TEXT DEFAULT 'dark', default_ticker TEXT DEFAULT 'AAPL', timezone TEXT DEFAULT 'UTC', FOREIGN KEY(user_id) REFERENCES user(id))"),
+    ]:
+        _c3.execute(_ddl3)
+    _c3.commit(); _c3.close()
 
 
 # ── Auth routes ─────────────────────────────────────────────────────────────
@@ -1993,6 +2099,1034 @@ def reset_password(token):
             db.session.commit()
             return redirect(url_for("login"))
     return render_template("reset_password.html", token=token, error=error, invalid=False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WAVE 3 — ADVANCED ANALYTICS & PLATFORM (25 new features)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+try:
+    import pyotp as _pyotp
+    _PYOTP_OK = True
+except ImportError:
+    _pyotp = None
+    _PYOTP_OK = False
+
+_POSITIVE_WORDS = {
+    "rally","surge","soar","rise","gain","beat","record","profit","strong","growth",
+    "upgrade","outperform","positive","boost","buy","breakout","milestone","expand",
+    "exceed","robust","recover","rebound","launch","partner","deal","approve",
+}
+_NEGATIVE_WORDS = {
+    "crash","fall","plunge","drop","loss","miss","decline","weak","cut","sell",
+    "underperform","warning","concern","risk","debt","layoff","downgrade","recall",
+    "investigation","lawsuit","fraud","default","bankruptcy","halt","suspend","probe",
+}
+
+_SECTOR_ETFS = {
+    "Technology":       "XLK",
+    "Healthcare":       "XLV",
+    "Financials":       "XLF",
+    "Consumer Disc":    "XLY",
+    "Industrials":      "XLI",
+    "Energy":           "XLE",
+    "Consumer Staples": "XLP",
+    "Real Estate":      "XLRE",
+    "Materials":        "XLB",
+    "Utilities":        "XLU",
+    "Communication":    "XLC",
+}
+
+
+# ── Wave-3 helper functions ───────────────────────────────────────────────────
+
+def _add_notification(user_id, ntype, title, body=None, link=None):
+    try:
+        with app.app_context():
+            n = Notification(user_id=user_id, type=ntype, title=title, body=body, link=link)
+            db.session.add(n)
+            db.session.commit()
+    except Exception:
+        pass
+
+
+def _fire_webhooks(user_id, event, payload):
+    import hmac as _hmac
+    try:
+        hooks = UserWebhook.query.filter_by(user_id=user_id, active=True).all()
+        for hook in hooks:
+            evts = (hook.events or "alert,signal").split(",")
+            if event not in evts:
+                continue
+            try:
+                import requests as _req
+                body_str = _json_std.dumps({"event": event, "data": payload})
+                headers = {"Content-Type": "application/json", "X-BullLogic-Event": event}
+                if hook.secret:
+                    sig = _hmac.new(hook.secret.encode(), body_str.encode(), "sha256").hexdigest()
+                    headers["X-BullLogic-Signature"] = f"sha256={sig}"
+                _req.post(hook.url, data=body_str, headers=headers, timeout=5)
+                hook.last_fired = datetime.utcnow()
+                hook.fire_count = (hook.fire_count or 0) + 1
+                db.session.commit()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _send_discord(webhook_url, title, body, color=0x00AA55):
+    try:
+        import requests as _req
+        _req.post(webhook_url, json={
+            "embeds": [{"title": title, "description": body,
+                        "color": color, "footer": {"text": "BullLogic"}}]
+        }, timeout=5)
+    except Exception:
+        pass
+
+
+def _log_activity(user_id, action, detail=None):
+    try:
+        ip = request.remote_addr if request else None
+        ua = (request.headers.get("User-Agent") or "")[:200] if request else None
+        entry = ActivityLog(user_id=user_id, action=action, detail=detail, ip=ip, ua=ua)
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        pass
+
+
+# ── Real-time SSE price stream ────────────────────────────────────────────────
+
+@app.route("/api/stream/prices")
+@login_required
+def stream_prices():
+    import yfinance as yf
+    tickers = request.args.getlist("t") or ["AAPL", "MSFT", "TSLA", "NVDA", "SPY"]
+    tickers = [t.upper() for t in tickers[:15]]
+
+    def generate():
+        while True:
+            batch = {}
+            for t in tickers:
+                try:
+                    fi = yf.Ticker(t).fast_info
+                    lp = float(fi.last_price or 0)
+                    pc = float(fi.previous_close or 0)
+                    batch[t] = {
+                        "price": round(lp, 4),
+                        "prev":  round(pc, 4),
+                        "chg":   round(lp - pc, 4),
+                        "pct":   round((lp - pc) / pc * 100 if pc else 0, 2),
+                    }
+                except Exception:
+                    pass
+            yield f"data: {_json_std.dumps(batch)}\n\n"
+            time.sleep(8)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"},
+    )
+
+
+# ── Fear & Greed Index ────────────────────────────────────────────────────────
+
+@app.route("/api/fear-greed")
+@login_required
+def api_fear_greed():
+    try:
+        import yfinance as yf
+        import pandas as pd
+        import ta as _ta
+
+        spy_hist = yf.download("SPY", period="1y", interval="1d", auto_adjust=True, progress=False)
+        if isinstance(spy_hist.columns, pd.MultiIndex):
+            spy_hist.columns = spy_hist.columns.get_level_values(0)
+        spy_close = spy_hist["Close"].dropna()
+
+        mom_score = 50.0
+        if len(spy_close) >= 125:
+            ma125 = spy_close.rolling(125).mean().iloc[-1]
+            ratio = float(spy_close.iloc[-1]) / float(ma125)
+            mom_score = max(0.0, min(100.0, (ratio - 0.9) / 0.2 * 100))
+
+        vix_hist = yf.download("^VIX", period="30d", interval="1d", auto_adjust=True, progress=False)
+        if isinstance(vix_hist.columns, pd.MultiIndex):
+            vix_hist.columns = vix_hist.columns.get_level_values(0)
+        vix_level = float(vix_hist["Close"].iloc[-1]) if not vix_hist.empty else 20.0
+        vol_score = max(0.0, min(100.0, (40 - vix_level) / 30 * 100))
+
+        rsi_val = 50.0
+        if len(spy_close) >= 14:
+            rsi_val = float(_ta.momentum.rsi(spy_close, window=14).iloc[-1])
+
+        h52 = float(spy_close.rolling(252, min_periods=100).max().iloc[-1])
+        l52 = float(spy_close.rolling(252, min_periods=100).min().iloc[-1])
+        hl_score = (float(spy_close.iloc[-1]) - l52) / (h52 - l52) * 100 if h52 != l52 else 50.0
+
+        composite = max(0, min(100, int(round(
+            mom_score * 0.30 + vol_score * 0.30 + rsi_val * 0.20 + hl_score * 0.20
+        ))))
+
+        if composite >= 75:   label, color = "Extreme Greed", "#00C853"
+        elif composite >= 55: label, color = "Greed",          "#69F0AE"
+        elif composite >= 45: label, color = "Neutral",        "#FFD54F"
+        elif composite >= 25: label, color = "Fear",           "#FF8A65"
+        else:                 label, color = "Extreme Fear",   "#FF5252"
+
+        return jsonify({
+            "ok": True, "score": composite, "label": label, "color": color,
+            "vix": round(vix_level, 1), "rsi": round(rsi_val, 1),
+            "components": {
+                "momentum":   round(mom_score),
+                "volatility": round(vol_score),
+                "rsi":        round(rsi_val),
+                "breadth":    round(hl_score),
+            },
+        })
+    except Exception as e:
+        return jsonify({"ok": True, "score": 50, "label": "Neutral", "color": "#FFD54F",
+                        "vix": 0, "rsi": 50, "components": {}, "error": str(e)})
+
+
+# ── Correlation matrix ────────────────────────────────────────────────────────
+
+@app.route("/api/correlation")
+@login_required
+def api_correlation():
+    try:
+        import yfinance as yf
+        import pandas as pd
+
+        tickers = request.args.getlist("t")
+        if not tickers:
+            items = WatchlistItem.query.filter_by(user_id=current_user.id).all()
+            tickers = [i.ticker for i in items]
+        if len(tickers) < 2:
+            return jsonify({"ok": False, "error": "Add at least 2 tickers to your watchlist"})
+        tickers = [t.upper() for t in tickers[:12]]
+
+        raw = yf.download(tickers, period="3mo", interval="1d", auto_adjust=True, progress=False)
+        close = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=tickers[0])
+        close = close.dropna(axis=1, how="all")
+        rets  = close.pct_change().dropna()
+        corr  = rets.corr().round(3)
+
+        return jsonify({"ok": True, "tickers": list(corr.columns), "matrix": corr.values.tolist()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── News sentiment ────────────────────────────────────────────────────────────
+
+@app.route("/api/sentiment/<ticker>")
+@login_required
+def api_sentiment(ticker):
+    try:
+        import yfinance as yf
+        news = yf.Ticker(ticker.upper()).news or []
+        scores, headlines = [], []
+        for item in news[:15]:
+            content = item.get("content") or {}
+            title   = (content.get("title") or item.get("title") or "").lower()
+            pos = sum(1 for w in _POSITIVE_WORDS if w in title)
+            neg = sum(1 for w in _NEGATIVE_WORDS if w in title)
+            s   = (pos - neg) / (pos + neg) if (pos + neg) else 0
+            scores.append(s)
+            url = (content.get("canonicalUrl") or {}).get("url") or item.get("link", "")
+            headlines.append({"title": title[:120], "score": round(s, 2), "url": url})
+
+        avg = round(sum(scores) / len(scores), 3) if scores else 0
+        if avg > 0.25:   label, color = "Bullish",          "#69F0AE"
+        elif avg > 0.0:  label, color = "Slightly Bullish", "#B9F6CA"
+        elif avg > -0.25:label, color = "Slightly Bearish", "#FFAB91"
+        else:            label, color = "Bearish",          "#FF5252"
+
+        return jsonify({
+            "ok": True, "ticker": ticker.upper(),
+            "score": avg, "label": label, "color": color,
+            "article_count": len(news), "analyzed": len(scores),
+            "headlines": headlines[:8],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── ML feature importance ─────────────────────────────────────────────────────
+
+@app.route("/api/feature-importance/<ticker>")
+@login_required
+def api_feature_importance(ticker):
+    try:
+        import joblib
+        ticker = ticker.upper()
+        models_dir = os.path.join(BASE_DIR, "Saved Models")
+        rf_path   = os.path.join(models_dir, f"rf_model_{ticker}.pkl")
+        feat_path = os.path.join(models_dir, f"feature_cols_sklearn_{ticker}.pkl")
+        if not os.path.exists(rf_path):
+            return jsonify({"ok": False, "error": f"No model found for {ticker}. Run a prediction first."})
+        rf   = joblib.load(rf_path)
+        feat = joblib.load(feat_path)
+        pairs = sorted(zip(feat, rf.feature_importances_.tolist()), key=lambda x: x[1], reverse=True)[:15]
+        return jsonify({
+            "ok": True, "ticker": ticker,
+            "features": [{"name": n, "importance": round(v, 4)} for n, v in pairs],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Monte Carlo portfolio simulation ──────────────────────────────────────────
+
+@app.route("/api/monte-carlo", methods=["POST"])
+@login_required
+def api_monte_carlo():
+    try:
+        import yfinance as yf
+        import pandas as pd
+        import numpy as np
+
+        data    = request.get_json() or {}
+        tickers = data.get("tickers", ["AAPL"])[:10]
+        weights = data.get("weights")
+        capital = float(data.get("capital", 10000))
+        days    = int(data.get("days", 252))
+        sims    = min(int(data.get("simulations", 500)), 1000)
+
+        raw = yf.download(tickers, period="2y", interval="1d", auto_adjust=True, progress=False)
+        prices = raw["Close"] if isinstance(raw.columns, pd.MultiIndex) else raw
+        if isinstance(prices, pd.Series):
+            prices = prices.to_frame(name=tickers[0])
+        rets = prices.pct_change().dropna()
+
+        w = np.array(weights if weights and len(weights) == len(tickers) else [1 / len(tickers)] * len(tickers))
+        w = w / w.sum()
+        port_r = rets.dot(w)
+        mu, sigma = float(port_r.mean()), float(port_r.std())
+
+        paths = np.zeros((sims, days))
+        for i in range(sims):
+            r = np.random.normal(mu, sigma, days)
+            paths[i] = capital * np.cumprod(1 + r)
+
+        final = paths[:, -1]
+        p5, p25, p50, p75, p95 = np.percentile(final, [5, 25, 50, 75, 95])
+        step = max(1, days // 60)
+
+        return jsonify({
+            "ok": True, "simulations": sims, "days": days, "capital": capital,
+            "final": {"p5": round(p5, 2), "p25": round(p25, 2),
+                      "p50": round(p50, 2), "p75": round(p75, 2), "p95": round(p95, 2)},
+            "chart": {
+                "p5":  [round(v, 2) for v in np.percentile(paths, 5,  axis=0)[::step]],
+                "p50": [round(v, 2) for v in np.percentile(paths, 50, axis=0)[::step]],
+                "p95": [round(v, 2) for v in np.percentile(paths, 95, axis=0)[::step]],
+            },
+            "prob_profit": round(float((final > capital).mean() * 100), 1),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Volume anomaly scanner ────────────────────────────────────────────────────
+
+@app.route("/api/scanner/volume")
+@login_required
+def api_scanner_volume():
+    import yfinance as yf
+    import pandas as pd
+    results = []
+
+    def _chk_vol(t):
+        try:
+            hist = yf.download(t, period="30d", interval="1d", auto_adjust=True, progress=False)
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist.columns = hist.columns.get_level_values(0)
+            if len(hist) < 10:
+                return
+            avg_vol = float(hist["Volume"].iloc[:-1].mean())
+            today   = float(hist["Volume"].iloc[-1])
+            ratio   = today / avg_vol if avg_vol > 0 else 1.0
+            price   = float(hist["Close"].iloc[-1])
+            chg     = float((hist["Close"].iloc[-1] / hist["Close"].iloc[-2] - 1) * 100)
+            results.append({"ticker": t, "price": round(price, 2),
+                            "volume": int(today), "avg_volume": int(avg_vol),
+                            "volume_ratio": round(ratio, 2), "pct_change": round(chg, 2)})
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(_chk_vol, SCREENER_TICKERS))
+    results.sort(key=lambda x: x["volume_ratio"], reverse=True)
+    return jsonify({"ok": True, "rows": results})
+
+
+# ── Short squeeze scanner ─────────────────────────────────────────────────────
+
+@app.route("/api/scanner/short-squeeze")
+@login_required
+def api_scanner_short_squeeze():
+    import yfinance as yf
+    import pandas as pd
+    import ta as _ta
+    results = []
+
+    def _chk_sq(t):
+        try:
+            info = yf.Ticker(t).info
+            sf   = (info.get("shortPercentOfFloat") or 0) * 100
+            sr   = info.get("shortRatio") or 0
+            price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+            hist = yf.download(t, period="30d", interval="1d", auto_adjust=True, progress=False)
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist.columns = hist.columns.get_level_values(0)
+            rsi_val = None
+            if len(hist) >= 14:
+                rsi_val = round(float(_ta.momentum.rsi(hist["Close"], window=14).iloc[-1]), 1)
+            mom = 0.0
+            if len(hist) >= 5:
+                mom = round(float((hist["Close"].iloc[-1] / hist["Close"].iloc[-5] - 1) * 100), 2)
+            results.append({
+                "ticker": t, "price": round(float(price), 2),
+                "short_float_pct": round(float(sf), 1),
+                "days_to_cover": round(float(sr), 1),
+                "rsi": rsi_val, "momentum_5d": mom,
+                "squeeze_score": round(float(sf) * 0.5 + max(0, mom) * 0.5, 1),
+            })
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        list(ex.map(_chk_sq, SCREENER_TICKERS))
+    results.sort(key=lambda x: x["squeeze_score"], reverse=True)
+    return jsonify({"ok": True, "rows": results})
+
+
+# ── Sector heatmap ────────────────────────────────────────────────────────────
+
+@app.route("/api/scanner/sector-heatmap")
+@login_required
+def api_scanner_sector_heatmap():
+    import yfinance as yf
+    import pandas as pd
+    results = []
+
+    def _chk_sector(item):
+        sector, etf = item
+        try:
+            hist = yf.download(etf, period="5d", interval="1d", auto_adjust=True, progress=False)
+            if isinstance(hist.columns, pd.MultiIndex):
+                hist.columns = hist.columns.get_level_values(0)
+            if len(hist) < 2:
+                return
+            d1 = round(float((hist["Close"].iloc[-1] / hist["Close"].iloc[-2] - 1) * 100), 2)
+            d5 = round(float((hist["Close"].iloc[-1] / hist["Close"].iloc[0]  - 1) * 100), 2)
+            results.append({"sector": sector, "etf": etf,
+                            "price": round(float(hist["Close"].iloc[-1]), 2),
+                            "d1": d1, "d5": d5,
+                            "volume": int(hist["Volume"].iloc[-1])})
+        except Exception:
+            pass
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(_chk_sector, _SECTOR_ETFS.items()))
+    results.sort(key=lambda x: x["d1"], reverse=True)
+    return jsonify({"ok": True, "sectors": results})
+
+
+# ── Short interest + institutional holders ────────────────────────────────────
+
+@app.route("/api/short-interest/<ticker>")
+@login_required
+def api_short_interest(ticker):
+    try:
+        import yfinance as yf
+        t    = yf.Ticker(ticker.upper())
+        info = t.info
+        holders = []
+        try:
+            ih = t.institutional_holders
+            if ih is not None and not ih.empty:
+                for _, row in ih.head(6).iterrows():
+                    holders.append({
+                        "holder": str(row.get("Holder", "")),
+                        "shares": int(row.get("Shares", 0)),
+                        "pct":    round(float(row.get("% Out", 0)) * 100, 2),
+                    })
+        except Exception:
+            pass
+        return jsonify({
+            "ok": True, "ticker": ticker.upper(),
+            "short_pct":   round(float((info.get("shortPercentOfFloat") or 0) * 100), 2),
+            "short_ratio": round(float(info.get("shortRatio") or 0), 2),
+            "float_shares": int(info.get("floatShares") or 0),
+            "institutional_pct": round(float((info.get("heldPercentInstitutions") or 0) * 100), 1),
+            "insider_pct":       round(float((info.get("heldPercentInsiders") or 0) * 100), 1),
+            "top_holders": holders,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Options chain ─────────────────────────────────────────────────────────────
+
+@app.route("/api/options/<ticker>")
+@login_required
+def api_options(ticker):
+    try:
+        import yfinance as yf
+        t    = yf.Ticker(ticker.upper())
+        exps = t.options
+        if not exps:
+            return jsonify({"ok": False, "error": "No options data available"})
+        exp = request.args.get("exp") or exps[0]
+        chain = t.option_chain(exp)
+        price = float(t.fast_info.last_price or 0)
+
+        def _fmt(df, otype):
+            rows = []
+            for _, r in df.iterrows():
+                try:
+                    vol = r.get("volume", 0)
+                    oi  = r.get("openInterest", 0)
+                    rows.append({
+                        "strike":  float(r.get("strike", 0) or 0),
+                        "iv":      round(float(r.get("impliedVolatility", 0) or 0) * 100, 1),
+                        "volume":  int(vol) if vol == vol else 0,  # NaN check
+                        "oi":      int(oi)  if oi  == oi  else 0,
+                        "bid":     float(r.get("bid", 0) or 0),
+                        "ask":     float(r.get("ask", 0) or 0),
+                        "itm":     bool(r.get("inTheMoney", False)),
+                        "type":    otype,
+                    })
+                except Exception:
+                    pass
+            return rows
+
+        calls = _fmt(chain.calls, "call")
+        puts  = _fmt(chain.puts,  "put")
+        near  = sorted(calls + puts, key=lambda x: abs(x["strike"] - price))[:20]
+        return jsonify({
+            "ok": True, "ticker": ticker.upper(), "expiry": exp,
+            "expirations": list(exps[:6]), "price": round(price, 2),
+            "calls": calls[:15], "puts": puts[:15], "near_atm": near,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Dividend history ──────────────────────────────────────────────────────────
+
+@app.route("/api/dividends/<ticker>")
+@login_required
+def api_dividends(ticker):
+    try:
+        import yfinance as yf
+        t    = yf.Ticker(ticker.upper())
+        info = t.info
+        divs = t.dividends
+        history = []
+        if divs is not None and not divs.empty:
+            for dt, val in divs.tail(12).items():
+                history.append({"date": str(dt.date()), "amount": round(float(val), 4)})
+        return jsonify({
+            "ok": True, "ticker": ticker.upper(),
+            "dividend_yield": round(float((info.get("dividendYield") or 0) * 100), 2),
+            "forward_annual": round(float(info.get("dividendRate") or 0), 4),
+            "payout_ratio":   round(float((info.get("payoutRatio") or 0) * 100), 1),
+            "ex_dividend_date": str(info.get("exDividendDate") or ""),
+            "history": list(reversed(history)),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Insider transactions ──────────────────────────────────────────────────────
+
+@app.route("/api/insiders/<ticker>")
+@login_required
+def api_insiders(ticker):
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker.upper())
+        rows = []
+        try:
+            insiders = t.insider_transactions
+            if insiders is not None and not insiders.empty:
+                for _, r in insiders.head(10).iterrows():
+                    rows.append({
+                        "insider":  str(r.get("Insider", "")),
+                        "relation": str(r.get("Relation", "")),
+                        "date":     str(r.get("Start Date", "")),
+                        "shares":   int(r.get("Shares", 0) or 0),
+                        "value":    int(r.get("Value", 0) or 0),
+                        "type":     str(r.get("Transaction", "")),
+                    })
+        except Exception:
+            pass
+        return jsonify({"ok": True, "ticker": ticker.upper(), "transactions": rows})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Analyst price targets ─────────────────────────────────────────────────────
+
+@app.route("/api/analyst-targets/<ticker>")
+@login_required
+def api_analyst_targets(ticker):
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker.upper()).info
+        return jsonify({
+            "ok": True, "ticker": ticker.upper(),
+            "current_price":  round(float(info.get("currentPrice") or 0), 2),
+            "target_mean":    round(float(info.get("targetMeanPrice") or 0), 2),
+            "target_high":    round(float(info.get("targetHighPrice") or 0), 2),
+            "target_low":     round(float(info.get("targetLowPrice") or 0), 2),
+            "target_median":  round(float(info.get("targetMedianPrice") or 0), 2),
+            "recommendation": str(info.get("recommendationKey") or "n/a"),
+            "analyst_count":  int(info.get("numberOfAnalystOpinions") or 0),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+# ── Scanner page ──────────────────────────────────────────────────────────────
+
+@app.route("/scanner")
+@login_required
+def scanner_page():
+    return render_template("scanner.html", user=current_user)
+
+
+# ── Notification bell API ─────────────────────────────────────────────────────
+
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    notifs = Notification.query.filter_by(user_id=current_user.id)\
+                               .order_by(Notification.created_at.desc()).limit(30).all()
+    unread = Notification.query.filter_by(user_id=current_user.id, read=False).count()
+    return jsonify({
+        "ok": True, "unread": unread,
+        "notifications": [{
+            "id": n.id, "type": n.type, "title": n.title, "body": n.body,
+            "read": n.read, "link": n.link,
+            "created_at": n.created_at.strftime("%Y-%m-%d %H:%M"),
+        } for n in notifs],
+    })
+
+
+@app.route("/api/notifications/read", methods=["POST"])
+@login_required
+def api_notifications_read():
+    nid = (request.get_json() or {}).get("id")
+    if nid:
+        n = Notification.query.filter_by(id=nid, user_id=current_user.id).first()
+        if n:
+            n.read = True
+            db.session.commit()
+    else:
+        Notification.query.filter_by(user_id=current_user.id, read=False)\
+                          .update({"read": True})
+        db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/notifications/clear", methods=["POST"])
+@login_required
+def api_notifications_clear():
+    Notification.query.filter_by(user_id=current_user.id).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ── Trade Journal ─────────────────────────────────────────────────────────────
+
+@app.route("/journal")
+@login_required
+def journal_page():
+    return render_template("journal.html", user=current_user)
+
+
+@app.route("/api/journal")
+@login_required
+def api_journal_list():
+    q = TradeJournal.query.filter_by(user_id=current_user.id)\
+                          .order_by(TradeJournal.created_at.desc())
+    tag = request.args.get("tag")
+    if tag:
+        q = q.filter(TradeJournal.tags.ilike(f"%{tag}%"))
+    ticker = request.args.get("ticker")
+    if ticker:
+        q = q.filter(TradeJournal.ticker == ticker.upper())
+    entries = q.limit(100).all()
+    return jsonify({"ok": True, "entries": [{
+        "id": e.id, "ticker": e.ticker, "title": e.title, "body": e.body[:300],
+        "mood": e.mood, "tags": e.tags, "trade_type": e.trade_type,
+        "created_at": e.created_at.strftime("%Y-%m-%d %H:%M"),
+    } for e in entries]})
+
+
+@app.route("/api/journal/add", methods=["POST"])
+@login_required
+def api_journal_add():
+    data  = request.get_json() or {}
+    title = (data.get("title") or "").strip()[:100]
+    body  = (data.get("body") or "").strip()
+    if not title or not body:
+        return jsonify({"ok": False, "error": "Title and body required"}), 400
+    entry = TradeJournal(
+        user_id    = current_user.id,
+        ticker     = (data.get("ticker") or "").upper()[:12] or None,
+        title      = title,
+        body       = body[:5000],
+        mood       = data.get("mood"),
+        tags       = (data.get("tags") or "")[:200],
+        trade_type = data.get("trade_type"),
+    )
+    db.session.add(entry)
+    db.session.commit()
+    _add_notification(current_user.id, "system", "Journal entry saved", title)
+    return jsonify({"ok": True, "id": entry.id})
+
+
+@app.route("/api/journal/delete", methods=["POST", "DELETE"])
+@login_required
+def api_journal_delete():
+    eid = (request.get_json() or {}).get("id")
+    e   = TradeJournal.query.filter_by(id=eid, user_id=current_user.id).first()
+    if not e:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    db.session.delete(e)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ── Discord webhook ───────────────────────────────────────────────────────────
+
+@app.route("/api/discord/configure", methods=["POST"])
+@login_required
+def api_discord_configure():
+    url = (request.get_json() or {}).get("webhook_url", "").strip()
+    if not url.startswith("https://discord.com/api/webhooks/"):
+        return jsonify({"ok": False, "error": "Invalid Discord webhook URL"}), 400
+    cfg = DiscordConfig.query.filter_by(user_id=current_user.id).first()
+    if cfg:
+        cfg.webhook_url = url
+        cfg.enabled = True
+    else:
+        cfg = DiscordConfig(user_id=current_user.id, webhook_url=url)
+        db.session.add(cfg)
+    db.session.commit()
+    _send_discord(url, "BullLogic Connected", f"Hi {current_user.username}! Discord alerts are now active.", 0xFF6B35)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/discord/status")
+@login_required
+def api_discord_status():
+    cfg = DiscordConfig.query.filter_by(user_id=current_user.id).first()
+    return jsonify({"ok": True, "configured": cfg is not None,
+                    "enabled": cfg.enabled if cfg else False})
+
+
+@app.route("/api/discord/remove", methods=["POST"])
+@login_required
+def api_discord_remove():
+    DiscordConfig.query.filter_by(user_id=current_user.id).delete()
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/discord/test", methods=["POST"])
+@login_required
+def api_discord_test():
+    cfg = DiscordConfig.query.filter_by(user_id=current_user.id).first()
+    if not cfg:
+        return jsonify({"ok": False, "error": "Discord not configured"}), 400
+    _send_discord(cfg.webhook_url, "BullLogic Test", "This is a test notification from BullLogic.", 0xFF6B35)
+    return jsonify({"ok": True})
+
+
+# ── Gift codes ────────────────────────────────────────────────────────────────
+
+@app.route("/api/gift-codes/generate", methods=["POST"])
+def api_gift_codes_generate():
+    admin_cookie = request.cookies.get("admin_token", "")
+    admin_pw     = os.environ.get("ADMIN_PASSWORD", "bulllogic-admin")
+    if not admin_cookie or not secrets.compare_digest(admin_cookie, admin_pw):
+        return jsonify({"ok": False, "error": "Unauthorized"}), 403
+    data = request.get_json() or {}
+    days = int(data.get("days", 30))
+    count = min(int(data.get("count", 1)), 20)
+    note  = (data.get("note") or "")[:100]
+    codes = []
+    for _ in range(count):
+        code = secrets.token_hex(6).upper()
+        gc   = GiftCode(code=code, days=days, note=note)
+        db.session.add(gc)
+        codes.append(code)
+    db.session.commit()
+    return jsonify({"ok": True, "codes": codes, "days": days})
+
+
+@app.route("/api/gift-codes/redeem", methods=["POST"])
+@login_required
+def api_gift_codes_redeem():
+    code = (request.get_json() or {}).get("code", "").upper().strip()
+    gc   = GiftCode.query.filter_by(code=code, used=False).first()
+    if not gc:
+        return jsonify({"ok": False, "error": "Invalid or already used code"}), 400
+    gc.used    = True
+    gc.used_by = current_user.id
+    gc.used_at = datetime.utcnow()
+    user = db.session.get(User, current_user.id)
+    if user.plan != "pro":
+        user.plan = "pro"
+        user.pro_expires_at = date.today() + timedelta(days=gc.days)
+    else:
+        if user.pro_expires_at:
+            user.pro_expires_at = user.pro_expires_at + timedelta(days=gc.days)
+        else:
+            user.pro_expires_at = date.today() + timedelta(days=gc.days)
+    db.session.commit()
+    _add_notification(current_user.id, "gift", "Pro activated!",
+                      f"Your gift code added {gc.days} days of Pro access.", "/profile")
+    return jsonify({"ok": True, "days_added": gc.days,
+                    "pro_until": str(user.pro_expires_at)})
+
+
+# ── Two-factor authentication ─────────────────────────────────────────────────
+
+@app.route("/api/2fa/setup")
+@login_required
+def api_2fa_setup():
+    if not _PYOTP_OK:
+        return jsonify({"ok": False, "error": "2FA library not installed (pip install pyotp)"}), 503
+    rec = TwoFactorAuth.query.filter_by(user_id=current_user.id).first()
+    if rec and rec.enabled:
+        return jsonify({"ok": False, "error": "2FA already enabled"}), 400
+    secret = _pyotp.random_base32()
+    if rec:
+        rec.secret = secret
+    else:
+        rec = TwoFactorAuth(user_id=current_user.id, secret=secret)
+        db.session.add(rec)
+    db.session.commit()
+    uri = _pyotp.totp.TOTP(secret).provisioning_uri(
+        name=current_user.email, issuer_name="BullLogic"
+    )
+    return jsonify({"ok": True, "secret": secret, "uri": uri})
+
+
+@app.route("/api/2fa/enable", methods=["POST"])
+@login_required
+def api_2fa_enable():
+    if not _PYOTP_OK:
+        return jsonify({"ok": False, "error": "2FA library not installed"}), 503
+    code = (request.get_json() or {}).get("code", "")
+    rec  = TwoFactorAuth.query.filter_by(user_id=current_user.id).first()
+    if not rec:
+        return jsonify({"ok": False, "error": "Run /api/2fa/setup first"}), 400
+    totp = _pyotp.TOTP(rec.secret)
+    if not totp.verify(code, valid_window=1):
+        return jsonify({"ok": False, "error": "Invalid code"}), 400
+    backup = [secrets.token_hex(4).upper() for _ in range(8)]
+    rec.enabled      = True
+    rec.backup_codes = _json_std.dumps(backup)
+    db.session.commit()
+    _add_notification(current_user.id, "system", "2FA Enabled",
+                      "Two-factor authentication is now active on your account.")
+    _log_activity(current_user.id, "2fa_enable")
+    return jsonify({"ok": True, "backup_codes": backup})
+
+
+@app.route("/api/2fa/disable", methods=["POST"])
+@login_required
+def api_2fa_disable():
+    if not _PYOTP_OK:
+        return jsonify({"ok": False, "error": "2FA library not installed"}), 503
+    data = request.get_json() or {}
+    code = data.get("code", "")
+    rec  = TwoFactorAuth.query.filter_by(user_id=current_user.id, enabled=True).first()
+    if not rec:
+        return jsonify({"ok": False, "error": "2FA is not enabled"}), 400
+    totp = _pyotp.TOTP(rec.secret)
+    pw   = data.get("password", "")
+    user = db.session.get(User, current_user.id)
+    if not user.check_password(pw):
+        return jsonify({"ok": False, "error": "Incorrect password"}), 400
+    if not totp.verify(code, valid_window=1):
+        return jsonify({"ok": False, "error": "Invalid 2FA code"}), 400
+    rec.enabled = False
+    db.session.commit()
+    _log_activity(current_user.id, "2fa_disable")
+    return jsonify({"ok": True})
+
+
+@app.route("/api/2fa/status")
+@login_required
+def api_2fa_status():
+    rec = TwoFactorAuth.query.filter_by(user_id=current_user.id).first()
+    return jsonify({"ok": True, "enabled": rec.enabled if rec else False,
+                    "available": _PYOTP_OK})
+
+
+# ── User webhooks ─────────────────────────────────────────────────────────────
+
+@app.route("/api/webhooks")
+@login_required
+def api_webhooks_list():
+    hooks = UserWebhook.query.filter_by(user_id=current_user.id).all()
+    return jsonify({"ok": True, "webhooks": [{
+        "id": h.id, "name": h.name, "url": h.url[:60] + "...",
+        "events": h.events, "active": h.active,
+        "fire_count": h.fire_count,
+        "last_fired": h.last_fired.strftime("%Y-%m-%d %H:%M") if h.last_fired else None,
+    } for h in hooks]})
+
+
+@app.route("/api/webhooks/add", methods=["POST"])
+@login_required
+def api_webhooks_add():
+    data = request.get_json() or {}
+    url  = (data.get("url") or "").strip()
+    if not url.startswith("http"):
+        return jsonify({"ok": False, "error": "URL must start with http"}), 400
+    if UserWebhook.query.filter_by(user_id=current_user.id).count() >= 5:
+        return jsonify({"ok": False, "error": "Max 5 webhooks per account"}), 400
+    hook = UserWebhook(
+        user_id = current_user.id,
+        url     = url[:500],
+        name    = (data.get("name") or "My Webhook")[:50],
+        events  = (data.get("events") or "alert,signal")[:100],
+        secret  = secrets.token_hex(16),
+    )
+    db.session.add(hook)
+    db.session.commit()
+    return jsonify({"ok": True, "id": hook.id, "secret": hook.secret})
+
+
+@app.route("/api/webhooks/delete", methods=["POST"])
+@login_required
+def api_webhooks_delete():
+    wid  = (request.get_json() or {}).get("id")
+    hook = UserWebhook.query.filter_by(id=wid, user_id=current_user.id).first()
+    if not hook:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    db.session.delete(hook)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/webhooks/test", methods=["POST"])
+@login_required
+def api_webhooks_test():
+    wid  = (request.get_json() or {}).get("id")
+    hook = UserWebhook.query.filter_by(id=wid, user_id=current_user.id).first()
+    if not hook:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    _fire_webhooks(current_user.id, "alert", {
+        "message": "BullLogic webhook test",
+        "ticker": "AAPL", "price": 195.0, "timestamp": datetime.utcnow().isoformat(),
+    })
+    return jsonify({"ok": True})
+
+
+# ── Activity log ──────────────────────────────────────────────────────────────
+
+@app.route("/api/activity-log")
+@login_required
+def api_activity_log():
+    entries = ActivityLog.query.filter_by(user_id=current_user.id)\
+                               .order_by(ActivityLog.created_at.desc()).limit(50).all()
+    return jsonify({"ok": True, "entries": [{
+        "action": e.action, "detail": e.detail, "ip": e.ip,
+        "ua": (e.ua or "")[:60],
+        "created_at": e.created_at.strftime("%Y-%m-%d %H:%M"),
+    } for e in entries]})
+
+
+# ── User preferences ──────────────────────────────────────────────────────────
+
+@app.route("/api/preferences", methods=["GET"])
+@login_required
+def api_preferences_get():
+    prefs = UserPreferences.query.filter_by(user_id=current_user.id).first()
+    return jsonify({
+        "ok": True,
+        "digest_enabled": prefs.digest_enabled if prefs else False,
+        "theme":          prefs.theme          if prefs else "dark",
+        "default_ticker": prefs.default_ticker if prefs else "AAPL",
+        "timezone":       prefs.timezone        if prefs else "UTC",
+    })
+
+
+@app.route("/api/preferences", methods=["POST"])
+@login_required
+def api_preferences_set():
+    data  = request.get_json() or {}
+    prefs = UserPreferences.query.filter_by(user_id=current_user.id).first()
+    if not prefs:
+        prefs = UserPreferences(user_id=current_user.id)
+        db.session.add(prefs)
+    if "digest_enabled" in data:
+        prefs.digest_enabled = bool(data["digest_enabled"])
+    if "theme" in data and data["theme"] in ("dark", "light"):
+        prefs.theme = data["theme"]
+    if "default_ticker" in data:
+        prefs.default_ticker = (data["default_ticker"] or "AAPL").upper()[:12]
+    if "timezone" in data:
+        prefs.timezone = (data["timezone"] or "UTC")[:50]
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+# ── Daily email digest ────────────────────────────────────────────────────────
+
+@app.route("/api/digest/send", methods=["POST"])
+@login_required
+def api_digest_send():
+    user = current_user
+    try:
+        signals = []
+        for t in SCREENER_TICKERS[:6]:
+            try:
+                sig = ml_signal(t, "1d")
+                signals.append(f"  {t}: {sig.get('action','?')} (conf {sig.get('confidence',0):.0%})")
+            except Exception:
+                pass
+        body_lines = [
+            f"Good morning {user.username}!",
+            "",
+            "BullLogic Daily Market Digest",
+            "=" * 30,
+            "",
+            "Top Scanner Signals:",
+            *signals,
+            "",
+            "Log in at bulllogic.app for full analysis.",
+            "",
+            "— BullLogic",
+        ]
+        if mail and app.config.get("MAIL_USERNAME") and user.email:
+            msg = MailMessage(
+                subject="BullLogic — Daily Market Digest",
+                recipients=[user.email],
+                body="\n".join(body_lines),
+            )
+            mail.send(msg)
+            _log_activity(user.id, "digest_sent")
+            return jsonify({"ok": True, "message": "Digest sent to your email"})
+        return jsonify({"ok": False, "error": "Email not configured"})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 
 if __name__ == "__main__":
