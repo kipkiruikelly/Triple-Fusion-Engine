@@ -979,7 +979,7 @@ def performance():
         "started": None, "total_ret": 0, "n_trades": 0, "win_rate": 0,
         "profit_factor": 0, "sharpe": 0, "sortino": 0, "max_dd": 0,
         "equity": 10_000, "trades": [], "equity_dates": "[]", "equity_vals": "[]",
-        "backtest_dates": "[]", "backtest_vals": "[]", "backtest_tickers": "[]",
+        "backtest_dates": "[]", "backtest_vals": "[]", "backtest_tickers": [],
     }
 
     # ── Live paper-trade equity ──
@@ -1866,7 +1866,7 @@ def api_calendar_macro():
     today  = date.today()
     events = []
     # Generate approximate recurring events for next 90 days
-    for offset in range(0, 90, 7):
+    for offset in range(0, 90):
         d = today + timedelta(days=offset)
         # FOMC meetings are roughly every 6-7 weeks; approximate first Wednesday
         if d.weekday() == 2 and offset % 42 < 7:
