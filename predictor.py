@@ -123,6 +123,24 @@ def _model_suffix(interval: str) -> str:
     return "" if interval == "1d" else f"_{interval}"
 
 
+def _infer_model(model, X: np.ndarray, current_price: float):
+    """Return (price_target, return_pct, prob_up) compatible with any model type.
+
+    Professional models (classifiers, have ``classes_``) produce a synthetic
+    price target from their directional probability so downstream display code
+    keeps working without changes.  Legacy regressors return raw predictions.
+    """
+    if hasattr(model, "classes_"):                        # classifier
+        prob_up = float(model.predict_proba(X)[0][1])
+        ret_pct = (prob_up - 0.5) * 4                    # maps [0,1] → [-2%, +2%]
+        return current_price * (1 + ret_pct / 100), ret_pct, prob_up
+    pred = float(model.predict(X)[0])                    # regressor
+    if pred > 10:                                         # LR → next close price
+        ret_pct = (pred - current_price) / current_price * 100
+        return pred, ret_pct, pred > current_price
+    return current_price * (1 + pred / 100), pred, pred > 0  # RF → next return %
+
+
 def _load_models(ticker: str, interval: str = "1d"):
     """Return (lr, rf, scaler, feature_cols, xgb) — cached after first load. xgb may be None."""
     key = (ticker.upper(), interval)
@@ -483,18 +501,17 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
 
     current_price = float(df["Close"].iloc[-1])
     X             = scaler.transform(df[feature_cols].iloc[-1:].values)
-    lr_pred       = float(lr_model.predict(X)[0])   # next close price
-    rf_ret        = float(rf_model.predict(X)[0])   # next % return
-    rf_pred       = current_price * (1 + rf_ret / 100)
+    lr_pred, _, lr_up    = _infer_model(lr_model, X, current_price)
+    rf_pred, rf_ret, rf_up = _infer_model(rf_model, X, current_price)
 
     price_change = lr_pred - current_price
 
     if xgb_model is not None:
-        xgb_prob  = float(xgb_model.predict_proba(X)[0][1])   # P(up)
-        direction = "Up" if xgb_prob > 0.5 else "Down"
+        xgb_prob  = float(xgb_model.predict_proba(X)[0][1])
+        direction  = "Up" if xgb_prob > 0.5 else "Down"
         confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
     else:
-        direction  = "Up" if price_change > 0 else "Down"
+        direction  = "Up" if lr_up else "Down"
         recent_vol = float(df["Daily_Return"].tail(20).std())
         change_pct = abs(price_change / current_price * 100)
         confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
@@ -712,12 +729,8 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
 
         current_price = float(df["Close"].iloc[-1])
         X             = scaler.transform(df[feature_cols].iloc[-1:].values)
-        lr_pred       = float(lr_model.predict(X)[0])
-        rf_ret        = float(rf_model.predict(X)[0])
-        rf_pred       = current_price * (1 + rf_ret / 100)
-
-        lr_up = lr_pred > current_price
-        rf_up = rf_ret  > 0
+        lr_pred, _, lr_up    = _infer_model(lr_model, X, current_price)
+        rf_pred, rf_ret, rf_up = _infer_model(rf_model, X, current_price)
 
         if xgb_model is not None:
             xgb_prob = float(xgb_model.predict_proba(X)[0][1])
