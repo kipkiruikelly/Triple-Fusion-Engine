@@ -377,7 +377,11 @@ def _apply_vix(df: pd.DataFrame, vix_df) -> pd.DataFrame:
     idx = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
     vc  = vix_df["Close"].copy()
     vc.index = vc.index.normalize() if vc.index.tz is None else vc.index.tz_localize(None).normalize()
-    vix = pd.Series(vc.reindex(idx, method="ffill").values, index=df.index).fillna(20.0)
+    vc = vc[~vc.index.duplicated(keep="last")]
+    unique_idx = pd.DatetimeIndex(sorted(set(idx)))
+    vc_filled  = vc.reindex(unique_idx, method="ffill")
+    vix_map    = vc_filled.to_dict()
+    vix = pd.Series([vix_map.get(d, 20.0) for d in idx], index=df.index).fillna(20.0)
     df["VIX_Level"]          = vix
     df["VIX_Change"]         = vix.pct_change().fillna(0) * 100
     df["VIX_Percentile_252"] = vix.rolling(252, min_periods=60).rank(pct=True).fillna(0.5)
@@ -394,8 +398,12 @@ def _apply_sector(df: pd.DataFrame, sector_df, spy_df) -> pd.DataFrame:
             return None
         s = src["Close"].copy()
         s.index = s.index.normalize() if s.index.tz is None else s.index.tz_localize(None).normalize()
+        s = s[~s.index.duplicated(keep="last")]
         ix = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
-        return s.reindex(ix, method="ffill")
+        unique_ix = pd.DatetimeIndex(sorted(set(ix)))
+        s_filled  = s.reindex(unique_ix, method="ffill")
+        s_map     = s_filled.to_dict()
+        return pd.Series([s_map.get(d, np.nan) for d in ix], index=df.index)
 
     sec = _align(sector_df)
     spy = _align(spy_df)

@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BullLogic — Institutional-Grade Trading Signals</title>
+  <link rel="manifest" href="/static/manifest.json"/>
+  <meta name="theme-color" content="#FF6B35"/>
+  <meta name="description" content="ML-powered trading signals fused with ICT concepts. Predict market direction across stocks, ETFs, and indices." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0A0D14;
+      --surface:   #111520;
+      --surface2:  #1A1F2E;
+      --surface3:  #222840;
+      --border:    #2A3150;
+      --text:      #E2E8F0;
+      --muted:     #7A8499;
+      --accent:    #FF6B35;
+      --accent2:   #FF8C5A;
+      --green:     #00C076;
+      --red:       #FF4D4D;
+      --blue:      #3B82F6;
+      --white:     #FFFFFF;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 200;
+      padding: 0 48px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(10, 13, 20, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(42, 49, 80, 0.6);
+      transition: background 0.3s;
+    }
+
+    .nav-logo {
+      font-size: 18pt;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.5px;
+    }
+    .nav-logo span { color: var(--accent); }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      font-size: 10pt;
+      font-weight: 500;
+      padding: 7px 14px;
+      border-radius: 6px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+
+    .nav-cta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 20px;
+      border-radius: 7px;
+      font-size: 10pt;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { border-color: var(--muted); background: var(--surface2); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255, 107, 53, 0.35); }
+
+    .btn-lg {
+      padding: 14px 32px;
+      font-size: 11pt;
+      border-radius: 8px;
+    }
+
+    .btn-outline-lg {
+      padding: 13px 32px;
+      font-size: 11pt;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-outline-lg:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── HERO ── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* animated gradient background */
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% -10%, rgba(255,107,53,0.12) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 80% 80%, rgba(59,130,246,0.07) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 40% at 20% 70%, rgba(0,192,118,0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(255, 107, 53, 0.1);
+      border: 1px solid rgba(255, 107, 53, 0.25);
+      color: var(--accent);
+      font-size: 9pt;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 100px;
+      margin-bottom: 28px;
+      letter-spacing: 0.3px;
+    }
+
+    .hero-badge .dot {
+      width: 6px; height: 6px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    .hero h1 {
+      font-size: clamp(32pt, 6vw, 56pt);
+      font-weight: 900;
+      color: var(--white);
+      line-height: 1.08;
+      letter-spacing: -2px;
+      max-width: 820px;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 .highlight {
+      background: linear-gradient(135deg, var(--accent) 0%, #FF9A6C 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      font-size: 13pt;
+      color: var(--muted);
+      max-width: 560px;
+      line-height: 1.65;
+      margin-bottom: 44px;
+      font-weight: 400;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 72px;
+    }
+
+    .hero-stats {
+      display: flex;
+      align-items: center;
+      gap: 48px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 22pt;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    .stat-value .accent { color: var(--accent); }
+    .stat-value .green  { color: var(--green); }
+
+    .stat-label {
+      font-size: 9pt;
+      color: var(--muted);
+      margin-top: 5px;
+      font-weight: 500;
+    }
+
+    .stat-divider {
+      width: 1px;
+      height: 36px;
+      background: var(--border);
+    }
+
+    /* ── TICKER STRIP ── */
+    .ticker-strip {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 0;
+      height: 44px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .ticker-track {
+      display: flex;
+      align-items: center;
+      gap: 48px;
+      animation: scroll-left 30s linear infinite;
+      white-space: nowrap;
+      height: 100%;
+      padding: 0 24px;
+      width: max-content;
+    }
+
+    @keyframes scroll-left {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    .ticker-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ticker-symbol { font-size: 9pt; font-weight: 700; color: var(--text); }
+    .ticker-price  { font-size: 9pt; color: var(--muted); }
+    .ticker-change { font-size: 9pt; font-weight: 600; }
+    .ticker-change.up   { color: var(--green); }
+    .ticker-change.down { color: var(--red); }
+    .ticker-signal {
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.3px;
+    }
+    .ticker-signal.bull { background: rgba(0,192,118,0.15); color: var(--green); }
+    .ticker-signal.bear { background: rgba(255,77,77,0.15); color: var(--red); }
+
+    /* ── SECTION ── */
+    section { padding: 96px 24px; }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 9pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: clamp(22pt, 3.5vw, 32pt);
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -1px;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 11pt;
+      color: var(--muted);
+      line-height: 1.65;
+      max-width: 520px;
+    }
+
+    /* ── FEATURES ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-top: 56px;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+    }
+    .feature-card:hover {
+      border-color: rgba(255, 107, 53, 0.4);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+
+    .feature-icon {
+      width: 44px; height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 18px;
+    }
+
+    .feature-icon.orange { background: rgba(255, 107, 53, 0.12); }
+    .feature-icon.green  { background: rgba(0, 192, 118, 0.12); }
+    .feature-icon.blue   { background: rgba(59, 130, 246, 0.12); }
+    .feature-icon.purple { background: rgba(168, 85, 247, 0.12); }
+    .feature-icon.yellow { background: rgba(234, 179, 8, 0.12); }
+    .feature-icon.red    { background: rgba(255, 77, 77, 0.12); }
+
+    .feature-card h3 {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 10px;
+    }
+
+    .feature-card p {
+      font-size: 10pt;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ── HOW IT WORKS ── */
+    .how-section { background: var(--surface); }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      margin-top: 56px;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: calc(12.5% + 24px);
+      right: calc(12.5% + 24px);
+      height: 1px;
+      background: linear-gradient(to right, var(--border), var(--accent), var(--border));
+    }
+
+    .step {
+      text-align: center;
+      padding: 0 16px;
+      position: relative;
+    }
+
+    .step-num {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--surface2);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14pt;
+      font-weight: 800;
+      color: var(--accent);
+      margin: 0 auto 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .step h4 {
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--white);
+      margin-bottom: 8px;
+    }
+
+    .step p {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── SIGNAL DEMO ── */
+    .demo-section { background: var(--bg); }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+      align-items: center;
+      margin-top: 56px;
+    }
+
+    .demo-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      font-size: 10pt;
+    }
+
+    .demo-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .demo-ticker-name {
+      font-size: 14pt;
+      font-weight: 800;
+      color: var(--white);
+    }
+
+    .demo-badge {
+      font-size: 9pt;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 100px;
+    }
+    .demo-badge.bullish { background: rgba(0,192,118,0.15); color: var(--green); border: 1px solid rgba(0,192,118,0.25); }
+    .demo-badge.bearish { background: rgba(255,77,77,0.15); color: var(--red); border: 1px solid rgba(255,77,77,0.25); }
+
+    .signal-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .signal-row:last-child { border-bottom: none; }
+
+    .signal-label { color: var(--muted); font-size: 9.5pt; }
+    .signal-value { font-weight: 600; color: var(--text); font-size: 9.5pt; }
+    .signal-value.green { color: var(--green); }
+    .signal-value.orange { color: var(--accent); }
+    .signal-value.blue { color: var(--blue); }
+
+    .score-bar-wrap { margin-top: 20px; }
+    .score-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9pt;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .score-bar-bg {
+      height: 6px;
+      background: var(--surface3);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--green));
+    }
+
+    .demo-cta-box {
+      padding: 32px;
+    }
+
+    .demo-cta-box h3 {
+      font-size: 20pt;
+      font-weight: 800;
+      color: var(--white);
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+      margin-bottom: 14px;
+    }
+
+    .demo-cta-box p {
+      font-size: 10.5pt;
+      color: var(--muted);
+      line-height: 1.65;
+      margin-bottom: 28px;
+    }
+
+    .check-list {
+      list-style: none;
+      margin-bottom: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .check-list li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 10pt;
+      color: var(--text);
+    }
+
+    .check-list li::before {
+      content: '✓';
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: rgba(0,192,118,0.15);
+      color: var(--green);
+      font-size: 9pt;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── TICKERS COVERAGE ── */
+    .tickers-section { background: var(--surface); }
+
+    .tickers-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      margin-top: 48px;
+    }
+
+    .ticker-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 16px;
+      text-align: center;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .ticker-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .ticker-card-symbol {
+      font-size: 13pt;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 4px;
+    }
+
+    .ticker-card-name {
+      font-size: 8.5pt;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .ticker-card-models {
+      display: flex;
+      gap: 5px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .model-tag {
+      font-size: 7.5pt;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255,107,53,0.12);
+      color: var(--accent);
+    }
+    .model-tag.green { background: rgba(0,192,118,0.12); color: var(--green); }
+
+    /* ── PRICING PREVIEW ── */
+    .pricing-section { background: var(--bg); }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 700px;
+      margin: 56px auto 0;
+    }
+
+    .price-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+    }
+    .price-card.featured {
+      border-color: var(--accent);
+      position: relative;
+      background: linear-gradient(145deg, var(--surface) 0%, rgba(255,107,53,0.05) 100%);
+    }
+
+    .featured-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent);
+      color: #fff;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 100px;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .price-tier { font-size: 9pt; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+    .price-amount { font-size: 30pt; font-weight: 900; color: var(--white); letter-spacing: -1.5px; line-height: 1; margin-bottom: 4px; }
+    .price-period { font-size: 9pt; color: var(--muted); margin-bottom: 20px; }
+
+    .price-features {
+      list-style: none;
+      margin-bottom: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .price-features li {
+      font-size: 9.5pt;
+      color: var(--muted);
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+    }
+
+    .price-features li .tick { color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .price-features li.highlighted { color: var(--text); }
+
+    /* ── CTA BANNER ── */
+    .cta-section {
+      background: linear-gradient(135deg, rgba(255,107,53,0.08) 0%, rgba(59,130,246,0.05) 100%);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+      padding: 100px 24px;
+    }
+
+    .cta-section h2 {
+      font-size: clamp(22pt, 4vw, 36pt);
+      font-weight: 900;
+      color: var(--white);
+      letter-spacing: -1.5px;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+
+    .cta-section p {
+      font-size: 12pt;
+      color: var(--muted);
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 48px 24px 32px;
+    }
+
+    .footer-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+
+    .footer-brand .logo {
+      font-size: 16pt;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 10px;
+    }
+    .footer-brand .logo span { color: var(--accent); }
+
+    .footer-brand p {
+      font-size: 9.5pt;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 260px;
+    }
+
+    .footer-links h4 {
+      font-size: 9pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .footer-links ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .footer-links ul a {
+      font-size: 10pt;
+      color: var(--muted);
+      transition: color 0.15s;
+    }
+    .footer-links ul a:hover { color: var(--text); }
+
+    .footer-bottom {
+      max-width: 1100px;
+      margin: 32px auto 0;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9pt;
+      color: var(--muted);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .footer-disclaimer {
+      font-size: 8.5pt;
+      color: var(--muted);
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(255,77,77,0.05);
+      border: 1px solid rgba(255,77,77,0.1);
+      border-radius: 6px;
+      line-height: 1.5;
+      max-width: 1100px;
+      margin: 24px auto 0;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .features-grid { grid-template-columns: 1fr 1fr; }
+      .steps { grid-template-columns: 1fr 1fr; gap: 32px; }
+      .steps::before { display: none; }
+      .demo-grid { grid-template-columns: 1fr; }
+      .tickers-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 600px) {
+      .hero h1 { letter-spacing: -1px; }
+      .hero-stats { gap: 24px; }
+      .stat-divider { display: none; }
+      .features-grid { grid-template-columns: 1fr; }
+      .steps { grid-template-columns: 1fr; }
+      .pricing-grid { grid-template-columns: 1fr; }
+      .tickers-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer-inner { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── NAV ── -->
+<nav>
+  <div class="nav-logo">Bull<span>Logic</span></div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How it works</a>
+    <a href="#coverage">Coverage</a>
+    <a href="#pricing">Pricing</a>
+  </div>
+  <div class="nav-cta">
+    <a href="/login" class="btn btn-ghost">Log in</a>
+    <a href="/register" class="btn btn-primary">Get started free</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <div class="hero-badge">
+    <span class="dot"></span>
+    Live signals — 10 assets · 3 timeframes
+  </div>
+
+  <h1>
+    Institutional signals.<br>
+    <span class="highlight">Individual access.</span>
+  </h1>
+
+  <p>
+    BullLogic fuses ICT market structure analysis with machine learning to deliver high-confidence directional signals across stocks, ETFs and indices — before the move happens.
+  </p>
+
+  <div class="hero-actions">
+    <a href="/register" class="btn btn-primary btn-lg">Start for free</a>
+    <a href="/login" class="btn-outline-lg">Log in to dashboard</a>
+  </div>
+
+  <div class="hero-stats">
+    <div class="stat">
+      <div class="stat-value"><span class="accent">10</span></div>
+      <div class="stat-label">Instruments covered</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value"><span class="green">52.6%</span></div>
+      <div class="stat-label">Backtest win rate (2015–2026)</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value">1.71<span style="font-size:14pt;color:var(--muted)">×</span></div>
+      <div class="stat-label">Profit factor</div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat">
+      <div class="stat-value"><span class="accent">3</span></div>
+      <div class="stat-label">Timeframes: 15m · 1h · Daily</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TICKER STRIP ── -->
+<div class="ticker-strip">
+  <div class="ticker-track">
+    <!-- duplicated for infinite scroll -->
+    <div class="ticker-item"><span class="ticker-symbol">QQQ</span><span class="ticker-price">$484.20</span><span class="ticker-change up">+1.24%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$212.49</span><span class="ticker-change up">+0.87%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$138.85</span><span class="ticker-change up">+2.31%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">TSLA</span><span class="ticker-price">$248.50</span><span class="ticker-change down">-0.62%</span><span class="ticker-signal bear">BEARISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">MSFT</span><span class="ticker-price">$420.33</span><span class="ticker-change up">+0.44%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">GOOGL</span><span class="ticker-price">$178.92</span><span class="ticker-change up">+1.10%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">META</span><span class="ticker-price">$568.14</span><span class="ticker-change up">+1.85%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">AMZN</span><span class="ticker-price">$198.77</span><span class="ticker-change down">-0.33%</span><span class="ticker-signal bear">BEARISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">NDX</span><span class="ticker-price">$21,480</span><span class="ticker-change up">+1.18%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">DIA</span><span class="ticker-price">$424.60</span><span class="ticker-change up">+0.29%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <!-- duplicate -->
+    <div class="ticker-item"><span class="ticker-symbol">QQQ</span><span class="ticker-price">$484.20</span><span class="ticker-change up">+1.24%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$212.49</span><span class="ticker-change up">+0.87%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$138.85</span><span class="ticker-change up">+2.31%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">TSLA</span><span class="ticker-price">$248.50</span><span class="ticker-change down">-0.62%</span><span class="ticker-signal bear">BEARISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">MSFT</span><span class="ticker-price">$420.33</span><span class="ticker-change up">+0.44%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">GOOGL</span><span class="ticker-price">$178.92</span><span class="ticker-change up">+1.10%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">META</span><span class="ticker-price">$568.14</span><span class="ticker-change up">+1.85%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">AMZN</span><span class="ticker-price">$198.77</span><span class="ticker-change down">-0.33%</span><span class="ticker-signal bear">BEARISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">NDX</span><span class="ticker-price">$21,480</span><span class="ticker-change up">+1.18%</span><span class="ticker-signal bull">BULLISH</span></div>
+    <div class="ticker-item"><span class="ticker-symbol">DIA</span><span class="ticker-price">$424.60</span><span class="ticker-change up">+0.29%</span><span class="ticker-signal bull">BULLISH</span></div>
+  </div>
+</div>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="container">
+    <div class="section-label">Why BullLogic</div>
+    <div class="section-title">Everything you need to trade with conviction.</div>
+    <div class="section-sub">Built on the same concepts used by institutional traders — now accessible through a clean, fast interface.</div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon orange">🧠</div>
+        <h3>Triple-Fusion Signals</h3>
+        <p>ICT market structure acts as the primary gate. ML models and technical indicators layer on top, requiring agreement before any signal fires.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">📐</div>
+        <h3>ICT Concepts Built-In</h3>
+        <p>Order blocks, fair value gaps, liquidity sweeps, displacement, and premium/discount zones — all computed automatically from OHLCV data.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon blue">⚙️</div>
+        <h3>Machine Learning Core</h3>
+        <p>Logistic Regression and Random Forest models trained on 45–55 engineered features per ticker, with per-symbol model caches for speed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon purple">📊</div>
+        <h3>Multi-Timeframe Analysis</h3>
+        <p>Switch between Daily, 1-hour, and 15-minute views. Each timeframe runs dedicated trained models with timeframe-appropriate feature sets.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon yellow">📓</div>
+        <h3>Trading Journal</h3>
+        <p>Log every trade, track your edge, and review performance over time. Built-in P&L tracking with notes and outcome tagging.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon red">🛡️</div>
+        <h3>Risk Management Tools</h3>
+        <p>Position sizing calculator, ATR-based stop loss and take profit levels, and portfolio exposure monitoring in one place.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how-it-works" class="how-section">
+  <div class="container">
+    <div class="section-label">How it works</div>
+    <div class="section-title">Signal generation in three layers.</div>
+    <div class="section-sub">Every prediction passes through a strict multi-gate process before reaching you.</div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h4>ICT Bias Gate</h4>
+        <p>Price must be above the 200 SMA with bullish structure and EMA20 > EMA50 alignment. No gate, no trade.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h4>ICT Pattern Score</h4>
+        <p>Order blocks, FVGs, liquidity sweeps, PD zones and displacement are scored. Minimum score of 3 required to proceed.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h4>ML Confirmation</h4>
+        <p>LR and RF models must agree. Agreement adds +2 to the total score; conflict subtracts 1.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h4>Signal Delivered</h4>
+        <p>Total score ≥ 5 with ICT bias present fires a BULLISH or BEARISH signal with entry, SL, and TP levels.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SIGNAL DEMO ── -->
+<section class="demo-section">
+  <div class="container">
+    <div class="section-label">Live example</div>
+    <div class="section-title">What a signal looks like.</div>
+    <div class="section-sub">Real output from the prediction engine — no cherry-picking, just the data.</div>
+
+    <div class="demo-grid">
+      <div class="demo-panel">
+        <div class="demo-panel-header">
+          <div>
+            <div class="demo-ticker-name">QQQ &nbsp;<span style="font-size:10pt;font-weight:500;color:var(--muted)">Daily</span></div>
+            <div style="font-size:9pt;color:var(--muted);margin-top:3px;">NASDAQ-100 ETF · as of Jun 27, 2026</div>
+          </div>
+          <div class="demo-badge bullish">BULLISH</div>
+        </div>
+
+        <div class="signal-row">
+          <span class="signal-label">ICT Bias</span>
+          <span class="signal-value green">Bullish confirmed</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">Structure</span>
+          <span class="signal-value green">Higher High / Higher Low</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">200 SMA position</span>
+          <span class="signal-value green">Price above</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">Order Block</span>
+          <span class="signal-value orange">Detected (+2)</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">Fair Value Gap</span>
+          <span class="signal-value orange">Present (+1)</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">ML Models (LR + RF)</span>
+          <span class="signal-value green">Agreement (+2)</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">Total Score</span>
+          <span class="signal-value green">7 / 10</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">Suggested SL</span>
+          <span class="signal-value" style="color:var(--red)">$478.40 (1.5× ATR)</span>
+        </div>
+        <div class="signal-row">
+          <span class="signal-label">Suggested TP</span>
+          <span class="signal-value green">$496.80 (2.5× ATR)</span>
+        </div>
+
+        <div class="score-bar-wrap">
+          <div class="score-bar-label"><span>Signal confidence</span><span style="color:var(--green);font-weight:600;">70%</span></div>
+          <div class="score-bar-bg"><div class="score-bar-fill" style="width:70%"></div></div>
+        </div>
+      </div>
+
+      <div class="demo-cta-box">
+        <h3>Signals that explain themselves.</h3>
+        <p>Every prediction shows you exactly why it fired — which ICT patterns were present, whether ML models agreed, and the exact score. No black box.</p>
+
+        <ul class="check-list">
+          <li>Full ICT breakdown per signal</li>
+          <li>ML model agreement indicator</li>
+          <li>ATR-based SL &amp; TP levels</li>
+          <li>Historical backtest performance</li>
+          <li>Multi-timeframe views</li>
+          <li>Price alerts &amp; email notifications</li>
+        </ul>
+
+        <a href="/register" class="btn btn-primary btn-lg" style="width:100%;justify-content:center;">Get started free →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── COVERAGE ── -->
+<section id="coverage" class="tickers-section">
+  <div class="container">
+    <div class="section-label">Coverage</div>
+    <div class="section-title">10 instruments. 3 timeframes. All trained.</div>
+    <div class="section-sub">Every ticker has dedicated LR and RF models trained on years of data. New instruments added regularly.</div>
+
+    <div class="tickers-grid">
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">QQQ</div>
+        <div class="ticker-card-name">NASDAQ-100 ETF</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">AAPL</div>
+        <div class="ticker-card-name">Apple Inc.</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span><span class="model-tag green">LSTM</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">NVDA</div>
+        <div class="ticker-card-name">NVIDIA Corp.</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">TSLA</div>
+        <div class="ticker-card-name">Tesla Inc.</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">MSFT</div>
+        <div class="ticker-card-name">Microsoft Corp.</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">GOOGL</div>
+        <div class="ticker-card-name">Alphabet Inc.</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">META</div>
+        <div class="ticker-card-name">Meta Platforms</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">AMZN</div>
+        <div class="ticker-card-name">Amazon.com Inc.</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">NDX</div>
+        <div class="ticker-card-name">NASDAQ-100 Index</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span></div>
+      </div>
+      <div class="ticker-card">
+        <div class="ticker-card-symbol">DIA</div>
+        <div class="ticker-card-name">Dow Jones ETF</div>
+        <div class="ticker-card-models"><span class="model-tag">Daily</span><span class="model-tag">1h</span><span class="model-tag green">15m</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PRICING ── -->
+<section id="pricing" class="pricing-section">
+  <div class="container" style="text-align:center;">
+    <div class="section-label">Pricing</div>
+    <div class="section-title">Start free. Upgrade when ready.</div>
+    <div class="section-sub" style="margin:0 auto;">No credit card required to get started.</div>
+
+    <div class="pricing-grid">
+      <div class="price-card">
+        <div class="price-tier">Starter</div>
+        <div class="price-amount">$0</div>
+        <div class="price-period">forever free</div>
+        <ul class="price-features">
+          <li><span class="tick">✓</span> Daily signals — all tickers</li>
+          <li><span class="tick">✓</span> ICT breakdown per signal</li>
+          <li><span class="tick">✓</span> Trading journal</li>
+          <li><span class="tick">✓</span> Basic risk calculator</li>
+        </ul>
+        <a href="/register" class="btn btn-ghost" style="width:100%;justify-content:center;padding:12px;">Get started free</a>
+      </div>
+
+      <div class="price-card featured">
+        <div class="featured-badge">Most popular</div>
+        <div class="price-tier">Pro</div>
+        <div class="price-amount">$29</div>
+        <div class="price-period">per month</div>
+        <ul class="price-features">
+          <li class="highlighted"><span class="tick">✓</span> Everything in Starter</li>
+          <li class="highlighted"><span class="tick">✓</span> 1h &amp; 15m intraday signals</li>
+          <li class="highlighted"><span class="tick">✓</span> MT5 live &amp; paper trading</li>
+          <li class="highlighted"><span class="tick">✓</span> Email &amp; price alerts</li>
+          <li class="highlighted"><span class="tick">✓</span> Market scanner &amp; screener</li>
+          <li class="highlighted"><span class="tick">✓</span> Full backtest access</li>
+        </ul>
+        <a href="/register" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;">Start Pro trial</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FINAL CTA ── -->
+<section class="cta-section">
+  <div class="container">
+    <h2>Ready to trade smarter?</h2>
+    <p>Join traders using BullLogic to cut noise and act on high-confidence signals.</p>
+    <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;">
+      <a href="/register" class="btn btn-primary btn-lg">Create free account</a>
+      <a href="/login" class="btn-outline-lg">Log in</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="logo">Bull<span>Logic</span></div>
+      <p>ML-powered trading signals fused with ICT market structure analysis. Built for serious traders.</p>
+    </div>
+
+    <div class="footer-links">
+      <h4>Product</h4>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#coverage">Coverage</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-links">
+      <h4>Account</h4>
+      <ul>
+        <li><a href="/login">Log in</a></li>
+        <li><a href="/register">Sign up</a></li>
+        <li><a href="/pricing">Upgrade to Pro</a></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="footer-disclaimer">
+    <strong>Risk Disclaimer:</strong> Trading involves substantial risk of loss. BullLogic signals are for informational purposes only and do not constitute financial advice. Past backtest performance does not guarantee future results. Never risk more than you can afford to lose.
+  </div>
+
+  <div class="footer-bottom">
+    <span>© 2026 BullLogic. All rights reserved.</span>
+    <span>Built with ICT + ML</span>
+  </div>
+</footer>
+
+</body>
+</html>

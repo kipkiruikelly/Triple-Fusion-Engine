@@ -658,9 +658,10 @@ def pricing():
 # ── Main routes ─────────────────────────────────────────────────────────────
 
 @app.route("/", methods=["GET"])
-@login_required
 def home():
-    return render_template("index.html")
+    if current_user.is_authenticated:
+        return render_template("index.html")
+    return render_template("landing.html")
 
 
 VALID_INTERVALS = {"1d", "1h", "15m"}
