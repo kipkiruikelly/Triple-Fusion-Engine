@@ -297,6 +297,43 @@
       {% endif %}
     </div>
 
+    <!-- Telegram Alerts -->
+    <div class="section-card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="section-title">Telegram Alerts</div>
+        <span id="tgStatus" style="font-size:9pt;color:var(--muted)">Loading…</span>
+      </div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Get instant price alerts on Telegram. Start a chat with <a href="https://t.me/BullLogicBot" target="_blank" style="color:var(--accent)">@BullLogicBot</a>, send <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">/start</code>, then paste your Chat ID below.</p>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="tgChatId" type="text" placeholder="Your Telegram Chat ID (e.g. 123456789)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;width:280px;font-family:'Inter',sans-serif"/>
+        <button onclick="saveTelegram()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">Connect</button>
+        <button id="tgRemoveBtn" onclick="removeTelegram()" style="display:none;background:none;border:1px solid var(--border);color:var(--red);padding:7px 12px;border-radius:6px;font-size:9pt;cursor:pointer">Disconnect</button>
+      </div>
+    </div>
+
+    <!-- API Keys -->
+    <div class="section-card" style="margin-bottom:16px">
+      <div class="section-title" style="margin-bottom:14px">API Keys</div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Use API keys to access predictions programmatically. Endpoint: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:9pt">/api/v1/predict/AAPL?key=YOUR_KEY</code></p>
+      <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center">
+        <input id="keyName" type="text" placeholder="Key name (e.g. My App)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;width:200px;font-family:'Inter',sans-serif"/>
+        <button onclick="createKey()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">+ Create Key</button>
+      </div>
+      <div id="keyAlert" style="display:none;background:rgba(0,192,118,.1);border:1px solid var(--green);border-radius:6px;padding:12px;margin-bottom:14px;font-size:9.5pt;word-break:break-all"></div>
+      <div id="keyList" style="display:flex;flex-direction:column;gap:8px">
+        <div style="color:var(--muted);font-size:9.5pt">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Prediction Accuracy -->
+    <div class="section-card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="section-title">Prediction Accuracy</div>
+        <button onclick="checkAccuracy()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:6px;font-size:8.5pt;cursor:pointer">Check Now</button>
+      </div>
+      <div id="accuracyBlock"><div style="color:var(--muted);font-size:9.5pt">Loading accuracy stats…</div></div>
+    </div>
+
     <!-- Danger zone -->
     <div class="danger-zone">
       <div class="danger-title">Danger Zone</div>
@@ -305,5 +342,109 @@
     </div>
   </main>
 </div>
+
+<script>
+function loadKeys() {
+  fetch('/api/keys').then(r=>r.json()).then(keys=>{
+    const list=document.getElementById('keyList');
+    if(!keys.length){list.innerHTML='<div style="color:var(--muted);font-size:9.5pt">No API keys yet.</div>';return;}
+    list.innerHTML=keys.map(k=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 14px">
+        <div>
+          <div style="font-weight:600;font-size:10pt">${k.name}</div>
+          <div style="color:var(--muted);font-size:9pt;margin-top:2px">${k.key_preview} &nbsp;·&nbsp; Created ${k.created_at} &nbsp;·&nbsp; ${k.calls_today} calls today</div>
+        </div>
+        <button onclick="deleteKey(${k.id})" style="background:none;border:1px solid var(--border);color:#FF4D4D;padding:4px 10px;border-radius:4px;font-size:8.5pt;cursor:pointer">Revoke</button>
+      </div>`).join('');
+  });
+}
+
+function createKey() {
+  const name=document.getElementById('keyName').value.trim()||'Default';
+  fetch('/api/keys/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){
+        const alert=document.getElementById('keyAlert');
+        alert.style.display='block';
+        alert.innerHTML='<strong style="color:var(--green)">Key created — copy it now, it will not be shown again:</strong><br><code style="font-size:10pt">'+d.key+'</code>';
+        loadKeys();
+      } else alert(d.error);
+    });
+}
+
+function deleteKey(id) {
+  if(!confirm('Revoke this API key? This cannot be undone.'))return;
+  fetch('/api/keys/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key_id:id})})
+    .then(r=>r.json()).then(d=>{if(d.ok)loadKeys();});
+}
+
+function loadAccuracy() {
+  fetch('/api/accuracy').then(r=>r.json()).then(d=>{
+    const el=document.getElementById('accuracyBlock');
+    if(!d.ok||!d.count){el.innerHTML='<div style="color:var(--muted);font-size:9.5pt">No accuracy data yet. Run some predictions and check back the next day.</div>';return;}
+    el.innerHTML=`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:12px 16px">
+          <div style="font-size:8pt;color:var(--muted);margin-bottom:4px">Direction Accuracy</div>
+          <div style="font-size:18pt;font-weight:700;color:var(--green)">${d.direction_accuracy}%</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:12px 16px">
+          <div style="font-size:8pt;color:var(--muted);margin-bottom:4px">Avg Price Error</div>
+          <div style="font-size:18pt;font-weight:700">${d.avg_pct_error}%</div>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:12px 16px">
+          <div style="font-size:8pt;color:var(--muted);margin-bottom:4px">Checked</div>
+          <div style="font-size:18pt;font-weight:700">${d.count}</div>
+        </div>
+      </div>`;
+  });
+}
+
+function checkAccuracy() {
+  fetch('/api/accuracy/check',{method:'POST'}).then(r=>r.json()).then(d=>{
+    if(d.ok)loadAccuracy();
+  });
+}
+
+loadKeys();
+loadAccuracy();
+
+function loadTelegram() {
+  fetch('/api/telegram/status').then(r=>r.json()).then(d=>{
+    const status = document.getElementById('tgStatus');
+    const removeBtn = document.getElementById('tgRemoveBtn');
+    if (d.configured) {
+      status.textContent = '✓ Connected — Chat ID: ' + d.chat_id;
+      status.style.color = 'var(--green)';
+      document.getElementById('tgChatId').value = d.chat_id;
+      removeBtn.style.display = 'inline-block';
+    } else {
+      status.textContent = 'Not connected';
+      removeBtn.style.display = 'none';
+    }
+  });
+}
+
+function saveTelegram() {
+  const chatId = document.getElementById('tgChatId').value.trim();
+  if (!chatId) { alert('Enter your Telegram Chat ID.'); return; }
+  fetch('/api/telegram/configure', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({chat_id: chatId, enabled: true})
+  }).then(r=>r.json()).then(d=>{
+    if (d.ok) { alert('Telegram connected! You should receive a test message.'); loadTelegram(); }
+    else alert(d.error);
+  });
+}
+
+function removeTelegram() {
+  if (!confirm('Disconnect Telegram?')) return;
+  fetch('/api/telegram/remove', {method:'POST'}).then(r=>r.json()).then(d=>{
+    if (d.ok) { alert('Telegram disconnected.'); loadTelegram(); }
+  });
+}
+
+loadTelegram();
+</script>
 </body>
 </html>

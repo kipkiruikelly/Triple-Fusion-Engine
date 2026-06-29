@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Login — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--surface2:#222840;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--red:#FF4D4D;--white:#FFFFFF}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:36px;width:340px}
+    h1{font-size:16pt;font-weight:700;margin-bottom:6px}
+    .sub{color:var(--muted);font-size:9.5pt;margin-bottom:24px}
+    label{display:block;font-size:8.5pt;color:var(--muted);margin-bottom:5px;font-weight:500}
+    input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:10pt;font-family:'Inter',sans-serif;margin-bottom:16px}
+    input:focus{outline:none;border-color:var(--accent)}
+    button{width:100%;background:var(--accent);color:var(--white);border:none;padding:10px;border-radius:6px;font-size:10.5pt;font-weight:600;cursor:pointer}
+    .error{color:var(--red);font-size:9pt;margin-bottom:12px}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Admin Access</h1>
+    <p class="sub">BullLogic administration panel.</p>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+    <form method="POST">
+      <label>Password</label>
+      <input type="password" name="password" autofocus required/>
+      <button type="submit">Enter Admin</button>
+    </form>
+  </div>
+</body>
+</html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Risk Calculator — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--surface2:#222840;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--green:#00C076;--red:#FF4D4D;--blue:#3B82F6;--white:#FFFFFF}
+    body{font-family:'Inter',sans-serif;font-size:11pt;background:var(--bg);color:var(--text);min-height:100vh}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .topbar-left{display:flex;align-items:center;gap:32px}
+    .logo{font-size:15pt;font-weight:700;color:var(--white);text-decoration:none;letter-spacing:-0.5px}
+    .logo span{color:var(--accent)}
+    .nav-links{display:flex;gap:4px}
+    .nav-links a{color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 12px;border-radius:6px;transition:all .15s}
+    .nav-links a:hover,.nav-links a.active{color:var(--text);background:var(--surface2)}
+    .topbar-right{display:flex;align-items:center;gap:8px}
+    .btn-sm{padding:5px 12px;border-radius:4px;font-size:9pt;font-weight:600;text-decoration:none;color:var(--muted);border:1px solid var(--border);background:transparent}
+    .container{max-width:860px;margin:0 auto;padding:32px 24px}
+    h1{font-size:20pt;font-weight:700;margin-bottom:4px}
+    .subtitle{color:var(--muted);font-size:10pt;margin-bottom:28px}
+    .layout{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px}
+    .card h2{font-size:12pt;font-weight:600;margin-bottom:18px}
+    .field{margin-bottom:14px}
+    label{display:block;font-size:8.5pt;color:var(--muted);margin-bottom:5px;font-weight:500}
+    input,select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:6px;font-size:10.5pt;font-family:'Inter',sans-serif}
+    input:focus,select:focus{outline:none;border-color:var(--accent)}
+    .btn-calc{width:100%;background:var(--accent);color:var(--white);border:none;padding:11px;border-radius:6px;font-size:11pt;font-weight:700;cursor:pointer;margin-top:4px}
+    .btn-calc:hover{opacity:.9}
+    .result-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px}
+    .result-item{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:13px 14px}
+    .result-label{font-size:8.5pt;color:var(--muted);margin-bottom:5px}
+    .result-val{font-size:15pt;font-weight:700}
+    .result-val.green{color:var(--green)}
+    .result-val.red{color:var(--red)}
+    .result-val.accent{color:var(--accent)}
+    .rr-bar{height:10px;background:var(--border);border-radius:5px;overflow:hidden;margin-top:12px}
+    .rr-fill{height:100%;border-radius:5px;background:var(--green);transition:width .4s}
+    .rr-label{display:flex;justify-content:space-between;margin-top:4px;font-size:8.5pt;color:var(--muted)}
+    .explainer{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:14px;margin-top:16px;font-size:9pt;color:var(--muted);line-height:1.7}
+    .explainer strong{color:var(--text)}
+    @media(max-width:700px){.layout{grid-template-columns:1fr}.result-grid{grid-template-columns:1fr}.nav-links{display:none}}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="/" class="logo">Bull<span>Logic</span></a>
+    <nav class="nav-links">
+      <a href="/">Predictor</a>
+      <a href="/screener">Screener</a>
+      <a href="/calendar">Calendar</a>
+      <a href="/risk" class="active">Risk Calc</a>
+      <a href="/portfolio">Portfolio</a>
+      <a href="/history">History</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <a href="/profile" class="btn-sm">Profile</a>
+    <a href="/logout" class="btn-sm">Logout</a>
+  </div>
+</div>
+
+<div class="container">
+  <h1>Risk & Position Size Calculator</h1>
+  <p class="subtitle">Calculate exact position size, risk/reward, and Kelly Criterion sizing before every trade.</p>
+
+  <div class="layout">
+    <div class="card">
+      <h2>Trade Parameters</h2>
+
+      <div class="field">
+        <label>Ticker (optional)</label>
+        <input id="rTicker" type="text" placeholder="AAPL" style="text-transform:uppercase"/>
+      </div>
+      <div class="field">
+        <label>Account Size ($)</label>
+        <input id="rAccount" type="number" value="10000" step="100"/>
+      </div>
+      <div class="field">
+        <label>Risk Per Trade (%)</label>
+        <input id="rRisk" type="number" value="1" step="0.1" min="0.1" max="10"/>
+      </div>
+      <div class="field">
+        <label>Entry Price ($)</label>
+        <input id="rEntry" type="number" placeholder="195.00" step="0.01"/>
+      </div>
+      <div class="field">
+        <label>Stop Loss Price ($)</label>
+        <input id="rStop" type="number" placeholder="190.00" step="0.01"/>
+      </div>
+      <div class="field">
+        <label>Target Price ($)</label>
+        <input id="rTarget" type="number" placeholder="210.00" step="0.01"/>
+      </div>
+      <button class="btn-calc" onclick="calculate()">Calculate Position Size</button>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <div id="resultsWrap">
+        <div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:40px 0">Enter trade parameters and click Calculate.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function calculate() {
+  const account = parseFloat(document.getElementById('rAccount').value);
+  const risk    = parseFloat(document.getElementById('rRisk').value);
+  const entry   = parseFloat(document.getElementById('rEntry').value);
+  const stop    = parseFloat(document.getElementById('rStop').value);
+  const target  = parseFloat(document.getElementById('rTarget').value);
+  const ticker  = document.getElementById('rTicker').value.toUpperCase().trim();
+
+  if ([account,risk,entry,stop,target].some(v=>isNaN(v)||v<=0)) {
+    alert('Please fill in all fields with valid positive numbers.'); return;
+  }
+
+  fetch('/api/risk/calculate', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({account, risk_pct: risk, entry, stop_loss: stop, target, ticker})
+  }).then(r=>r.json()).then(d=>{
+    if (!d.ok) { alert(d.error); return; }
+    const isLong = target > entry;
+    const rr = d.rr_ratio;
+    const rrPct = Math.min(100, rr / 5 * 100);
+    const rrColor = rr >= 2 ? 'var(--green)' : rr >= 1 ? 'var(--yellow,#F59E0B)' : 'var(--red)';
+
+    document.getElementById('resultsWrap').innerHTML = `
+      <div class="result-grid">
+        <div class="result-item">
+          <div class="result-label">Position Size</div>
+          <div class="result-val accent">${d.shares.toLocaleString()} shares</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Position Value</div>
+          <div class="result-val">$${d.position_val.toLocaleString()}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Max Risk ($)</div>
+          <div class="result-val red">−$${d.risk_amount.toLocaleString()}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Potential Profit</div>
+          <div class="result-val green">+$${d.potential_pnl.toLocaleString()}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Risk per Share</div>
+          <div class="result-val">$${d.risk_per_sh}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Kelly Size</div>
+          <div class="result-val">${d.kelly_shares.toLocaleString()} sh (${d.kelly_pct}%)</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:14px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:9pt;color:var(--muted)">Risk / Reward Ratio</span>
+          <span style="font-weight:700;color:${rrColor}">${rr.toFixed(2)} : 1</span>
+        </div>
+        <div class="rr-bar"><div class="rr-fill" style="width:${rrPct}%;background:${rrColor}"></div></div>
+        <div class="rr-label"><span>Poor (&lt;1)</span><span>Good (2+)</span><span>Excellent (3+)</span></div>
+      </div>
+
+      <div class="explainer">
+        <strong>How to read this:</strong><br/>
+        Buy <strong>${d.shares.toLocaleString()} shares</strong> at <strong>$${entry}</strong>,
+        stop at <strong>$${stop}</strong> (−$${d.risk_amount}),
+        target <strong>$${target}</strong> (+$${d.potential_pnl.toLocaleString()}).<br/>
+        R:R of <strong>${rr.toFixed(2)}:1</strong> means you make $${rr.toFixed(2)} for every $1 risked.
+        Kelly Criterion suggests <strong>${d.kelly_shares} shares</strong> (${d.kelly_pct}% of account) for optimal growth.<br/>
+        ${rr < 1.5 ? '⚠️ R:R below 1.5 — consider widening your target or tightening the stop.' :
+          rr >= 3 ? '✅ Excellent R:R — this meets professional trading standards.' :
+          '✓ Acceptable R:R — viable trade setup.'}
+      </div>`;
+  });
+}
+
+// Auto-calculate on Enter
+document.addEventListener('keydown', e => { if (e.key === 'Enter') calculate(); });
+</script>
+</body>
+</html>

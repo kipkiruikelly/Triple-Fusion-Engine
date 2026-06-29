@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ML-based Quantitative Trading System</title>
+  <title>BullLogic — ML Trading System</title>
+  <link rel="manifest" href="/static/manifest.json"/>
+  <meta name="theme-color" content="#FF6B35"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -499,7 +501,10 @@
     <nav class="nav-links">
       <a href="/" class="active">Predictor</a>
       <a href="/market">Markets</a>
+      <a href="/screener">Screener</a>
       <a href="/watchlist">Watchlist</a>
+      <a href="/alerts">Alerts</a>
+      <a href="/portfolio">Portfolio</a>
       <a href="/history">History</a>
       <a href="/pricing">Pricing</a>
     </nav>
@@ -1079,5 +1084,10 @@
   </div>
 </div>
 
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
 </body>
 </html>
