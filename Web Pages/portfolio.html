@@ -104,6 +104,15 @@
     </div>
   </div>
 
+  <!-- Equity Curve -->
+  <div class="card" id="equityCard" style="display:none">
+    <h2 style="display:flex;align-items:center;justify-content:space-between;">
+      Equity Curve
+      <span id="equityReturn" style="font-size:10pt;font-weight:700;color:var(--green)"></span>
+    </h2>
+    <canvas id="equityChart" height="80"></canvas>
+  </div>
+
   <div class="card">
     <h2>
       Positions
@@ -271,6 +280,53 @@ function deletePos(id) {
 
 loadPositions();
 setInterval(loadPositions, 30000);
+
+// ── Equity Curve ─────────────────────────────────────────────────────────────
+let _eqChart = null;
+async function loadEquityCurve() {
+  const r = await fetch('/api/portfolio/equity');
+  const d = await r.json();
+  if (!d.ok || !d.labels || d.labels.length < 2) return;
+  document.getElementById('equityCard').style.display = 'block';
+  const ret = d.total_return;
+  const el  = document.getElementById('equityReturn');
+  el.textContent  = (ret >= 0 ? '+' : '') + ret.toFixed(2) + '% total return';
+  el.style.color  = ret >= 0 ? 'var(--green)' : 'var(--red)';
+  const ctx = document.getElementById('equityChart').getContext('2d');
+  if (_eqChart) _eqChart.destroy();
+  _eqChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [{
+        label: 'Portfolio Value ($)',
+        data: d.values,
+        borderColor: ret >= 0 ? '#00C076' : '#FF4D4D',
+        backgroundColor: ret >= 0 ? 'rgba(0,192,118,0.08)' : 'rgba(255,77,77,0.08)',
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#7A8499', maxTicksLimit: 8, font: { size: 9 } }, grid: { color: '#2A3150' } },
+        y: { ticks: { color: '#7A8499', font: { size: 9 }, callback: v => '$' + v.toLocaleString() }, grid: { color: '#2A3150' } }
+      }
+    }
+  });
+}
+
+// Load Chart.js then draw equity curve
+(function() {
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+  s.onload = loadEquityCurve;
+  document.head.appendChild(s);
+})();
 </script>
 </body>
 </html>

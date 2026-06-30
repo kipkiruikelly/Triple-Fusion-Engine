@@ -171,6 +171,58 @@ def register_portfolio_routes(app):
         db.session.commit()
         return jsonify({"ok": True})
 
+    # ── Portfolio equity curve ─────────────────────────────────────────────────
+
+    @app.route("/api/portfolio/equity")
+    @login_required
+    def portfolio_equity():
+        """Return time-series portfolio equity for the equity curve chart."""
+        positions = PortfolioPosition.query.filter_by(user_id=current_user.id)\
+                                           .order_by(PortfolioPosition.opened_at).all()
+        if not positions:
+            return jsonify({"ok": True, "labels": [], "values": [], "total_return": 0})
+
+        # Build a timeline of events (open/close) to compute running P&L
+        from collections import defaultdict
+        events = []
+        for p in positions:
+            if p.opened_at:
+                cost = p.entry_price * p.quantity
+                events.append((p.opened_at.date(), "open",  cost))
+            if p.status == "closed" and p.closed_at and p.exit_price:
+                pnl = ((p.exit_price - p.entry_price) * p.quantity
+                       if p.side == "long"
+                       else (p.entry_price - p.exit_price) * p.quantity)
+                events.append((p.closed_at.date(), "close", pnl))
+
+        if not events:
+            return jsonify({"ok": True, "labels": [], "values": [], "total_return": 0})
+
+        events.sort(key=lambda x: x[0])
+        start   = events[0][0]
+        end     = datetime.utcnow().date()
+        equity  = 10_000.0   # starting paper capital
+
+        # Daily equity series
+        from datetime import timedelta
+        labels, values = [], []
+        running = equity
+        daily_pnl: dict = defaultdict(float)
+        for dt, etype, amount in events:
+            if etype == "close":
+                daily_pnl[dt] += amount
+
+        current = start
+        while current <= end:
+            running += daily_pnl.get(current, 0)
+            labels.append(current.strftime("%b %d"))
+            values.append(round(running, 2))
+            current += timedelta(days=1)
+
+        total_return = round((running - equity) / equity * 100, 2)
+        return jsonify({"ok": True, "labels": labels, "values": values,
+                        "total_return": total_return})
+
     # ── Risk / position size calculator ───────────────────────────────────────
 
     @app.route("/risk")

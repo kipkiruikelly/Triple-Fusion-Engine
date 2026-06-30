@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Strategy Pipeline — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--surface2:#222840;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--green:#00C076;--red:#FF4D4D;--blue:#3B82F6;--white:#ffffff}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .topbar-left{display:flex;align-items:center;gap:32px}
+    .logo{font-size:15pt;font-weight:700;color:var(--white);letter-spacing:-0.5px;text-decoration:none}
+    .logo span{color:var(--accent)}
+    .nav-links{display:flex;gap:4px}
+    .nav-links a{color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 12px;border-radius:6px;transition:all .15s}
+    .nav-links a:hover,.nav-links a.active{color:var(--text);background:var(--surface2)}
+    .topbar-right{display:flex;align-items:center;gap:8px}
+    .btn-sm{font-size:9pt;font-weight:600;padding:5px 12px;border-radius:5px;text-decoration:none;border:1px solid var(--border);color:var(--muted);transition:all .15s}
+    .btn-sm:hover{color:var(--white);border-color:var(--accent)}
+    .container{max-width:1000px;margin:0 auto;padding:32px 24px}
+    h1{font-size:20pt;font-weight:700;color:var(--white);margin-bottom:6px}
+    .subtitle{font-size:10.5pt;color:var(--muted);margin-bottom:32px}
+    /* Pipeline */
+    .pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:40px;position:relative}
+    .pipeline::before{content:'';position:absolute;top:40px;left:12.5%;right:12.5%;height:2px;background:linear-gradient(90deg,var(--accent),var(--blue),var(--green),#00C076);opacity:0.4;z-index:0}
+    .stage{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px 20px;position:relative;z-index:1;margin:0 6px;transition:border-color .2s}
+    .stage:hover{border-color:var(--accent)}
+    .stage-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11pt;font-weight:700;color:var(--white);margin:0 auto 16px;position:relative}
+    .stage-1 .stage-num{background:var(--accent)}
+    .stage-2 .stage-num{background:var(--blue)}
+    .stage-3 .stage-num{background:#8B5CF6}
+    .stage-4 .stage-num{background:var(--green)}
+    .stage-title{font-size:11pt;font-weight:700;color:var(--white);text-align:center;margin-bottom:8px}
+    .stage-desc{font-size:8.5pt;color:var(--muted);text-align:center;line-height:1.5;margin-bottom:16px}
+    .stage-metrics{display:flex;flex-direction:column;gap:8px}
+    .metric{background:var(--bg);border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center}
+    .metric-label{font-size:8.5pt;color:var(--muted);font-weight:500}
+    .metric-val{font-size:10pt;font-weight:700;color:var(--white)}
+    .metric-val.good{color:var(--green)}
+    .metric-val.warn{color:#FBBF24}
+    .metric-val.muted{color:var(--muted)}
+    /* Timeline */
+    .section-title{font-size:13pt;font-weight:700;color:var(--white);margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:8px}
+    .steps-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:40px}
+    .step-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+    .step-header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .step-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14pt}
+    .step-card h3{font-size:10.5pt;font-weight:700;color:var(--white)}
+    .step-card p{font-size:9pt;color:var(--muted);line-height:1.5}
+    .step-card .cta{display:inline-block;margin-top:12px;font-size:9pt;font-weight:600;color:var(--accent);text-decoration:none}
+    .step-card .cta:hover{text-decoration:underline}
+    .badge-pro{font-size:7.5pt;font-weight:700;background:var(--accent);color:var(--white);padding:2px 7px;border-radius:3px;margin-left:6px;vertical-align:middle}
+    @media(max-width:700px){.pipeline{grid-template-columns:1fr 1fr}.steps-grid{grid-template-columns:1fr}.pipeline::before{display:none}}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="/" class="logo">Bull<span>Logic</span></a>
+    <nav class="nav-links">
+      <a href="/">Predictor</a>
+      <a href="/screener">Screener</a>
+      <a href="/leaderboard">Leaderboard</a>
+      <a href="/backtest">Backtest</a>
+      <a href="/portfolio">Portfolio</a>
+      <a href="/pipeline" class="active">Pipeline</a>
+    </nav>
+  </div>
+  <div class="topbar-right">
+    <a href="/model-metrics" class="btn-sm">Model Metrics</a>
+    <a href="/profile" class="btn-sm">Profile</a>
+    <a href="/logout" class="btn-sm">Logout</a>
+  </div>
+</div>
+
+<div class="container">
+  <h1>Strategy Pipeline</h1>
+  <p class="subtitle">End-to-end quantitative workflow — from model research to live signal generation.</p>
+
+  <div class="pipeline">
+    <div class="stage stage-1">
+      <div class="stage-num">1</div>
+      <div class="stage-title">Research</div>
+      <div class="stage-desc">ML model training on ICT features across 10 tickers × 7 timeframes</div>
+      <div class="stage-metrics" id="researchMetrics">
+        <div class="metric"><span class="metric-label">Models Trained</span><span class="metric-val" id="nModels">—</span></div>
+        <div class="metric"><span class="metric-label">Avg XGB AUC</span><span class="metric-val" id="avgAuc">—</span></div>
+        <div class="metric"><span class="metric-label">Timeframes</span><span class="metric-val">7</span></div>
+        <div class="metric"><span class="metric-label">Tickers</span><span class="metric-val">10</span></div>
+      </div>
+    </div>
+    <div class="stage stage-2">
+      <div class="stage-num">2</div>
+      <div class="stage-title">Backtest</div>
+      <div class="stage-desc">Historical validation against out-of-sample price data with risk metrics</div>
+      <div class="stage-metrics">
+        <div class="metric"><span class="metric-label">Total Return</span><span class="metric-val" id="btReturn">—</span></div>
+        <div class="metric"><span class="metric-label">Sharpe Ratio</span><span class="metric-val" id="btSharpe">—</span></div>
+        <div class="metric"><span class="metric-label">Engine</span><span class="metric-val">Custom</span></div>
+        <div class="metric"><span class="metric-label">Data Source</span><span class="metric-val">Alpaca</span></div>
+      </div>
+    </div>
+    <div class="stage stage-3">
+      <div class="stage-num">3</div>
+      <div class="stage-title">Paper Trading</div>
+      <div class="stage-desc">Track signals against real prices before committing capital</div>
+      <div class="stage-metrics">
+        <div class="metric"><span class="metric-label">Open Positions</span><span class="metric-val" id="paperOpen">—</span></div>
+        <div class="metric"><span class="metric-label">Total Logged</span><span class="metric-val" id="paperTotal">—</span></div>
+        <div class="metric"><span class="metric-label">Direction Acc.</span><span class="metric-val good" id="paperAcc">—</span></div>
+        <div class="metric"><span class="metric-label">Checked</span><span class="metric-val" id="paperChecked">—</span></div>
+      </div>
+    </div>
+    <div class="stage stage-4">
+      <div class="stage-num">4</div>
+      <div class="stage-title">Live Signals</div>
+      <div class="stage-desc">Real-time ML predictions with ICT confluence filters</div>
+      <div class="stage-metrics">
+        <div class="metric"><span class="metric-label">Total Predictions</span><span class="metric-val" id="livePreds">—</span></div>
+        <div class="metric"><span class="metric-label">Retraining</span><span class="metric-val good">Weekly</span></div>
+        <div class="metric"><span class="metric-label">Execution</span><span class="metric-val">MT5 / Paper</span></div>
+        <div class="metric"><span class="metric-label">Backup</span><span class="metric-val">Azure</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">How It Works</div>
+  <div class="steps-grid">
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-icon" style="background:rgba(255,107,53,0.15)">&#128202;</div>
+        <h3>ICT Feature Engineering</h3>
+      </div>
+      <p>Every bar is annotated with Order Blocks, Fair Value Gaps, Change of Character, OTE zones, PD arrays, kill zones, and IPDA liquidity levels — the same concepts used by institutional traders.</p>
+      <a class="cta" href="/model-metrics">View Model AUC Scores &rarr;</a>
+    </div>
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-icon" style="background:rgba(59,130,246,0.15)">&#127919;</div>
+        <h3>Multi-Timeframe Confluence</h3>
+      </div>
+      <p>Higher-timeframe bias (1d, 4h) is injected into lower-timeframe models (1h, 15m) via forward-fill, so every signal inherits the structural context of the full market structure.</p>
+      <a class="cta" href="/">Run a Prediction &rarr;</a>
+    </div>
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-icon" style="background:rgba(139,92,246,0.15)">&#9878;</div>
+        <h3>Ensemble Models<span class="badge-pro">PRO</span></h3>
+      </div>
+      <p>Three classifiers vote on each signal: Logistic Regression for linear structure, Random Forest for non-linear patterns, and XGBoost with 5-fold CV for robustness. Final confidence is ensemble-weighted.</p>
+      <a class="cta" href="/backtest">Run a Backtest &rarr;</a>
+    </div>
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-icon" style="background:rgba(0,192,118,0.15)">&#128640;</div>
+        <h3>Automated Retraining</h3>
+      </div>
+      <p>A systemd timer fires every Sunday at 2 AM, runs the full training pipeline with the latest Alpaca data, saves model metrics, and auto-uploads artifacts to Azure Blob Storage.</p>
+      <a class="cta" href="/leaderboard">View Signal Leaderboard &rarr;</a>
+    </div>
+  </div>
+
+  <div class="section-title">Quick Actions</div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    <a href="/" style="background:var(--accent);border:none;border-radius:6px;color:#fff;text-decoration:none;font-size:9.5pt;font-weight:700;padding:10px 20px">&#9654; Run Prediction</a>
+    <a href="/screener" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;font-size:9.5pt;font-weight:600;padding:10px 20px">&#128269; Screener</a>
+    <a href="/leaderboard" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;font-size:9.5pt;font-weight:600;padding:10px 20px">&#127942; Leaderboard</a>
+    <a href="/backtest" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;font-size:9.5pt;font-weight:600;padding:10px 20px">&#128200; Backtest</a>
+    <a href="/model-metrics" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;font-size:9.5pt;font-weight:600;padding:10px 20px">&#127919; Model Metrics</a>
+    <a href="/portfolio" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;font-size:9.5pt;font-weight:600;padding:10px 20px">&#128181; Portfolio</a>
+  </div>
+</div>
+
+<script>
+(async function() {
+  try {
+    const d = await (await fetch('/api/pipeline/stats')).json();
+    if (!d.ok) return;
+    // Research stage
+    document.getElementById('nModels').textContent = d.research.n_models || '—';
+    const auc = d.research.avg_auc;
+    const aucEl = document.getElementById('avgAuc');
+    if (auc) {
+      aucEl.textContent = auc;
+      aucEl.className = 'metric-val ' + (auc >= 0.65 ? 'good' : auc >= 0.55 ? 'warn' : '');
+    }
+    // Backtest stage
+    const btr = d.backtest.total_return;
+    const bts = d.backtest.sharpe;
+    document.getElementById('btReturn').textContent = btr != null ? (btr >= 0 ? '+' : '') + btr.toFixed(1) + '%' : 'Run backtest';
+    document.getElementById('btReturn').className = 'metric-val ' + (btr > 0 ? 'good' : btr < 0 ? '' : 'muted');
+    document.getElementById('btSharpe').textContent = bts != null ? bts.toFixed(2) : '—';
+    // Paper stage
+    document.getElementById('paperOpen').textContent = d.paper.open ?? '—';
+    document.getElementById('paperTotal').textContent = d.paper.total ?? '—';
+    const acc = d.paper.direction_acc;
+    const accEl = document.getElementById('paperAcc');
+    accEl.textContent = acc != null ? acc + '%' : d.paper.checked < 3 ? 'Need data' : '—';
+    accEl.className = 'metric-val ' + (acc >= 60 ? 'good' : acc ? 'warn' : 'muted');
+    document.getElementById('paperChecked').textContent = d.paper.checked ?? 0;
+    // Live stage
+    document.getElementById('livePreds').textContent = d.live.total_predictions ?? '—';
+  } catch(e) {}
+})();
+</script>
+</body>
+</html>

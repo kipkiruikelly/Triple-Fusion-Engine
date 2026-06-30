@@ -335,6 +335,199 @@ def register_prediction_routes(app, metrics):
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
+    # ── Signal leaderboard ─────────────────────────────────────────────────────
+
+    @app.route("/leaderboard")
+    @login_required
+    def leaderboard():
+        return render_template("leaderboard.html")
+
+    @app.route("/api/leaderboard")
+    @login_required
+    def api_leaderboard():
+        from models import PredictionAccuracy, PredictionHistory
+        tickers   = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL", "AMZN", "META", "QQQ", "NDX", "DIA"]
+        intervals = ["1d", "1h", "4h"]
+        rows = []
+
+        def _sig(args):
+            ticker, ivl = args
+            try:
+                sig    = ml_signal(ticker, ivl)
+                acc_rows = (db.session.query(PredictionAccuracy)
+                            .join(PredictionHistory,
+                                  PredictionAccuracy.prediction_id == PredictionHistory.id)
+                            .filter(PredictionHistory.ticker == ticker,
+                                    PredictionHistory.interval == ivl)
+                            .limit(50).all())
+                n      = len(acc_rows)
+                dir_ok = sum(1 for a in acc_rows if a.direction_ok) if n else 0
+                return {
+                    "ticker":     ticker,
+                    "interval":   ivl,
+                    "action":     sig.get("action", "HOLD"),
+                    "confidence": sig.get("confidence", 0),
+                    "price":      sig.get("current_price", 0),
+                    "rsi":        sig.get("rsi", 50),
+                    "accuracy":   round(dir_ok / n * 100, 1) if n >= 3 else None,
+                    "n_checked":  n,
+                }
+            except Exception:
+                return None
+
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            results = list(ex.map(_sig, [(t, iv) for t in tickers for iv in intervals]))
+        rows = sorted([r for r in results if r],
+                      key=lambda x: (x["accuracy"] or 0, x["confidence"]), reverse=True)
+        return jsonify({"ok": True, "rows": rows})
+
+    # ── Deep research page ─────────────────────────────────────────────────────
+
+    @app.route("/research/<ticker>")
+    @login_required
+    def research_page(ticker):
+        return render_template("research.html", ticker=ticker.upper())
+
+    @app.route("/api/research/<ticker>")
+    @login_required
+    def api_research(ticker):
+        ticker = ticker.upper()
+        import yfinance as yf
+
+        def _price():
+            try:
+                fi = yf.Ticker(ticker).fast_info
+                return {"price": round(float(fi.last_price or 0), 2),
+                        "prev":  round(float(fi.previous_close or 0), 2)}
+            except Exception:
+                return {}
+
+        def _info():
+            try:
+                i = yf.Ticker(ticker).info
+                return {
+                    "name":           i.get("longName", ticker),
+                    "sector":         i.get("sector", "—"),
+                    "industry":       i.get("industry", "—"),
+                    "market_cap":     i.get("marketCap"),
+                    "pe":             round(float(i.get("trailingPE") or 0), 2),
+                    "eps":            round(float(i.get("trailingEps") or 0), 2),
+                    "52w_high":       round(float(i.get("fiftyTwoWeekHigh") or 0), 2),
+                    "52w_low":        round(float(i.get("fiftyTwoWeekLow") or 0), 2),
+                    "avg_volume":     i.get("averageVolume"),
+                    "beta":           round(float(i.get("beta") or 0), 2),
+                    "div_yield":      round(float((i.get("dividendYield") or 0) * 100), 2),
+                    "target_mean":    round(float(i.get("targetMeanPrice") or 0), 2),
+                    "recommendation": i.get("recommendationKey", "—"),
+                    "analyst_count":  i.get("numberOfAnalystOpinions", 0),
+                    "short_float":    round(float((i.get("shortPercentOfFloat") or 0) * 100), 2),
+                    "description":    (i.get("longBusinessSummary") or "")[:400],
+                }
+            except Exception:
+                return {}
+
+        def _news():
+            try:
+                raw = yf.Ticker(ticker).news or []
+                items = []
+                for n in raw[:5]:
+                    ct    = n.get("content", {})
+                    title = ct.get("title") or n.get("title", "")
+                    link  = ct.get("canonicalUrl", {}).get("url") or n.get("link", "")
+                    items.append({"title": title, "link": link})
+                return items
+            except Exception:
+                return []
+
+        def _prediction():
+            try:
+                _try_azure_download(ticker, "1d")
+                res = run_prediction(ticker, "1d")
+                return {
+                    "direction":  res.get("direction"),
+                    "confidence": res.get("confidence"),
+                    "lr_pred":    res.get("lr_pred"),
+                    "action":     res.get("action"),
+                    "rsi":        res.get("rsi"),
+                    "macd":       res.get("macd_signal"),
+                    "ict_bias":   res.get("ict_bias"),
+                    "current_price": res.get("current_price"),
+                }
+            except Exception:
+                return {}
+
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            fp = ex.submit(_price)
+            fi = ex.submit(_info)
+            fn = ex.submit(_news)
+            fd = ex.submit(_prediction)
+            price_d = fp.result()
+            info_d  = fi.result()
+            news_d  = fn.result()
+            pred_d  = fd.result()
+
+        return jsonify({"ok": True, "ticker": ticker,
+                        "price": price_d, "info": info_d,
+                        "news": news_d,  "prediction": pred_d})
+
+    # ── Pipeline page ──────────────────────────────────────────────────────────
+
+    @app.route("/pipeline")
+    @login_required
+    def pipeline():
+        return render_template("pipeline.html")
+
+    @app.route("/api/pipeline/stats")
+    @login_required
+    def api_pipeline_stats():
+        """Return system-wide metrics for the strategy pipeline page."""
+        import glob
+        from models import PredictionAccuracy, PredictionHistory, PortfolioPosition
+        BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        models_dir = os.path.join(BASE_DIR, "Saved Models")
+        data_dir   = os.path.join(BASE_DIR, "Data")
+
+        n_models = len(glob.glob(os.path.join(models_dir, "lr_model_*.pkl")))
+
+        metrics_path = os.path.join(data_dir, "model_metrics.json")
+        avg_auc = None
+        if os.path.exists(metrics_path):
+            import json
+            with open(metrics_path) as f:
+                m = json.load(f)
+            results = m.get("results", [])
+            aucs = [r["xgb_auc"] for r in results if r.get("xgb_auc") and r["xgb_auc"] > 0]
+            avg_auc = round(sum(aucs) / len(aucs), 3) if aucs else None
+
+        bt_path = os.path.join(data_dir, "backtest_summary.json")
+        bt_return, bt_sharpe = None, None
+        if os.path.exists(bt_path):
+            import json
+            with open(bt_path) as f:
+                bt = json.load(f)
+            metrics = bt.get("metrics", {})
+            bt_return = metrics.get("total_return")
+            bt_sharpe = metrics.get("sharpe")
+
+        total_acc = PredictionAccuracy.query.count()
+        dir_ok    = PredictionAccuracy.query.filter_by(direction_ok=True).count()
+        direction_acc = round(dir_ok / total_acc * 100, 1) if total_acc >= 5 else None
+
+        open_positions  = PortfolioPosition.query.filter_by(
+            user_id=current_user.id, status="open").count()
+        total_positions = PortfolioPosition.query.filter_by(user_id=current_user.id).count()
+
+        total_preds = PredictionHistory.query.filter_by(user_id=current_user.id).count()
+
+        return jsonify({
+            "ok": True,
+            "research":    {"n_models": n_models, "avg_auc": avg_auc, "tickers": 10, "timeframes": 7},
+            "backtest":    {"total_return": bt_return, "sharpe": bt_sharpe},
+            "paper":       {"open": open_positions, "total": total_positions,
+                            "direction_acc": direction_acc, "checked": total_acc},
+            "live":        {"total_predictions": total_preds},
+        })
+
     @app.route("/api/ai/analyze/<ticker>", methods=["POST"])
     @login_required
     def ai_analyze(ticker):
