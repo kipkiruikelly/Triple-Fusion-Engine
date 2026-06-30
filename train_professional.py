@@ -48,9 +48,11 @@ try:
 except ImportError:
     XGB_OK = False
 
+import json
+
 from alpaca.data.historical import StockHistoricalDataClient
 from alpaca.data.requests import StockBarsRequest
-from alpaca.data.timeframe import TimeFrame
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
 # ── Credentials ───────────────────────────────────────────────────────────────
 
@@ -69,6 +71,14 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 
 FETCH_START = datetime(2024, 1, 2)
 FETCH_END   = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+# For longer TFs, fetch directly from Alpaca with an extended start date.
+# Alpaca daily/hourly bars go back further than the 1m free-tier limit.
+DIRECT_TF_FETCH = {
+    # (alpaca TimeFrame, start_date, chunk_days)
+    "1h": (TimeFrame(1, TimeFrameUnit.Hour), datetime(2022, 1, 3), 365),
+    "1d": (TimeFrame(1, TimeFrameUnit.Day),  datetime(2019, 1, 2), 730),
+}
 
 ALL_TICKERS = ["QQQ", "AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "META", "AMZN", "NDX", "DIA"]
 
@@ -159,6 +169,40 @@ def fetch_1min(ticker: str) -> pd.DataFrame:
     df = df.between_time("09:30", "16:00")[["Open", "High", "Low", "Close", "Volume"]]
     log.info(f"  {len(df):,} 1m bars after market-hours filter")
     return df
+
+
+def fetch_tf_direct(ticker: str, alpaca_tf, start: datetime, chunk_days: int = 365) -> pd.DataFrame:
+    """Fetch OHLCV at a coarser timeframe directly from Alpaca (longer history than 1m)."""
+    symbol = ALPACA_SYMBOL_MAP.get(ticker, ticker)
+    log.info(f"  Fetching {symbol} direct {alpaca_tf} {start.date()} → {FETCH_END.date()}")
+
+    chunks, cursor = [], start
+    while cursor < FETCH_END:
+        end = min(cursor + timedelta(days=chunk_days), FETCH_END)
+        try:
+            req = StockBarsRequest(symbol_or_symbols=symbol, timeframe=alpaca_tf,
+                                   start=cursor, end=end)
+            df = _client.get_stock_bars(req).df
+            if not df.empty:
+                if isinstance(df.index, pd.MultiIndex):
+                    df = df.droplevel(0)
+                chunks.append(df)
+        except Exception as exc:
+            log.warning(f"    {cursor.date()} → {end.date()}: {exc}")
+        cursor = end
+
+    if not chunks:
+        raise ValueError(f"No direct Alpaca data for {symbol} at {alpaca_tf}")
+
+    df = pd.concat(chunks).sort_index()
+    df = df[~df.index.duplicated(keep="last")]
+    df = df.rename(columns={"open": "Open", "high": "High", "low": "Low",
+                             "close": "Close", "volume": "Volume"})
+    df.index.name = "Date"
+    df.index = pd.to_datetime(df.index, utc=True).tz_convert("America/New_York")
+    df = df[df["Volume"] > 0]
+    log.info(f"  Direct {alpaca_tf}: {len(df):,} bars")
+    return df[["Open", "High", "Low", "Close", "Volume"]]
 
 
 def resample_ohlcv(df_1m: pd.DataFrame, rule: str) -> pd.DataFrame:
@@ -590,16 +634,43 @@ def main():
             log.error(f"  {ticker}: fetch failed — {exc}")
             continue
 
-        # 2. Resample 1m → all timeframes (need all for MTF context)
+        # 2. Resample 1m → short timeframes
         tf_dfs: dict[str, pd.DataFrame] = {"1m": df_1m.copy()}
         for tf, (rule, _, _) in TF_CONFIG.items():
-            if tf == "1m":
+            if tf in ("1m", "1h", "4h", "1d"):
                 continue
             try:
                 tf_dfs[tf] = resample_ohlcv(df_1m, rule)
                 log.info(f"  Resampled {tf:>4s}: {len(tf_dfs[tf]):,} bars")
             except Exception as exc:
                 log.warning(f"  Resample {tf} failed: {exc}")
+
+        # 2b. Fetch 1h and 1d directly from Alpaca for more historical data.
+        #     4h is then resampled from the extended 1h feed.
+        for tf, (alpaca_tf, start, chunk_days) in DIRECT_TF_FETCH.items():
+            try:
+                tf_dfs[tf] = fetch_tf_direct(ticker, alpaca_tf, start, chunk_days)
+            except Exception as exc:
+                log.warning(f"  Direct {tf} fetch failed, falling back to resample: {exc}")
+                if tf not in tf_dfs:
+                    rule = TF_CONFIG[tf][0]
+                    try:
+                        tf_dfs[tf] = resample_ohlcv(df_1m, rule)
+                    except Exception:
+                        pass
+
+        # Build 4h from the (possibly extended) 1h data
+        if "1h" in tf_dfs and not tf_dfs["1h"].empty:
+            try:
+                tf_dfs["4h"] = resample_ohlcv(tf_dfs["1h"], "4h")
+                log.info(f"  Resampled {'4h':>4s}: {len(tf_dfs['4h']):,} bars (from 1h)")
+            except Exception as exc:
+                log.warning(f"  4h resample from 1h failed: {exc}")
+        elif "4h" not in tf_dfs:
+            try:
+                tf_dfs["4h"] = resample_ohlcv(df_1m, "4h")
+            except Exception:
+                pass
 
         # 3. Compute ICT features for every TF (including those not being trained,
         #    as they may be needed as MTF context sources)
@@ -662,6 +733,29 @@ def main():
 
     log.info(f"\n  Log : {LOG_FILE}")
     log.info(f"  Models dir : {MODELS_DIR}")
+
+    # Persist metrics for the AUC dashboard
+    metrics_path = os.path.join(BASE_DIR, "Data", "model_metrics.json")
+    try:
+        with open(metrics_path, "w") as _mf:
+            json.dump({"trained_at": datetime.now().isoformat(), "results": all_results},
+                      _mf, indent=2, default=str)
+        log.info(f"  Metrics saved → {metrics_path}")
+    except Exception as _e:
+        log.warning(f"  Could not save metrics JSON: {_e}")
+
+    # Auto-upload to Azure if configured
+    conn_str = os.environ.get("AZURE_STORAGE_CONNECTION_STRING", "")
+    if conn_str:
+        try:
+            from azure_storage import upload_models_to_azure
+            trained = list({r["ticker"] for r in all_results})
+            log.info(f"  Uploading {len(trained)} tickers to Azure…")
+            for t in trained:
+                upload_models_to_azure(t)
+            log.info("  Azure upload complete.")
+        except Exception as _ae:
+            log.warning(f"  Azure upload failed: {_ae}")
 
 
 if __name__ == "__main__":

@@ -162,14 +162,61 @@ def _load_models(ticker: str, interval: str = "1d"):
 _FETCH_PERIOD = {
     "1d":  "18mo",
     "1h":  "730d",
+    "4h":  "730d",   # fetch as 1h then resample
+    "30m": "60d",
     "15m": "60d",
     "5m":  "60d",
+    "1m":  "7d",
 }
+
+_HTF_YF_PARAMS = {
+    "5m":  ("5m",  "60d"),
+    "15m": ("15m", "60d"),
+    "1h":  ("1h",  "730d"),
+    "4h":  ("1h",  "730d"),  # resample to 4h after fetch
+    "1d":  ("1d",  "18mo"),
+}
+
+_MTF_SOURCES = {
+    "1m":  ["5m", "15m", "1h"],
+    "5m":  ["15m", "1h", "4h"],
+    "15m": ["1h", "4h", "1d"],
+    "30m": ["1h", "4h", "1d"],
+    "1h":  ["4h", "1d"],
+    "4h":  ["1d"],
+    "1d":  [],
+}
+
+_MTF_COLS = {
+    "Structure_Bullish": "Struct",
+    "PD_Position":       "PD",
+    "RSI_14":            "RSI",
+    "Above_200SMA":      "A200",
+    "MACD_Diff":         "MACD",
+    "Bull_FVG_Count":    "BullFVG",
+    "Bear_FVG_Count":    "BearFVG",
+    "Displacement":      "Disp",
+    "BB_Pos":            "BBPos",
+    "ADX":               "ADX",
+}
+
+
+def _resample_4h(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.resample("4h", label="left", closed="left").agg(
+        {"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"}
+    ).dropna(subset=["Open", "Close"])
+    return df[df["Volume"] > 0]
 
 
 def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
     yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
-    period    = _FETCH_PERIOD.get(interval, "1y")
+    if interval == "4h":
+        df = yf.download(yf_ticker, period="730d", interval="1h",
+                         auto_adjust=True, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return _resample_4h(df) if not df.empty else df
+    period = _FETCH_PERIOD.get(interval, "1y")
     df = yf.download(yf_ticker, period=period, interval=interval,
                      auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
@@ -478,12 +525,289 @@ def build_features(df: pd.DataFrame, interval: str = "1d",
     return df
 
 
+# ── Professional (ICT 2022) feature engineering ────────────────────────────────
+
+def _is_professional_model(feature_cols: list) -> bool:
+    """True if model was trained by train_professional.py (has new ICT feature names)."""
+    return bool(set(feature_cols) & {"Returns", "CHoCH_Bear", "BB_Pos", "ADX", "MACD_Diff"})
+
+
+def _compute_pro_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataFrame:
+    """Mirror of compute_ict_features() from train_professional.py for live inference."""
+    df = df.copy()
+    c, h, l, o, v = df["Close"], df["High"], df["Low"], df["Open"], df["Volume"]
+
+    df["Returns"]  = c.pct_change()
+    df["Log_Ret"]  = np.log((c / c.shift(1)).replace(0, np.nan))
+    df["HL_Range"] = (h - l) / (c + 1e-8)
+    df["CO_Move"]  = (c - o) / (o + 1e-8)
+
+    atr14 = ta.volatility.AverageTrueRange(h, l, c, window=14).average_true_range().fillna(c * 0.01)
+    df["ATR_14"] = atr14
+    df["ATR_r"]  = atr14 / (c + 1e-8)
+
+    for p in [5, 10, 20, 50]:
+        sma = ta.trend.sma_indicator(c, window=p)
+        df[f"SMA_{p}"]   = sma
+        df[f"SMA_{p}_r"] = c / (sma + 1e-8) - 1
+    sma200 = c.rolling(200, min_periods=1).mean()
+    df["SMA_200_r"]    = c / (sma200 + 1e-8) - 1
+    df["Above_200SMA"] = (c > sma200).astype(int)
+    df["EMA_9"]  = ta.trend.ema_indicator(c, window=9)
+    df["EMA_21"] = ta.trend.ema_indicator(c, window=21)
+    df["EMA_50"] = ta.trend.ema_indicator(c, window=50)
+
+    df["RSI_7"]      = ta.momentum.rsi(c, window=7)
+    df["RSI_14"]     = ta.momentum.rsi(c, window=14)
+    df["RSI_21"]     = ta.momentum.rsi(c, window=21)
+    df["Stoch_K"]    = ta.momentum.stoch(h, l, c, window=14, smooth_window=3)
+    df["Stoch_D"]    = ta.momentum.stoch_signal(h, l, c, window=14, smooth_window=3)
+    df["ROC_5"]      = ta.momentum.roc(c, window=5)
+    df["ROC_10"]     = ta.momentum.roc(c, window=10)
+    df["Williams_R"] = ta.momentum.williams_r(h, l, c, lbp=14)
+
+    macd_ind        = ta.trend.MACD(c, window_fast=12, window_slow=26, window_sign=9)
+    df["MACD"]      = macd_ind.macd()
+    df["MACD_Sig"]  = macd_ind.macd_signal()
+    df["MACD_Diff"] = macd_ind.macd_diff()
+    df["ADX"]       = ta.trend.adx(h, l, c, window=14)
+    df["ADX_Pos"]   = ta.trend.adx_pos(h, l, c, window=14)
+    df["ADX_Neg"]   = ta.trend.adx_neg(h, l, c, window=14)
+    df["CCI"]       = ta.trend.cci(h, l, c, window=20)
+
+    bb = ta.volatility.BollingerBands(c, window=20, window_dev=2)
+    df["BB_Upper"] = bb.bollinger_hband()
+    df["BB_Lower"] = bb.bollinger_lband()
+    df["BB_Mid"]   = bb.bollinger_mavg()
+    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / (df["BB_Mid"] + 1e-8)
+    df["BB_Pos"]   = (c - df["BB_Lower"]) / (df["BB_Upper"] - df["BB_Lower"] + 1e-8)
+    try:
+        kc = ta.volatility.KeltnerChannel(h, l, c, window=20)
+        df["KC_Squeeze"] = ((df["BB_Upper"] < kc.keltner_channel_hband()) &
+                            (df["BB_Lower"] > kc.keltner_channel_lband())).astype(int)
+    except Exception:
+        df["KC_Squeeze"] = 0
+
+    vma20          = v.rolling(20, min_periods=1).mean()
+    df["Volume_r"] = v / (vma20 + 1)
+    df["OBV"]      = ta.volume.on_balance_volume(c, v)
+    df["OBV_r"]    = df["OBV"] / (df["OBV"].rolling(20, min_periods=1).mean() + 1e-8) - 1
+    try:
+        df["CMF"] = ta.volume.chaikin_money_flow(h, l, c, v, window=20)
+    except Exception:
+        df["CMF"] = 0.0
+    df["VWAP_r"] = c / (ta.volume.volume_weighted_average_price(h, l, c, v, window=14) + 1e-8) - 1
+
+    sh20 = h.rolling(20).max();  sl20 = l.rolling(20).min()
+    sh60 = h.rolling(60).max();  sl60 = l.rolling(60).min()
+    df["Dist_to_SH20"] = ((sh20 - c) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_to_SL20"] = ((c - sl20) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_to_SH60"] = ((sh60 - c) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_to_SL60"] = ((c - sl60) / (atr14 + 1e-8)).clip(-10, 10)
+    df["HH"] = ((h > h.shift(1)) & (h.shift(1) > h.shift(2))).astype(int)
+    df["LL"] = ((l < l.shift(1)) & (l.shift(1) < l.shift(2))).astype(int)
+    df["HL"] = ((l > l.shift(2)) & (h < sh20.shift(1))).astype(int)
+    df["LH"] = ((h < h.shift(2)) & (l > sl20.shift(1))).astype(int)
+    df["Structure_Bullish"] = (sh20 > sh60.shift(20)).astype(int)
+
+    hl_mask   = (l > l.shift(2)) & (h < sh20.shift(1))
+    lh_mask   = (h < h.shift(2)) & (l > sl20.shift(1))
+    recent_hl = l.where(hl_mask).rolling(10, min_periods=1).max().ffill()
+    recent_lh = h.where(lh_mask).rolling(10, min_periods=1).min().ffill()
+    df["CHoCH_Bear"] = ((c < recent_hl) &  df["Structure_Bullish"].astype(bool)).astype(int)
+    df["CHoCH_Bull"] = ((c > recent_lh) & ~df["Structure_Bullish"].astype(bool)).astype(int)
+
+    rng60 = (sh60 - sl60).replace(0, np.nan)
+    df["PD_Position"] = ((c - sl60) / rng60).fillna(0.5).clip(0, 1)
+    df["In_Premium"]  = (df["PD_Position"] >= 0.55).astype(int)
+    df["In_Discount"] = (df["PD_Position"] <= 0.45).astype(int)
+
+    rng20 = (sh20 - sl20).replace(0, np.nan)
+    df["In_OTE_Buy"]  = ((c >= sh20 - rng20 * 0.79) & (c <= sh20 - rng20 * 0.62)).astype(int)
+    df["In_OTE_Sell"] = ((c >= sl20 + rng20 * 0.62) & (c <= sl20 + rng20 * 0.79)).astype(int)
+
+    bull_fvg = (l > h.shift(2)).astype(int)
+    bear_fvg = (h < l.shift(2)).astype(int)
+    df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
+    df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
+    df["FVG_Net"]        = df["Bull_FVG_Count"] - df["Bear_FVG_Count"]
+    bull_ce = ((h.shift(2) + l) / 2).where(bull_fvg.astype(bool)).ffill()
+    bear_ce = ((l.shift(2) + h) / 2).where(bear_fvg.astype(bool)).ffill()
+    df["CE_Bull_Dist"] = ((c - bull_ce) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+    df["CE_Bear_Dist"] = ((bear_ce - c) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+
+    body = (c - o).abs();  rng = (h - l).replace(0, np.nan)
+    df["Body_Ratio"]   = (body / rng).fillna(0).clip(0, 1)
+    df["Displacement"] = ((rng.fillna(0) > atr14 * 1.5) & (df["Body_Ratio"] > 0.6)).astype(int)
+    bear_c = (c < o);  bull_c = (c > o)
+    bull_ob = (bear_c.shift(1).fillna(False)) & (df["Displacement"] == 1) & bull_c
+    bear_ob = (bull_c.shift(1).fillna(False)) & (df["Displacement"] == 1) & bear_c
+    df["Bull_OB_Count"] = bull_ob.astype(int).rolling(10, min_periods=1).sum()
+    df["Bear_OB_Count"] = bear_ob.astype(int).rolling(10, min_periods=1).sum()
+    last_boh = h.where(bull_ob).ffill();  last_bol = l.where(bull_ob).ffill()
+    last_beh = h.where(bear_ob).ffill();  last_bel = l.where(bear_ob).ffill()
+    df["Bull_OB_H_Dist"] = ((last_boh - c) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+    df["Bull_OB_L_Dist"] = ((c - last_bol) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+    df["Bear_OB_H_Dist"] = ((last_beh - c) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+    df["Bear_OB_L_Dist"] = ((c - last_bel) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+
+    tol  = c * 0.001
+    r10h = h.rolling(10).max().shift(1);  r10l = l.rolling(10).min().shift(1)
+    df["Equal_Highs"] = ((h - r10h).abs() < tol).astype(int).rolling(5, min_periods=1).sum()
+    df["Equal_Lows"]  = ((l - r10l).abs() < tol).astype(int).rolling(5, min_periods=1).sum()
+    df["Swept_High"]  = ((h > sh20.shift(1)) & (c < sh20.shift(1))).astype(int)
+    df["Swept_Low"]   = ((l < sl20.shift(1)) & (c > sl20.shift(1))).astype(int)
+    pwh = h.rolling(5).max().shift(1);  pwl = l.rolling(5).min().shift(1)
+    df["Dist_PWH"] = ((pwh - c) / (atr14 + 1e-8)).clip(-10, 10)
+    df["Dist_PWL"] = ((c - pwl)  / (atr14 + 1e-8)).clip(-10, 10)
+
+    for n in [20, 40, 60]:
+        df[f"IPDA_{n}_H"] = ((h.rolling(n).max().shift(1) - c) / (atr14 + 1e-8)).clip(-20, 20)
+        df[f"IPDA_{n}_L"] = ((c - l.rolling(n).min().shift(1)) / (atr14 + 1e-8)).clip(-20, 20)
+
+    df["P3_Accum"]   = (df["Returns"].abs() < df["ATR_r"] * 0.5).astype(int)
+    df["P3_Manip"]   = ((h > h.shift(1)) & (c < o)).astype(int)
+    df["P3_Distrib"] = df["Displacement"].rolling(3, min_periods=1).sum()
+
+    df["DayOfWeek"] = np.array(df.index.dayofweek, dtype=np.int32)
+    _m = np.array(df.index.month, dtype=np.int32)
+    _q = np.array(df.index.quarter, dtype=np.int32)
+    df["Month_Sin"]   = np.sin(2 * np.pi * _m / 12)
+    df["Month_Cos"]   = np.cos(2 * np.pi * _m / 12)
+    df["Quarter_Sin"] = np.sin(2 * np.pi * _q / 4)
+    df["Quarter_Cos"] = np.cos(2 * np.pi * _q / 4)
+
+    for lag in range(1, 6):
+        df[f"Ret_lag_{lag}"] = df["Returns"].shift(lag)
+    for lag in range(1, 4):
+        df[f"Vol_lag_{lag}"] = df["Volume_r"].shift(lag)
+
+    if is_intraday:
+        idx  = df.index
+        et   = idx.tz_convert("America/New_York") if idx.tz else idx.tz_localize("UTC").tz_convert("America/New_York")
+        hour   = np.array(et.hour,      dtype=np.int32)
+        minute = np.array(et.minute,    dtype=np.int32)
+        dow    = np.array(et.dayofweek, dtype=np.int32)
+
+        df["KZ_London"]       = ((hour >= 2)  & (hour < 5)).astype(int)
+        df["KZ_NY_Open"]      = ((hour >= 9)  & (hour < 11)).astype(int)
+        df["KZ_London_Close"] = ((hour >= 10) & (hour < 12)).astype(int)
+        df["KZ_NY_PM"]        = ((hour >= 13) & (hour < 16)).astype(int)
+        df["KZ_SB_AM"]        = ((hour == 10) | ((hour == 9) & (minute >= 50))).astype(int)
+        df["KZ_SB_PM"]        = ((hour >= 14) & (hour < 15)).astype(int)
+
+        mins_in           = np.clip((hour - 9) * 60 + minute - 30, 0, 390)
+        df["Session_Pct"] = mins_in / 390
+        df["Hour_Sin"]    = np.sin(2 * np.pi * hour / 24)
+        df["Hour_Cos"]    = np.cos(2 * np.pi * hour / 24)
+        df["Day_Sin"]     = np.sin(2 * np.pi * dow / 5)
+        df["Day_Cos"]     = np.cos(2 * np.pi * dow / 5)
+
+        date_str      = pd.Series(et.date, index=df.index)
+        midnight_open = df.groupby(date_str)["Open"].transform("first")
+        df["vs_MidOpen"] = (c - midnight_open) / (midnight_open + 1e-8) * 100
+        sess_hi = df.groupby(date_str)["High"].transform("cummax")
+        sess_lo = df.groupby(date_str)["Low"].transform("cummin")
+        df["Sess_H_Dist"] = ((sess_hi - c) / (atr14 + 1e-8)).clip(-10, 10)
+        df["Sess_L_Dist"] = ((c - sess_lo) / (atr14 + 1e-8)).clip(-10, 10)
+
+        is_asia_s = pd.Series((hour >= 20) | (hour < 2), index=df.index)
+        asia_h    = h.where(is_asia_s).rolling(14, min_periods=1).max().ffill()
+        asia_l    = l.where(is_asia_s).rolling(14, min_periods=1).min().ffill()
+        df["Asia_H_Dist"] = ((asia_h - c) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+        df["Asia_L_Dist"] = ((c - asia_l) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
+        df["Asia_Range"]  = ((asia_h - asia_l) / (atr14 + 1e-8)).clip(0, 20).fillna(0)
+        df["Above_AsiaH"] = (c > asia_h).astype(int)
+        df["Below_AsiaL"] = (c < asia_l).astype(int)
+
+        is_mon_s   = pd.Series(dow == 0, index=df.index)
+        prev_close = c.shift(1)
+        nwog_open  = df["Open"].where(is_mon_s).ffill()
+        nwog_prev  = prev_close.where(is_mon_s).ffill()
+        lo = nwog_prev.clip(lower=0)
+        df["In_NWOG"]   = (nwog_open.notna() & nwog_prev.notna() &
+                           c.between(lo, nwog_open, inclusive="both")).astype(int)
+        week_gap        = (df["Open"] - prev_close).where(is_mon_s).ffill().fillna(0)
+        df["NWOG_Norm"] = (week_gap / (atr14 + 1e-8)).clip(-5, 5)
+
+    # Compatibility aliases so display/chart code in run_prediction() works unchanged
+    df["SMA_7"]        = ta.trend.sma_indicator(c, window=7)
+    df["SMA_21"]       = ta.trend.sma_indicator(c, window=21)
+    df["MACD_Hist"]    = df["MACD_Diff"]
+    df["Daily_Return"] = df["Returns"] * 100
+    return df
+
+
+def _fetch_htf_for_mtf(ticker: str, htf: str) -> "pd.DataFrame | None":
+    """Fetch higher-timeframe data for MTF context injection during inference."""
+    yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
+    iv, period = _HTF_YF_PARAMS.get(htf, ("1d", "18mo"))
+    try:
+        df = yf.download(yf_ticker, period=period, interval=iv,
+                         auto_adjust=True, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        if df.empty:
+            return None
+        if htf == "4h":
+            df = _resample_4h(df)
+        return df if not df.empty else None
+    except Exception:
+        return None
+
+
+def _build_pro_features(df: pd.DataFrame, ticker: str, interval: str) -> pd.DataFrame:
+    """Build professional feature set (153 features + MTF context) for inference."""
+    is_intraday = (interval != "1d")
+    df = _compute_pro_features(df, is_intraday)
+
+    for htf in _MTF_SOURCES.get(interval, []):
+        htf_raw = _fetch_htf_for_mtf(ticker, htf)
+        if htf_raw is None:
+            continue
+        try:
+            htf_feat = _compute_pro_features(htf_raw, is_intraday=(htf != "1d"))
+        except Exception:
+            continue
+        for src_col, suffix in _MTF_COLS.items():
+            col_name = f"HTF_{htf}_{suffix}"
+            if src_col not in htf_feat.columns:
+                df[col_name] = 0.0
+                continue
+            s = htf_feat[src_col].copy()
+            # Normalise timezones before reindex-merge
+            try:
+                if s.index.tz is not None:
+                    s.index = s.index.tz_convert("UTC")
+                if df.index.tz is not None:
+                    ref_idx = df.index.tz_convert("UTC")
+                else:
+                    ref_idx = df.index
+                    s.index = s.index.tz_localize(None) if s.index.tz else s.index
+            except Exception:
+                ref_idx = df.index
+            union_ix = s.index.union(ref_idx)
+            combined = s.reindex(union_ix).sort_index().ffill()
+            df[col_name] = combined.reindex(ref_idx).values
+
+    # Zero-fill any HTF columns that couldn't be fetched
+    for htf in _MTF_SOURCES.get(interval, []):
+        for src_col, suffix in _MTF_COLS.items():
+            col_name = f"HTF_{htf}_{suffix}"
+            if col_name not in df.columns:
+                df[col_name] = 0.0
+
+    df.dropna(inplace=True)
+    return df
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def run_prediction(ticker: str, interval: str = "1d") -> dict:
     """Full prediction result dict for Flask routes and the result page."""
-    ticker = ticker.upper()
-    min_bars = {"1d": 70, "1h": 200, "15m": 150, "5m": 100}.get(interval, 70)
+    ticker   = ticker.upper()
+    min_bars = {"1d": 70, "1h": 100, "4h": 30, "30m": 50,
+                "15m": 80, "5m": 80, "1m": 50}.get(interval, 70)
 
     df = _fetch_df(ticker, interval)
     if df.empty or len(df) < min_bars:
@@ -492,12 +816,17 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
             "Check the ticker symbol."
         )
 
-    aux = _fetch_aux(ticker, interval)
-    df = build_features(df, interval, ticker, aux)
+    # Load models first so we know which feature set to build
+    lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
+
+    if _is_professional_model(feature_cols):
+        df = _build_pro_features(df, ticker, interval)
+    else:
+        aux = _fetch_aux(ticker, interval)
+        df  = build_features(df, interval, ticker, aux)
+
     if df.empty:
         raise ValueError("Feature engineering failed — insufficient data history.")
-
-    lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
 
     current_price = float(df["Close"].iloc[-1])
     X             = scaler.transform(df[feature_cols].iloc[-1:].values)
@@ -507,14 +836,25 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     price_change = lr_pred - current_price
 
     if xgb_model is not None:
-        xgb_prob  = float(xgb_model.predict_proba(X)[0][1])
+        xgb_prob   = float(xgb_model.predict_proba(X)[0][1])
+        xgb_up     = xgb_prob > 0.5
+        votes_up   = sum([bool(lr_up), bool(rf_up), xgb_up])
         direction  = "Up" if xgb_prob > 0.5 else "Down"
         confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
+        signal_strength = ("Strong" if votes_up == 3 and confidence >= 62
+                           else ("Strong" if votes_up == 0 and confidence >= 62
+                           else ("Moderate" if votes_up >= 2 or votes_up == 0
+                           else "Weak")))
     else:
+        xgb_prob   = 0.5
+        xgb_up     = lr_up
+        votes_up   = sum([bool(lr_up), bool(rf_up)])
         direction  = "Up" if lr_up else "Down"
-        recent_vol = float(df["Daily_Return"].tail(20).std())
+        daily_ret  = df.get("Daily_Return", df.get("Returns", pd.Series(dtype=float)))
+        recent_vol = float(daily_ret.tail(20).std()) if not daily_ret.empty else 1.0
         change_pct = abs(price_change / current_price * 100)
         confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
+        signal_strength = "Moderate" if votes_up == 2 or votes_up == 0 else "Weak"
 
     change_pct = abs(price_change / current_price * 100)
 
@@ -648,8 +988,11 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     _horizon_label = {
         "1d":  "Next Day",
         "1h":  "Next Hour",
+        "4h":  "Next 4 Hours",
+        "30m": "Next 30 Minutes",
         "15m": "Next 15 Minutes",
         "5m":  "Next 5 Minutes",
+        "1m":  "Next 5 Minutes",
     }
     if interval == "1d":
         as_of   = last_idx.strftime("%B %d, %Y")
@@ -703,6 +1046,14 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         "displaced"    : displaced,
         # Lightweight Charts
         "lw_chart"     : json.dumps(lw_chart_data),
+        # Model consensus fields (used by result.html confidence panel)
+        "xgb_prob"      : round(xgb_prob, 4),
+        "signal_strength": signal_strength,
+        "lr_up"          : bool(lr_up),
+        "rf_up"          : bool(rf_up),
+        "xgb_up"         : bool(xgb_up),
+        "votes_up"       : votes_up,
+        "has_xgb"        : (xgb_model is not None),
     }
 
 
@@ -715,17 +1066,23 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
     HOLD — models disagree
     """
     try:
-        ticker = ticker.upper()
+        ticker   = ticker.upper()
+        min_bars = {"1d": 70, "1h": 100, "4h": 30, "30m": 50,
+                    "15m": 80, "5m": 80, "1m": 50}.get(interval, 70)
         df = _fetch_df(ticker, interval)
-        if df.empty or len(df) < 70:
+        if df.empty or len(df) < min_bars:
             return {"action": "HOLD", "error": "Insufficient data", "confidence": 0}
 
-        aux = _fetch_aux(ticker, interval)
-        df = build_features(df, interval, ticker, aux)
+        lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
+
+        if _is_professional_model(feature_cols):
+            df = _build_pro_features(df, ticker, interval)
+        else:
+            aux = _fetch_aux(ticker, interval)
+            df  = build_features(df, interval, ticker, aux)
+
         if df.empty:
             return {"action": "HOLD", "error": "Feature build failed", "confidence": 0}
-
-        lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
 
         current_price = float(df["Close"].iloc[-1])
         X             = scaler.transform(df[feature_cols].iloc[-1:].values)
@@ -746,7 +1103,8 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
             if lr_up and rf_up:           action = "BUY"
             elif not lr_up and not rf_up: action = "SELL"
             else:                          action = "HOLD"
-            recent_vol = float(df["Daily_Return"].tail(20).std())
+            daily_ret  = df.get("Daily_Return", df.get("Returns", pd.Series(dtype=float)))
+            recent_vol = float(daily_ret.tail(20).std()) if not daily_ret.empty else 1.0
             change_pct = abs(lr_pred - current_price) / current_price * 100
             confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
 

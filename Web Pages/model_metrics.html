@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Model Quality — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
+      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
+      --accent: #FF6B35; --green: #00C076; --yellow: #F6C90E; --red: #FF4D4D;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    .topbar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 24px; height: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .logo { font-size: 15pt; font-weight: 700; color: #fff; letter-spacing: -0.5px; text-decoration: none; }
+    .logo span { color: var(--accent); }
+    .topbar-right { display: flex; align-items: center; gap: 10px; }
+    .topbar-right a {
+      color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500;
+      padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s;
+    }
+    .topbar-right a:hover { color: #fff; border-color: var(--accent); }
+
+    .page { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+    .page-header { margin-bottom: 28px; }
+    .page-header h1 { font-size: 20pt; font-weight: 800; color: #fff; }
+    .page-header p  { color: var(--muted); font-size: 10.5pt; margin-top: 6px; }
+    .meta { font-size: 9.5pt; color: var(--muted); margin-top: 4px; }
+    .meta strong { color: var(--text); }
+
+    /* Filters */
+    .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filter-label { font-size: 9.5pt; color: var(--muted); }
+    .tf-btn {
+      padding: 5px 14px; border-radius: 20px; font-size: 9.5pt; font-weight: 600;
+      border: 1px solid var(--border); background: transparent; color: var(--muted);
+      cursor: pointer; transition: all 0.15s;
+    }
+    .tf-btn.active, .tf-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(255,107,53,.08); }
+
+    /* Legend */
+    .legend { display: flex; gap: 18px; margin-bottom: 16px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 9pt; color: var(--muted); }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot.good   { background: var(--green); }
+    .dot.ok     { background: var(--yellow); }
+    .dot.weak   { background: var(--red); }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+    thead th {
+      background: var(--surface); padding: 10px 14px; text-align: left;
+      font-size: 9pt; font-weight: 600; color: var(--muted);
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: 9px 14px; color: var(--text); white-space: nowrap; }
+    .ticker-cell { font-weight: 700; color: #fff; }
+    .tf-cell {
+      display: inline-block; padding: 2px 8px; border-radius: 4px;
+      font-size: 8.5pt; font-weight: 600;
+      background: rgba(255,107,53,.12); color: var(--accent);
+    }
+    .rows-cell { color: var(--muted); font-size: 9pt; }
+
+    .auc {
+      font-weight: 700; font-size: 10pt;
+      padding: 3px 8px; border-radius: 5px; display: inline-block;
+    }
+    .auc.good   { color: var(--green);  background: rgba(0,192,118,.1); }
+    .auc.ok     { color: var(--yellow); background: rgba(246,201,14,.1); }
+    .auc.weak   { color: var(--red);    background: rgba(255,77,77,.1); }
+    .auc.na     { color: var(--muted);  background: transparent; font-weight: 400; }
+
+    /* Summary cards */
+    .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 14px; margin-bottom: 28px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+    .card .lbl { font-size: 9pt; color: var(--muted); margin-bottom: 5px; }
+    .card .val { font-size: 18pt; font-weight: 800; color: #fff; }
+    .card .val.green  { color: var(--green); }
+    .card .val.yellow { color: var(--yellow); }
+    .card .val.red    { color: var(--red); }
+
+    #loading { text-align: center; padding: 60px; color: var(--muted); }
+    #error-msg { color: var(--red); padding: 20px; font-size: 10pt; }
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="/"><Bull<span>Logic</span></a>
+  <div class="topbar-right">
+    <a href="/">Dashboard</a>
+    <a href="/screener">Screener</a>
+    <a href="/profile">Profile</a>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-header">
+    <h1>Model Quality</h1>
+    <p>AUC scores for every trained ticker × timeframe. XGB AUC is the primary signal quality metric.</p>
+    <div class="meta" id="trained-at"></div>
+  </div>
+
+  <div class="summary" id="summary-cards"></div>
+
+  <div class="filters">
+    <span class="filter-label">Timeframe:</span>
+    <button class="tf-btn active" data-tf="all">All</button>
+    <button class="tf-btn" data-tf="1m">1m</button>
+    <button class="tf-btn" data-tf="5m">5m</button>
+    <button class="tf-btn" data-tf="15m">15m</button>
+    <button class="tf-btn" data-tf="30m">30m</button>
+    <button class="tf-btn" data-tf="1h">1h</button>
+    <button class="tf-btn" data-tf="4h">4h</button>
+    <button class="tf-btn" data-tf="1d">1d</button>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="dot good"></div> AUC ≥ 0.65 — strong</div>
+    <div class="legend-item"><div class="dot ok"></div>   0.55 – 0.65 — usable</div>
+    <div class="legend-item"><div class="dot weak"></div> &lt; 0.55 — near-random</div>
+  </div>
+
+  <div id="loading">Loading model metrics…</div>
+  <div id="error-msg" style="display:none"></div>
+
+  <div class="table-wrap" id="table-wrap" style="display:none">
+    <table id="metrics-table">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>TF</th>
+          <th>Rows</th>
+          <th>Features</th>
+          <th>LR Acc</th>
+          <th>LR AUC</th>
+          <th>RF Acc</th>
+          <th>RF AUC</th>
+          <th>XGB CV</th>
+          <th>XGB Test</th>
+          <th>XGB AUC</th>
+        </tr>
+      </thead>
+      <tbody id="metrics-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const TF_ORDER = ['1m','5m','15m','30m','1h','4h','1d'];
+let allResults = [];
+let activeTf   = 'all';
+
+function aucClass(v) {
+  if (v == null) return 'na';
+  if (v >= 0.65) return 'good';
+  if (v >= 0.55) return 'ok';
+  return 'weak';
+}
+function fmt(v, decimals=3) {
+  return v != null ? v.toFixed(decimals) : '—';
+}
+function fmtRows(n) {
+  return n >= 1000 ? (n/1000).toFixed(0)+'k' : n;
+}
+
+function renderTable() {
+  const rows = activeTf === 'all' ? allResults : allResults.filter(r => r.tf === activeTf);
+  rows.sort((a,b) => a.ticker.localeCompare(b.ticker) || TF_ORDER.indexOf(a.tf) - TF_ORDER.indexOf(b.tf));
+
+  const tbody = document.getElementById('metrics-body');
+  tbody.innerHTML = rows.map(r => `
+    <tr data-tf="${r.tf}">
+      <td class="ticker-cell">${r.ticker}</td>
+      <td><span class="tf-cell">${r.tf}</span></td>
+      <td class="rows-cell">${fmtRows(r.rows)}</td>
+      <td class="rows-cell">${r.feats}</td>
+      <td>${fmt(r.lr_acc)}</td>
+      <td><span class="auc ${aucClass(r.lr_auc)}">${fmt(r.lr_auc)}</span></td>
+      <td>${fmt(r.rf_acc)}</td>
+      <td><span class="auc ${aucClass(r.rf_auc)}">${fmt(r.rf_auc)}</span></td>
+      <td>${fmt(r.xgb_cv_acc)}</td>
+      <td>${fmt(r.xgb_test_acc)}</td>
+      <td><span class="auc ${aucClass(r.xgb_auc)}">${fmt(r.xgb_auc)}</span></td>
+    </tr>`).join('');
+}
+
+function renderSummary() {
+  const aucs = allResults.map(r => r.xgb_auc).filter(v => v != null);
+  const avg  = aucs.reduce((s,v)=>s+v,0) / (aucs.length||1);
+  const good = aucs.filter(v=>v>=0.65).length;
+  const weak = aucs.filter(v=>v<0.55).length;
+  const best = Math.max(...aucs);
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="card"><div class="lbl">Models Trained</div><div class="val">${allResults.length}</div></div>
+    <div class="card"><div class="lbl">Avg XGB AUC</div><div class="val ${avg>=0.65?'green':avg>=0.55?'yellow':'red'}">${avg.toFixed(3)}</div></div>
+    <div class="card"><div class="lbl">Best AUC</div><div class="val green">${best.toFixed(3)}</div></div>
+    <div class="card"><div class="lbl">Strong (≥0.65)</div><div class="val green">${good}</div></div>
+    <div class="card"><div class="lbl">Weak (&lt;0.55)</div><div class="val ${weak>0?'red':'green'}">${weak}</div></div>
+  `;
+}
+
+async function load() {
+  try {
+    const res  = await fetch('/api/model-metrics');
+    const data = await res.json();
+    if (!data.ok) { throw new Error(data.error); }
+
+    allResults = data.results || [];
+    const ts   = data.trained_at ? new Date(data.trained_at).toLocaleString() : 'unknown';
+    document.getElementById('trained-at').innerHTML = `Last trained: <strong>${ts}</strong> — ${allResults.length} models`;
+
+    renderSummary();
+    renderTable();
+    document.getElementById('loading').style.display    = 'none';
+    document.getElementById('table-wrap').style.display = 'block';
+  } catch(e) {
+    document.getElementById('loading').style.display  = 'none';
+    const el = document.getElementById('error-msg');
+    el.style.display = 'block';
+    el.textContent   = 'Could not load metrics: ' + e.message;
+  }
+}
+
+document.querySelectorAll('.tf-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeTf = btn.dataset.tf;
+    renderTable();
+  });
+});
+
+load();
+</script>
+</body>
+</html>

@@ -320,26 +320,27 @@
     /* ── Interval toggle ── */
     .interval-toggle {
       display: flex;
-      gap: 0;
+      gap: 3px;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      overflow: hidden;
+      padding: 3px;
       height: 38px;
     }
 
     .iv-btn {
       flex: 1;
-      padding: 0 18px;
+      padding: 0 10px;
       border: none;
       background: transparent;
       color: var(--muted);
       font-family: 'Inter', sans-serif;
-      font-size: 9.5pt;
+      font-size: 8.5pt;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.15s;
       white-space: nowrap;
+      border-radius: 4px;
     }
 
     .iv-btn.active {
@@ -351,6 +352,47 @@
       background: var(--surface2);
       color: var(--text);
     }
+
+    /* ── Pro tickers signal grid ── */
+    .pro-tickers-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pro-ticker-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      position: relative;
+    }
+
+    .pro-ticker-card:hover { border-color: var(--accent); background: var(--surface2); }
+    .pro-ticker-card.selected { border-color: var(--accent); background: rgba(255,107,53,0.10); }
+
+    .ptc-sym { font-size: 10.5pt; font-weight: 700; color: var(--white); letter-spacing: 0.3px; }
+    .ptc-action {
+      font-size: 8pt; font-weight: 700; margin-top: 4px;
+      padding: 2px 6px; border-radius: 3px; display: inline-block;
+    }
+    .ptc-action.buy  { background: rgba(0,192,118,0.15); color: var(--green); }
+    .ptc-action.sell { background: rgba(255,77,77,0.15);  color: var(--red);   }
+    .ptc-action.hold { background: rgba(122,132,153,0.15);color: var(--muted); }
+    .ptc-conf { font-size: 7.5pt; color: var(--muted); margin-top: 3px; }
+
+    /* Kill zone indicator */
+    .kz-indicator {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 9pt; color: var(--muted); margin-top: 8px;
+    }
+    .kz-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .kz-dot.active { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .kz-name { font-weight: 600; }
 
     .error-box {
       background: rgba(255,77,77,0.1);
@@ -754,22 +796,36 @@
             autofocus
           />
           <div class="interval-toggle">
-            <button type="button" id="btn15m" class="iv-btn {% if interval == '15m' %}active{% endif %}" onclick="setInterval('15m')">15 Min</button>
-            <button type="button" id="btn1h"  class="iv-btn {% if interval == '1h'  %}active{% endif %}" onclick="setInterval('1h')">1 Hour</button>
-            <button type="button" id="btn1d"  class="iv-btn {% if (interval or '1d') == '1d' %}active{% endif %}" onclick="setInterval('1d')">Daily</button>
+            <button type="button" id="btn1m"  class="iv-btn {% if interval == '1m'  %}active{% endif %}" onclick="setIntervalAndPredict('1m')">1m</button>
+            <button type="button" id="btn5m"  class="iv-btn {% if interval == '5m'  %}active{% endif %}" onclick="setIntervalAndPredict('5m')">5m</button>
+            <button type="button" id="btn15m" class="iv-btn {% if interval == '15m' %}active{% endif %}" onclick="setIntervalAndPredict('15m')">15m</button>
+            <button type="button" id="btn30m" class="iv-btn {% if interval == '30m' %}active{% endif %}" onclick="setIntervalAndPredict('30m')">30m</button>
+            <button type="button" id="btn1h"  class="iv-btn {% if interval == '1h'  %}active{% endif %}" onclick="setIntervalAndPredict('1h')">1h</button>
+            <button type="button" id="btn4h"  class="iv-btn {% if interval == '4h'  %}active{% endif %}" onclick="setIntervalAndPredict('4h')">4h</button>
+            <button type="button" id="btn1d"  class="iv-btn {% if (interval or '1d') == '1d' %}active{% endif %}" onclick="setIntervalAndPredict('1d')">1D</button>
           </div>
-          <button type="submit" class="btn-predict">Predict</button>
+          <button type="submit" class="btn-predict" id="predictBtn">Predict</button>
         </div>
-        <div class="quick-picks">
-          <span class="quick-label">Quick pick:</span>
-          <span class="quick-tag" onclick="setTicker('AAPL')">AAPL</span>
-          <span class="quick-tag" onclick="setTicker('TSLA')">TSLA</span>
-          <span class="quick-tag" onclick="setTicker('MSFT')">MSFT</span>
-          <span class="quick-tag" onclick="setTicker('GOOGL')">GOOGL</span>
-          <span class="quick-tag" onclick="setTicker('NVDA')">NVDA</span>
-          <span class="quick-tag" onclick="setTicker('META')">META</span>
-          <span class="quick-tag" onclick="setTicker('NDX')">NDX</span>
-          <span class="quick-tag" onclick="setTicker('QQQ')">QQQ</span>
+
+        <!-- Kill zone indicator -->
+        <div class="kz-indicator" id="kzIndicator">
+          <div class="kz-dot" id="kzDot"></div>
+          <span class="kz-name" id="kzName">Loading session…</span>
+          <span style="margin-left:auto;font-size:8pt" id="kzClock"></span>
+        </div>
+
+        <div class="quick-picks" style="margin-top:10px;">
+          <span class="quick-label">Pro Models (all timeframes):</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('QQQ')">QQQ</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('AAPL')">AAPL</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('NVDA')">NVDA</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('TSLA')">TSLA</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('MSFT')">MSFT</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('GOOGL')">GOOGL</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('META')">META</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('AMZN')">AMZN</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('NDX')">NDX</span>
+          <span class="quick-tag" onclick="setTickerAndPredict('DIA')">DIA</span>
         </div>
         {% if error %}
         <div class="error-box">{{ error }}
@@ -784,24 +840,47 @@
     <!-- Stats -->
     <div class="stats-row">
       <div class="stat-card">
-        <div class="stat-label">Models Trained</div>
-        <div class="stat-value">3</div>
-        <div class="stat-sub">LR · RF · LSTM</div>
+        <div class="stat-label">Pro Models</div>
+        <div class="stat-value">210</div>
+        <div class="stat-sub">LR · RF · XGB × 10 tickers × 7 TFs</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Training Data</div>
-        <div class="stat-value">5–40yr</div>
-        <div class="stat-sub">2021 – 2026 (varies by ticker)</div>
+        <div class="stat-value">2024–Now</div>
+        <div class="stat-sub">Alpaca 1m → resampled to all TFs</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Features Used</div>
-        <div class="stat-value">57 / 76</div>
-        <div class="stat-sub">Daily / Intraday (TA + ICT 2022)</div>
+        <div class="stat-label">Features (1m)</div>
+        <div class="stat-value">153</div>
+        <div class="stat-sub">TA + ICT 2022 + Multi-TF context</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Best Model MAE</div>
-        <div class="stat-value">$1.09</div>
-        <div class="stat-sub">Linear Regression on AAPL 1h</div>
+        <div class="stat-label">Best XGB AUC</div>
+        <div class="stat-value">0.783</div>
+        <div class="stat-sub">AAPL 1m · ~70% direction accuracy</div>
+      </div>
+    </div>
+
+    <!-- Pro ticker live signal grid -->
+    <div class="info-section" style="margin-bottom:20px;" id="pro-signal-section">
+      <div class="info-header" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Live Signals — Pro Models</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span id="sig-tf-label" style="font-size:8.5pt;color:var(--muted)">1d</span>
+          <button onclick="refreshSignals()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:8.5pt;font-weight:600;padding:4px 10px;border-radius:4px;cursor:pointer;">Refresh</button>
+          <span id="sig-status" style="font-size:8pt;color:var(--muted)">loading…</span>
+        </div>
+      </div>
+      <div style="padding:16px 20px;">
+        <div class="pro-tickers-grid" id="pro-signals-grid">
+          {% for sym in ['QQQ','AAPL','NVDA','TSLA','MSFT','GOOGL','META','AMZN','NDX','DIA'] %}
+          <div class="pro-ticker-card" id="ptc-{{ sym }}" onclick="setTickerAndPredict('{{ sym }}')">
+            <div class="ptc-sym">{{ sym }}</div>
+            <div class="ptc-action hold" id="ptc-action-{{ sym }}">—</div>
+            <div class="ptc-conf" id="ptc-conf-{{ sym }}">—</div>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
 
@@ -844,22 +923,22 @@
     <!-- Models -->
     <div class="models-grid">
       <div class="model-card">
-        <div class="model-type">Baseline</div>
-        <div class="model-name">Linear Regression</div>
-        <div class="model-desc">Models the linear relationship between technical indicators and the next day's closing price. Fast, interpretable, and strong on trending assets.</div>
-        <span class="model-badge badge-lr">MAE $3.44 · R² 0.944 (AAPL daily)</span>
+        <div class="model-type">Classifier · ICT 2022</div>
+        <div class="model-name">Logistic Regression</div>
+        <div class="model-desc">Direction classifier trained on 153 ICT + TA features: Order Blocks, FVGs, CHoCH, OTE zones, IPDA levels, kill zones, and multi-timeframe context. Best AUC ~0.75.</div>
+        <span class="model-badge badge-lr">AUC 0.73–0.75 across all TFs</span>
       </div>
       <div class="model-card">
-        <div class="model-type">Ensemble</div>
+        <div class="model-type">Ensemble · Walk-Forward</div>
         <div class="model-name">Random Forest</div>
-        <div class="model-desc">100 decision trees trained on 57 TA + ICT 2022 features including IPDA levels, OTE zones, and Equal Highs/Lows. Captures non-linear price patterns.</div>
-        <span class="model-badge badge-rf">MAE $3.23 · R² 0.944 (AAPL daily)</span>
+        <div class="model-desc">200 decision trees trained on fractal 1m→7TF data. Captures non-linear ICT patterns including displacement candles, liquidity sweeps and Power of 3 phases.</div>
+        <span class="model-badge badge-rf">AUC 0.72–0.76 · max_depth=10</span>
       </div>
       <div class="model-card">
-        <div class="model-type">Deep Learning</div>
-        <div class="model-name">LSTM Network</div>
-        <div class="model-desc">Recurrent neural network trained on 60-day price sequences. Designed specifically for sequential time-series forecasting tasks.</div>
-        <span class="model-badge badge-lstm">MAE $5.99 · Dir. 48.4%</span>
+        <div class="model-type">Boosted · 5-Fold TSS CV</div>
+        <div class="model-name">XGBoost</div>
+        <div class="model-desc">Gradient-boosted classifier with 5-fold TimeSeriesSplit cross-validation. Primary confidence signal. Best on 1m–15m intraday timeframes with fractal MTF context.</div>
+        <span class="model-badge badge-lstm">AUC 0.78 · Acc 70% (AAPL 1m)</span>
       </div>
     </div>
 
