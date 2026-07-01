@@ -38,7 +38,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def create_app():
     app = Flask(__name__, template_folder="Web Pages", static_folder="Static Files")
-    app.secret_key = os.environ.get("SECRET_KEY", "smp-dev-key-2025")
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key:
+        if os.environ.get("FLASK_DEBUG", "false").lower() == "true":
+            secret_key = "smp-dev-key-2025"
+        else:
+            raise RuntimeError(
+                "SECRET_KEY environment variable must be set outside debug mode"
+            )
+    app.secret_key = secret_key
 
     # ── SQLAlchemy ────────────────────────────────────────────────────────────
     app.config["SQLALCHEMY_DATABASE_URI"] = (
@@ -267,6 +275,11 @@ def _start_alert_thread(app, db):
 app = create_app()
 
 if __name__ == "__main__":
+    # Dev-only entry point. For persistent/background hosting use wsgi.py
+    # (waitress), which has no interactive debugger and no reloader.
+    debug = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    host = os.environ.get("HOST", "127.0.0.1")
+    port = int(os.environ.get("PORT", 5000))
     print("ML-based Quantitative Trading System (refactored)")
-    print("Running at: http://127.0.0.1:5000\n")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    print(f"Running at: http://{host}:{port}\n")
+    app.run(debug=debug, host=host, port=port)

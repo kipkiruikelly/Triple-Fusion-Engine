@@ -33,3 +33,12 @@ Data/users.db
 .vscode/
 .idea/
 *.swp
+
+# Local service tooling (machine-specific, not source)
+tools/nssm.exe
+tools/caddy.exe
+tools/ngrok.exe
+tools/*.log
+logs/
+caddy/data/
+caddy/logs/

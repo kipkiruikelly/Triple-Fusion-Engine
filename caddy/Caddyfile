@@ -1,0 +1,21 @@
+{
+    admin off
+}
+
+:443 {
+    tls internal {
+        on_demand
+    }
+    reverse_proxy 127.0.0.1:5000
+
+    log {
+        output file C:\Users\Kipkirui\Projects\Stock-Market-Predictor\caddy\logs\access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}
+
+:80 {
+    redir https://{host}{uri} permanent
+}
