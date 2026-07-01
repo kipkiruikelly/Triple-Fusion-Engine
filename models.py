@@ -7,6 +7,9 @@ from extensions import db
 
 FREE_DAILY_LIMIT = 5
 
+# Role hierarchy for admin access control (higher = more privileged)
+ROLE_LEVELS = {'user': 0, 'viewer': 1, 'support': 2, 'admin': 3}
+
 
 class User(UserMixin, db.Model):
     id                      = db.Column(db.Integer, primary_key=True)
@@ -14,6 +17,10 @@ class User(UserMixin, db.Model):
     email                   = db.Column(db.String(120), unique=True, nullable=False)
     password_hash           = db.Column(db.String(256), nullable=False)
     plan                    = db.Column(db.String(20), default='free')
+    role                    = db.Column(db.String(10), default='user')    # user|viewer|support|admin
+    status                  = db.Column(db.String(12), default='active')  # active|deactivated|banned
+    created_at              = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen               = db.Column(db.DateTime, nullable=True)
     predictions_today       = db.Column(db.Integer, default=0)
     last_prediction_date    = db.Column(db.Date, nullable=True)
     stripe_customer_id      = db.Column(db.String(64), nullable=True)
@@ -26,6 +33,10 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    @property
+    def role_level(self):
+        return ROLE_LEVELS.get(self.role or 'user', 0)
 
     @property
     def is_pro(self):
@@ -174,7 +185,8 @@ class Payment(db.Model):
     phone        = db.Column(db.String(15), nullable=True)
     reference    = db.Column(db.String(80), unique=True, nullable=True)  # CheckoutRequestID / Stripe session id / gift code
     receipt      = db.Column(db.String(40), nullable=True)               # MpesaReceiptNumber
-    status       = db.Column(db.String(10), default='pending')  # pending | paid | cancelled | failed
+    status       = db.Column(db.String(10), default='pending')  # pending | paid | cancelled | failed | refunded
+    flagged      = db.Column(db.Boolean, default=False)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
 
@@ -219,6 +231,59 @@ class TwoFactorAuth(db.Model):
     secret       = db.Column(db.String(32), nullable=False)
     enabled      = db.Column(db.Boolean, default=False)
     backup_codes = db.Column(db.String(300), nullable=True)
+
+
+class AdminAuditLog(db.Model):
+    """Immutable log of every admin action — no delete/update path in the app."""
+    id          = db.Column(db.Integer, primary_key=True)
+    admin_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    action      = db.Column(db.String(50), nullable=False)    # e.g. 'login', 'user.ban', 'payment.refund'
+    target_type = db.Column(db.String(30), nullable=True)     # 'user', 'payment', 'ticker', 'setting', ...
+    target_id   = db.Column(db.String(40), nullable=True)
+    detail      = db.Column(db.String(400), nullable=True)
+    ip          = db.Column(db.String(45), nullable=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class AppSetting(db.Model):
+    """Key-value store for app settings and feature flags."""
+    key        = db.Column(db.String(50), primary_key=True)
+    value      = db.Column(db.String(500), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+
+class TickerConfig(db.Model):
+    """Admin-managed list of supported tickers."""
+    id       = db.Column(db.Integer, primary_key=True)
+    symbol   = db.Column(db.String(12), unique=True, nullable=False)
+    name     = db.Column(db.String(60), nullable=True)
+    enabled  = db.Column(db.Boolean, default=True)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Broadcast(db.Model):
+    """History of admin announcements sent to users."""
+    id         = db.Column(db.Integer, primary_key=True)
+    admin_id   = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title      = db.Column(db.String(100), nullable=False)
+    body       = db.Column(db.String(1000), nullable=False)
+    segment    = db.Column(db.String(10), default='all')      # all | free | pro
+    channel    = db.Column(db.String(10), default='in-app')   # in-app | email | both
+    sent_count = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ErrorLog(db.Model):
+    """Application errors captured by the global error handler."""
+    id         = db.Column(db.Integer, primary_key=True)
+    severity   = db.Column(db.String(10), default='error', index=True)  # error | warning
+    endpoint   = db.Column(db.String(120), nullable=True)
+    method     = db.Column(db.String(8), nullable=True)
+    message    = db.Column(db.String(500), nullable=False)
+    trace      = db.Column(db.Text, nullable=True)
+    ip         = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
 class UserPreferences(db.Model):

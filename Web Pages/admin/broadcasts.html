@@ -1,0 +1,75 @@
+{% extends "admin/base.html" %}
+{% block title %}Broadcasts{% endblock %}
+{% block crumbs %}<span class="sep">/</span><span class="here">Broadcasts</span>{% endblock %}
+{% block content %}
+<h1>Broadcasts</h1>
+<div class="subtitle">Send announcements to users and review history</div>
+
+<div class="grid g2">
+  {% if current_user.role in ('support','admin') %}
+  <div class="card" style="margin:0">
+    <h2>New announcement</h2>
+    <label class="stat-label" style="display:block;margin-bottom:4px">Title</label>
+    <input type="text" id="bTitle" maxlength="100" style="width:100%;margin-bottom:12px" placeholder="e.g. New 1-hour predictions are live">
+    <label class="stat-label" style="display:block;margin-bottom:4px">Message</label>
+    <textarea id="bBody" rows="5" maxlength="1000" placeholder="Body shown in the user's notification feed / email…"></textarea>
+    <div class="toolbar" style="margin:12px 0 0">
+      <select id="bSegment">
+        <option value="all">All active users</option>
+        <option value="free">Free users only</option>
+        <option value="pro">Pro users only</option>
+      </select>
+      <select id="bChannel">
+        <option value="in-app">In-app notification</option>
+        <option value="email">Email</option>
+        <option value="both">In-app + email</option>
+      </select>
+      <span style="flex:1"></span>
+      <button class="btn primary" id="bSend">Send broadcast</button>
+    </div>
+  </div>
+  {% endif %}
+  <div class="card" style="margin:0">
+    <h2>History</h2>
+    <div id="hist"><div class="skel" style="height:80px"></div></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+async function loadHist() {
+  const d = await api('/admin/api/broadcasts');
+  document.getElementById('hist').innerHTML = d.broadcasts.length
+    ? d.broadcasts.map(b => `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;gap:10px">
+          <b style="font-size:9.5pt">${esc(b.title)}</b>
+          <span class="muted" style="font-size:8pt;white-space:nowrap">${fmtDate(b.at)}</span>
+        </div>
+        <div class="muted" style="font-size:8.5pt;margin:4px 0">${esc(b.body)}</div>
+        <span class="badge b-blue">${b.segment}</span>
+        <span class="badge b-muted">${b.channel}</span>
+        <span class="muted" style="font-size:8pt">→ ${fmtNum(b.sent_count)} users · by ${esc(b.by)}</span>
+      </div>`).join('')
+    : '<div class="empty"><span class="big">∅</span>No broadcasts sent yet</div>';
+}
+const send = document.getElementById('bSend');
+if (send) send.onclick = () => {
+  const title = document.getElementById('bTitle').value.trim();
+  const body  = document.getElementById('bBody').value.trim();
+  const segment = document.getElementById('bSegment').value;
+  const channel = document.getElementById('bChannel').value;
+  if (!title || !body) return toast('Title and message are required', 'err');
+  confirmModal('Send broadcast?', `"${title}" will be sent via ${channel} to ${segment === 'all' ? 'ALL active users' : segment + ' users'}. This cannot be recalled.`, async () => {
+    send.disabled = true;
+    try {
+      const d = await api('/admin/api/broadcasts', {method: 'POST', body: {title, body, segment, channel}});
+      toast('Broadcast sent to ' + d.sent + ' users');
+      document.getElementById('bTitle').value = ''; document.getElementById('bBody').value = '';
+      loadHist();
+    } finally { send.disabled = false; }
+  }, 'Send');
+};
+loadHist();
+</script>
+{% endblock %}

@@ -41,6 +41,11 @@ def register_auth_routes(app):
                 (User.username == identifier) | (User.email == identifier)
             ).first()
             if user and user.check_password(password):
+                if (user.status or "active") != "active":
+                    error = ("This account has been suspended."
+                             if user.status == "banned"
+                             else "This account is deactivated. Contact support.")
+                    return render_template("login.html", error=error)
                 login_user(user, remember=True)
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('home'))
@@ -52,6 +57,14 @@ def register_auth_routes(app):
         if current_user.is_authenticated:
             return redirect(url_for('home'))
         error = None
+        try:
+            from models import AppSetting
+            closed = (row := db.session.get(AppSetting, "registration_open")) and row.value == "0"
+        except Exception:
+            closed = False
+        if closed:
+            return render_template("register.html",
+                                   error="Registration is temporarily closed."), 403
         if request.method == "POST":
             username = request.form.get("username", "").strip()
             email    = request.form.get("email", "").strip().lower()

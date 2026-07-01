@@ -1,0 +1,110 @@
+{% extends "admin/base.html" %}
+{% block title %}Payments{% endblock %}
+{% block crumbs %}<span class="sep">/</span><span class="here">Payments</span>{% endblock %}
+{% block content %}
+<h1>Payments &amp; Billing</h1>
+<div class="subtitle">M-Pesa, Stripe, and gift-code transactions</div>
+
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="card" style="margin:0"><div class="stat-label">Today</div><div class="stat-val green" id="r-today">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">This week</div><div class="stat-val" id="r-week">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">This month</div><div class="stat-val" id="r-month">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">All time</div><div class="stat-val orange" id="r-all">—</div><div class="stat-sub" id="r-counts"></div></div>
+</div>
+
+<div class="card">
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Search reference…" style="min-width:180px">
+    <select id="fStatus"><option value="">All statuses</option>
+      <option>paid</option><option>pending</option><option>failed</option><option>cancelled</option><option>refunded</option></select>
+    <select id="fProvider"><option value="">All providers</option>
+      <option>mpesa</option><option>stripe</option><option>gift</option></select>
+    <label style="font-size:8.5pt;color:var(--muted)"><input type="checkbox" id="fFlagged"> flagged only</label>
+    <input type="date" id="fFrom"> <span class="muted">to</span> <input type="date" id="fTo">
+    <button class="btn small" id="apply">Apply</button>
+    <span style="flex:1"></span>
+    {% if current_user.role in ('support','admin') %}
+    <a class="btn small" id="csvBtn" href="/admin/api/payments/export.csv">Export CSV</a>
+    {% endif %}
+  </div>
+  <div style="overflow-x:auto">
+  <table><thead><tr><th>ID</th><th>User</th><th>Provider</th><th>Plan</th><th>Amount</th><th>Status</th><th>Reference / receipt</th><th>Created</th><th>Completed</th><th></th></tr></thead>
+  <tbody id="tbody"></tbody></table>
+  </div>
+  <div class="pager" id="pager"></div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+let page = 1;
+const stBadge = s => ({paid: 'b-green', pending: 'b-yellow', refunded: 'b-blue',
+                       failed: 'b-red', cancelled: 'b-muted'}[s] || 'b-muted');
+
+function fmtSums(o) {
+  const parts = Object.entries(o || {}).filter(([, v]) => v > 0)
+    .map(([c, v]) => `${c} ${fmtNum(Math.round(v))}`);
+  return parts.length ? parts.join(' + ') : '0';
+}
+async function loadSummary() {
+  const d = await api('/admin/api/payments/summary');
+  document.getElementById('r-today').textContent = fmtSums(d.today);
+  document.getElementById('r-week').textContent  = fmtSums(d.this_week);
+  document.getElementById('r-month').textContent = fmtSums(d.this_month);
+  document.getElementById('r-all').textContent   = fmtSums(d.all_time);
+  document.getElementById('r-counts').textContent =
+    Object.entries(d.counts || {}).map(([s, c]) => `${c} ${s}`).join(' · ');
+}
+
+function params() {
+  const p = new URLSearchParams({page, per: 25});
+  if (q.value.trim()) p.set('q', q.value.trim());
+  if (fStatus.value) p.set('status', fStatus.value);
+  if (fProvider.value) p.set('provider', fProvider.value);
+  if (fFlagged.checked) p.set('flagged', '1');
+  if (fFrom.value) p.set('from', fFrom.value);
+  if (fTo.value) p.set('to', fTo.value);
+  return p;
+}
+
+async function load() {
+  const tb = document.getElementById('tbody');
+  skelRows(tb, 10);
+  const d = await api('/admin/api/payments?' + params());
+  const csv = document.getElementById('csvBtn');
+  if (csv) csv.href = '/admin/api/payments/export.csv?' + params();
+  if (!d.payments.length) { emptyRow(tb, 10, 'No transactions match'); pager2(d); return; }
+  tb.innerHTML = d.payments.map(p => `<tr>
+    <td class="muted">${p.id} ${p.flagged ? '🚩' : ''}</td>
+    <td><a href="/admin/users/${p.user_id}">${esc(p.user)}</a></td>
+    <td>${esc(p.provider)}</td><td class="muted">${esc(p.plan || '—')}</td>
+    <td><b>${p.amount != null ? fmtNum(p.amount) : '—'} ${esc(p.currency || '')}</b></td>
+    <td><span class="badge ${stBadge(p.status)}">${p.status}</span></td>
+    <td class="muted" style="font-size:8pt;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="${esc(p.reference || '')}">
+      ${esc(p.reference || '—')}${p.receipt ? '<br>rcpt: ' + esc(p.receipt) : ''}</td>
+    <td class="muted">${fmtDate(p.created_at)}</td>
+    <td class="muted">${fmtDate(p.completed_at)}</td>
+    <td style="white-space:nowrap">${ROLE_LVL >= 2 ? `
+      ${p.status === 'paid' ? `<button class="btn small danger act-refund" data-id="${p.id}" data-desc="${fmtNum(p.amount)} ${esc(p.currency || '')} from ${esc(p.user)}">Refund</button>` : ''}
+      <button class="btn small act-flag" data-id="${p.id}">${p.flagged ? 'Unflag' : 'Flag'}</button>` : ''}</td>
+  </tr>`).join('');
+  tb.querySelectorAll('.act-refund').forEach(b => b.onclick = () =>
+    confirmModal('Refund transaction #' + b.dataset.id + '?',
+      'Marks ' + b.dataset.desc + ' as refunded and revokes the granted Pro days.\n\nNote: the actual M-Pesa reversal must be done in the Daraja portal — this records it and updates the account.',
+      async () => {
+        const r = await api(`/admin/api/payments/${b.dataset.id}/refund`, {method: 'POST', body: {}});
+        toast(r.note || 'Refunded'); load(); loadSummary();
+      }, 'Refund'));
+  tb.querySelectorAll('.act-flag').forEach(b => b.onclick = async () => {
+    const r = await api(`/admin/api/payments/${b.dataset.id}/flag`, {method: 'POST', body: {}});
+    toast(r.flagged ? 'Flagged for review' : 'Flag removed'); load();
+  });
+  pager2(d);
+}
+function pager2(d) { pager(document.getElementById('pager'), d.page, d.per, d.total, p => { page = p; load(); }); }
+document.getElementById('apply').onclick = () => { page = 1; load(); };
+let deb; q.oninput = () => { clearTimeout(deb); deb = setTimeout(() => { page = 1; load(); }, 350); };
+
+loadSummary(); load();
+</script>
+{% endblock %}

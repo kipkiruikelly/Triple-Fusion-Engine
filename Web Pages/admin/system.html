@@ -1,0 +1,99 @@
+{% extends "admin/base.html" %}
+{% block title %}System{% endblock %}
+{% block crumbs %}<span class="sep">/</span><span class="here">System</span>{% endblock %}
+{% block content %}
+<h1>System &amp; Monitoring</h1>
+<div class="subtitle">Errors, API performance, jobs, and storage</div>
+
+<div class="grid g4" style="margin-bottom:16px">
+  <div class="card" style="margin:0"><div class="stat-label">Uptime</div><div class="stat-val" id="s-up" style="font-size:13pt">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Errors (24h)</div><div class="stat-val red" id="s-err">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Database size</div><div class="stat-val blue" id="s-db">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Azure Blob</div><div class="stat-val" id="s-az" style="font-size:13pt">—</div><div class="stat-sub" id="s-azd"></div></div>
+</div>
+
+<div class="grid g2" style="margin-bottom:16px">
+  <div class="card" style="margin:0">
+    <h2>Background jobs</h2>
+    <table><thead><tr><th>Job</th><th>Status</th><th>Detail</th></tr></thead><tbody id="jobBody"></tbody></table>
+  </div>
+  <div class="card" style="margin:0;max-height:340px;overflow:auto">
+    <h2>API usage <span class="muted" style="text-transform:none;letter-spacing:0">— since last restart</span></h2>
+    <table><thead><tr><th>Endpoint</th><th>Requests</th><th>Avg ms</th><th>5xx</th></tr></thead><tbody id="epBody"></tbody></table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Error logs</h2>
+  <div class="toolbar">
+    <select id="fSev"><option value="">All severities</option><option>error</option><option>warning</option></select>
+    <input type="text" id="fEp" placeholder="Endpoint contains…">
+    <input type="date" id="fFrom"> <span class="muted">to</span> <input type="date" id="fTo">
+    <button class="btn small" id="apply">Apply</button>
+  </div>
+  <div style="overflow-x:auto">
+  <table><thead><tr><th></th><th>Severity</th><th>Endpoint</th><th>Message</th><th>IP</th><th>When</th></tr></thead>
+  <tbody id="errBody"></tbody></table>
+  </div>
+  <div class="pager" id="pager"></div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+let page = 1;
+
+async function loadSystem() {
+  const d = await api('/admin/api/system');
+  const up = d.uptime_s;
+  document.getElementById('s-up').textContent =
+    Math.floor(up / 86400) + 'd ' + Math.floor(up % 86400 / 3600) + 'h ' + Math.floor(up % 3600 / 60) + 'm';
+  document.getElementById('s-err').textContent = fmtNum(d.error_count_24h);
+  document.getElementById('s-db').textContent = d.db_mb + ' MB';
+  document.getElementById('s-az').innerHTML = d.azure.enabled
+    ? '<span class="badge b-green" style="font-size:9pt">connected</span>'
+    : '<span class="badge b-muted" style="font-size:9pt">not configured</span>';
+  document.getElementById('s-azd').textContent =
+    d.azure.blobs != null ? d.azure.blobs + ' model blobs' : (d.azure.error || '');
+
+  document.getElementById('jobBody').innerHTML = d.jobs.map(j => `<tr>
+    <td>${esc(j.name)}</td>
+    <td><span class="badge ${j.status === 'running' ? 'b-green' : 'b-muted'}">${j.status}</span></td>
+    <td class="muted" style="font-size:8pt">${esc(j.detail)}</td></tr>`).join('');
+
+  const eb = document.getElementById('epBody');
+  eb.innerHTML = d.endpoints.length ? d.endpoints.map(e => `<tr>
+    <td style="font-size:8pt">${esc(e.endpoint)}</td><td>${fmtNum(e.count)}</td>
+    <td class="${e.avg_ms > 1000 ? 'red' : ''}">${e.avg_ms}</td>
+    <td class="${e.errors ? 'red' : 'muted'}">${e.errors}</td></tr>`).join('') : '';
+  if (!d.endpoints.length) emptyRow(eb, 4, 'No requests recorded yet');
+}
+
+async function loadErrors() {
+  const tb = document.getElementById('errBody');
+  skelRows(tb, 6);
+  const p = new URLSearchParams({page, per: 25});
+  if (fSev.value) p.set('severity', fSev.value);
+  if (fEp.value.trim()) p.set('endpoint', fEp.value.trim());
+  if (fFrom.value) p.set('from', fFrom.value);
+  if (fTo.value) p.set('to', fTo.value);
+  const d = await api('/admin/api/errors?' + p);
+  if (!d.errors.length) { emptyRow(tb, 6, 'No errors — nice.'); }
+  else tb.innerHTML = d.errors.map(e => `
+    <tr style="cursor:pointer" onclick="const t=document.getElementById('tr-${e.id}');t.style.display=t.style.display==='none'?'':'none'">
+      <td class="muted">▸</td>
+      <td><span class="badge ${e.severity === 'error' ? 'b-red' : 'b-yellow'}">${e.severity}</span></td>
+      <td style="font-size:8.5pt">${esc(e.method || '')} ${esc(e.endpoint || '')}</td>
+      <td style="max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.message)}">${esc(e.message)}</td>
+      <td class="muted">${esc(e.ip || '')}</td><td class="muted" style="white-space:nowrap">${fmtDate(e.at)}</td>
+    </tr>
+    <tr id="tr-${e.id}" style="display:none"><td></td><td colspan="5">
+      <pre style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:7.5pt;max-height:220px;overflow:auto;white-space:pre-wrap">${esc(e.trace || '(no traceback)')}</pre>
+    </td></tr>`).join('');
+  pager(document.getElementById('pager'), d.page, d.per, d.total, pg => { page = pg; loadErrors(); });
+}
+document.getElementById('apply').onclick = () => { page = 1; loadErrors(); };
+
+loadSystem(); loadErrors();
+</script>
+{% endblock %}

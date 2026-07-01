@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 _APP_START = time.time()
 _metrics   = {"requests": 0, "predictions": 0, "total_latency": 0.0}
 
+# Per-endpoint request stats since process start (in-memory, resets on restart).
+_endpoint_stats = {}
+_endpoint_lock  = threading.Lock()
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -92,7 +96,7 @@ def create_app():
     register_trading_routes(app)
     register_portfolio_routes(app)
     register_analytics_routes(app)
-    register_admin_routes(app)
+    register_admin_routes(app, _endpoint_stats, _APP_START)
     register_notification_routes(app)
 
     # ── Infrastructure routes (health, metrics, sw.js, model-metrics) ─────────
@@ -142,23 +146,141 @@ def create_app():
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
 
-    # ── Request counter ───────────────────────────────────────────────────────
+    # ── Request counter / stats / maintenance mode ────────────────────────────
 
     @app.before_request
     def _count_request():
+        from flask import request, render_template
+        from flask_login import current_user
         g.start_time = time.time()
         _metrics["requests"] += 1
+
+        # Maintenance mode: admins and auth/admin/static routes stay reachable.
+        if _maintenance_enabled():
+            path = request.path
+            exempt = (path.startswith(("/admin", "/login", "/logout", "/static",
+                                       "/health", "/forgot-password", "/reset-password"))
+                      or path == "/sw.js")
+            is_admin = (current_user.is_authenticated
+                        and getattr(current_user, "role_level", 0) >= 1)
+            if not exempt and not is_admin:
+                return render_template("maintenance.html"), 503
+
+        # Throttled last-seen tracking for active-user metrics.
+        if current_user.is_authenticated:
+            try:
+                now = datetime.utcnow()
+                if (current_user.last_seen is None
+                        or (now - current_user.last_seen).total_seconds() > 300):
+                    current_user.last_seen = now
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+
+    @app.after_request
+    def _track_endpoint(response):
+        try:
+            elapsed_ms = (time.time() - g.get("start_time", time.time())) * 1000
+            from flask import request
+            key = f"{request.method} {request.url_rule.rule if request.url_rule else request.path}"
+            with _endpoint_lock:
+                s = _endpoint_stats.setdefault(key, {"count": 0, "total_ms": 0.0, "errors": 0})
+                s["count"]    += 1
+                s["total_ms"] += elapsed_ms
+                if response.status_code >= 500:
+                    s["errors"] += 1
+        except Exception:
+            pass
+        return response
+
+    # ── Error logging to DB ───────────────────────────────────────────────────
+
+    from flask import got_request_exception
+
+    def _log_exception(sender, exception, **extra):
+        import traceback
+        from flask import request
+        from models import ErrorLog
+        try:
+            db.session.rollback()
+            db.session.add(ErrorLog(
+                severity="error",
+                endpoint=(request.endpoint or request.path)[:120],
+                method=request.method,
+                message=str(exception)[:500] or type(exception).__name__,
+                trace=traceback.format_exc()[-4000:],
+                ip=request.remote_addr,
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    got_request_exception.connect(_log_exception, app)
 
     # ── DB init ───────────────────────────────────────────────────────────────
 
     with app.app_context():
         db.create_all()
         _run_migrations(db)
+        _seed_defaults(db)
 
     # ── Background alert checker ──────────────────────────────────────────────
     _start_alert_thread(app, db)
 
     return app
+
+
+# ── Settings cache ────────────────────────────────────────────────────────────
+
+_settings_cache = {"maintenance": False, "checked_at": 0.0}
+
+def _maintenance_enabled():
+    """Check the maintenance_mode setting, cached for 15s to spare SQLite."""
+    now = time.time()
+    if now - _settings_cache["checked_at"] > 15:
+        try:
+            from models import AppSetting
+            row = AppSetting.query.get("maintenance_mode")
+            _settings_cache["maintenance"] = bool(row and row.value == "1")
+        except Exception:
+            _settings_cache["maintenance"] = False
+        _settings_cache["checked_at"] = now
+    return _settings_cache["maintenance"]
+
+
+def invalidate_settings_cache():
+    _settings_cache["checked_at"] = 0.0
+
+
+# ── Seed defaults ─────────────────────────────────────────────────────────────
+
+def _seed_defaults(db):
+    """Seed TickerConfig from the built-in list and default app settings."""
+    from models import TickerConfig, AppSetting
+    from utils import PRO_TICKERS
+    try:
+        if TickerConfig.query.count() == 0:
+            names = {"QQQ": "Invesco QQQ Trust", "AAPL": "Apple Inc.", "NVDA": "NVIDIA Corp.",
+                     "TSLA": "Tesla Inc.", "MSFT": "Microsoft Corp.", "GOOGL": "Alphabet Inc.",
+                     "META": "Meta Platforms", "AMZN": "Amazon.com Inc.",
+                     "NDX": "Nasdaq-100 Index", "DIA": "SPDR Dow Jones ETF"}
+            for sym in PRO_TICKERS:
+                db.session.add(TickerConfig(symbol=sym, name=names.get(sym), enabled=True))
+        defaults = {
+            "app_name":          "BullLogic",
+            "maintenance_mode":  "0",
+            "registration_open": "1",
+            "feature_signals":   "1",
+            "feature_mpesa":     "1",
+            "pro_monthly_kes":   os.environ.get("PRO_MONTHLY_KES", "3500"),
+            "pro_annual_kes":    os.environ.get("PRO_ANNUAL_KES", "23000"),
+        }
+        for k, v in defaults.items():
+            if AppSetting.query.get(k) is None:
+                db.session.add(AppSetting(key=k, value=v))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 # ── Migrations ────────────────────────────────────────────────────────────────
@@ -175,6 +297,11 @@ def _run_migrations(db):
     migrations = [
         ("user",                "pro_expires_at",  "DATE"),
         ("user",                "alerts_enabled",  "BOOLEAN DEFAULT 1"),
+        ("user",                "role",            "VARCHAR(10) DEFAULT 'user'"),
+        ("user",                "status",          "VARCHAR(12) DEFAULT 'active'"),
+        ("user",                "created_at",      "DATETIME"),
+        ("user",                "last_seen",       "DATETIME"),
+        ("payment",             "flagged",         "BOOLEAN DEFAULT 0"),
         ("prediction_history",  "interval",        "VARCHAR(4) DEFAULT '1d'"),
         ("price_alert",         "note",            "VARCHAR(100)"),
         ("price_alert",         "triggered_at",    "DATETIME"),

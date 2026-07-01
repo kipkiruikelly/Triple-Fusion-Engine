@@ -244,9 +244,9 @@ def register_payment_routes(app):
 
     @app.route("/api/gift-codes/generate", methods=["POST"])
     def api_gift_codes_generate():
-        admin_cookie = request.cookies.get("admin_token", "")
-        admin_pw     = os.environ.get("ADMIN_PASSWORD", "bulllogic-admin-2025")
-        if not admin_cookie or not secrets.compare_digest(admin_cookie, admin_pw):
+        from models import ROLE_LEVELS
+        if (not current_user.is_authenticated
+                or current_user.role_level < ROLE_LEVELS["support"]):
             return jsonify({"ok": False, "error": "Unauthorized"}), 403
         data  = request.get_json() or {}
         days  = int(data.get("days", 30))

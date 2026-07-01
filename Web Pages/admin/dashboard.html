@@ -1,0 +1,116 @@
+{% extends "admin/base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block crumbs %}<span class="sep">/</span><span class="here">Dashboard</span>{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="subtitle">Platform overview and system health</div>
+
+<div id="alertBox"></div>
+
+<div class="grid g4" id="kpis" style="margin-bottom:16px">
+  <div class="card" style="margin:0"><div class="stat-label">Total users</div><div class="stat-val" id="k-users"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub" id="k-pro"></div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Active today</div><div class="stat-val green" id="k-active"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub">seen in last 24h</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Predictions run</div><div class="stat-val blue" id="k-preds"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub">all time</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Revenue (M-Pesa)</div><div class="stat-val orange" id="k-rev"><div class="skel" style="width:80px;height:26px"></div></div><div class="stat-sub" id="k-err"></div></div>
+</div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h2 style="margin:0">Signups · Predictions · Revenue</h2>
+    <div>
+      <button class="btn small range-btn" data-d="7">7d</button>
+      <button class="btn small range-btn primary" data-d="30">30d</button>
+      <button class="btn small range-btn" data-d="90">90d</button>
+    </div>
+  </div>
+  <canvas id="mainChart" height="90"></canvas>
+</div>
+
+<div class="grid g2">
+  <div class="card" style="margin:0">
+    <h2>Recent activity</h2>
+    <div id="feed"><div class="skel" style="height:120px"></div></div>
+  </div>
+  <div class="card" style="margin:0">
+    <h2>System health</h2>
+    <table><tbody id="health">
+      <tr><td><div class="skel"></div></td></tr>
+    </tbody></table>
+  </div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+let chart = null;
+
+function healthRow(label, ok, detail) {
+  return `<tr><td>${label}</td><td style="text-align:right">
+    <span class="badge ${ok ? 'b-green' : 'b-red'}">${ok ? 'OK' : 'DOWN'}</span>
+    <span class="muted" style="font-size:8pt;margin-left:8px">${esc(detail || '')}</span></td></tr>`;
+}
+
+async function load(days) {
+  const d = await api('/admin/api/overview?days=' + days);
+  const k = d.kpis;
+  document.getElementById('k-users').textContent  = fmtNum(k.total_users);
+  document.getElementById('k-pro').textContent    = fmtNum(k.pro_users) + ' pro subscribers';
+  document.getElementById('k-active').textContent = fmtNum(k.active_today);
+  document.getElementById('k-preds').textContent  = fmtNum(k.total_predictions);
+  document.getElementById('k-rev').textContent    = 'KES ' + fmtNum(k.revenue_kes);
+  const errEl = document.getElementById('k-err');
+  errEl.textContent = 'error rate ' + k.error_rate_pct + '%';
+  errEl.className = 'stat-sub ' + (k.error_rate_pct > 2 ? 'red' : 'green');
+
+  document.getElementById('alertBox').innerHTML = (d.alerts || [])
+    .map(a => `<div class="alert-banner">⚠️ ${esc(a)}</div>`).join('');
+
+  // chart
+  const labels = d.signups.map(p => p.date.slice(5));
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('mainChart'), {
+    data: {
+      labels,
+      datasets: [
+        {type: 'line', label: 'Signups', data: d.signups.map(p => p.count),
+         borderColor: '#3B82F6', backgroundColor: '#3B82F6', tension: .3, pointRadius: 0, yAxisID: 'y'},
+        {type: 'line', label: 'Predictions', data: d.predictions.map(p => p.count),
+         borderColor: '#00C076', backgroundColor: '#00C076', tension: .3, pointRadius: 0, yAxisID: 'y'},
+        {type: 'bar', label: 'Revenue (KES)', data: d.revenue.map(p => p.amount),
+         backgroundColor: 'rgba(255,107,53,.55)', yAxisID: 'y1'},
+      ]
+    },
+    options: {
+      interaction: {mode: 'index', intersect: false},
+      plugins: {legend: {labels: {boxWidth: 10}}},
+      scales: {y: {beginAtZero: true, ticks: {precision: 0}},
+               y1: {beginAtZero: true, position: 'right', grid: {display: false}}}
+    }
+  });
+
+  // feed
+  const icons = {signup: '🟢', payment: '💰', error: '🔴'};
+  document.getElementById('feed').innerHTML = d.feed.length
+    ? d.feed.map(f => `<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:9pt">
+        <span>${icons[f.type] || '•'}</span><span style="flex:1">${esc(f.text)}</span>
+        <span class="muted" style="white-space:nowrap">${fmtDate(f.at)}</span></div>`).join('')
+    : '<div class="empty"><span class="big">∅</span>No activity yet</div>';
+
+  // health
+  const h = d.health;
+  document.getElementById('health').innerHTML =
+    healthRow('Web / API', h.api, 'uptime ' + Math.floor(h.uptime_s / 3600) + 'h ' + Math.floor(h.uptime_s % 3600 / 60) + 'm') +
+    healthRow('Prediction models', h.models, h.model_count + ' model files') +
+    healthRow('Azure Blob Storage', h.azure, h.azure ? 'connected' : 'not configured') +
+    `<tr><td>Maintenance mode</td><td style="text-align:right">
+      <span class="badge ${h.maintenance ? 'b-yellow' : 'b-muted'}">${h.maintenance ? 'ENABLED' : 'off'}</span></td></tr>`;
+}
+
+document.querySelectorAll('.range-btn').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.range-btn').forEach(x => x.classList.remove('primary'));
+  b.classList.add('primary');
+  load(+b.dataset.d);
+});
+load(30);
+</script>
+{% endblock %}

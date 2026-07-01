@@ -524,7 +524,8 @@ class MT5Trader:
         """Fetch ~15 months of daily OHLCV for ICT feature computation (needs 200+ bars)."""
         import yfinance as yf
         try:
-            yf_sym = symbol.replace(".", "-")
+            from predictor import YF_SYMBOL_MAP
+            yf_sym = YF_SYMBOL_MAP.get(symbol.upper(), symbol.replace(".", "-"))
             df = yf.download(yf_sym, period="18mo", auto_adjust=True, progress=False)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
@@ -720,7 +721,8 @@ class MT5Trader:
         """Fetch OHLCV bars from yfinance for paper mode."""
         try:
             import yfinance as yf
-            yf_sym = symbol.replace(".", "-")
+            from predictor import YF_SYMBOL_MAP
+            yf_sym = YF_SYMBOL_MAP.get(symbol.upper(), symbol.replace(".", "-"))
             df = yf.download(yf_sym, period="60d", interval="5m",
                              auto_adjust=True, progress=False)
             if isinstance(df.columns, pd.MultiIndex):

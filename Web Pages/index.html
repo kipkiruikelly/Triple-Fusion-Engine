@@ -641,6 +641,9 @@
       <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-5px;background:var(--accent);color:#fff;font-size:7.5pt;font-weight:700;min-width:16px;height:16px;border-radius:8px;text-align:center;line-height:16px;padding:0 3px">0</span>
     </div>
     <button id="themeToggle" onclick="toggleTheme()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:9pt;font-weight:600;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">☀ Light</button>
+    {% if current_user.is_authenticated and current_user.role in ('viewer', 'support', 'admin') %}
+    <a href="/admin" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">⚙ Admin</a>
+    {% endif %}
     <a href="/profile" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Profile</a>
     <a href="/logout" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Logout</a>
   </div>

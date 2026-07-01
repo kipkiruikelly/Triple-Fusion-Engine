@@ -19,4 +19,8 @@ from app import app
 if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", 5000))
-    serve(app, host=host, port=port)
+    # The SSE live-price stream holds one thread per connected client
+    # indefinitely, so waitress's default 4 threads starve under a couple
+    # of open tabs. Keep the pool comfortably larger.
+    threads = int(os.environ.get("WEB_THREADS", "24"))
+    serve(app, host=host, port=port, threads=threads, channel_timeout=300)

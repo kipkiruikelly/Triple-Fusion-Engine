@@ -13,6 +13,34 @@ from flask_login import login_required, current_user
 
 from utils import SCREENER_TICKERS, CALENDAR_TICKERS, _POSITIVE_WORDS, _NEGATIVE_WORDS, _SECTOR_ETFS
 
+# Shared quote cache so N clients / SSE loops don't multiply identical Yahoo
+# requests (which gets the whole host rate-limited). Failures are cached too,
+# briefly, to avoid hammering while throttled.
+_quote_cache = {}          # ticker -> (fetched_at, payload_or_None)
+_QUOTE_TTL_OK   = 20.0
+_QUOTE_TTL_FAIL = 60.0
+
+
+def _cached_quote(ticker):
+    import yfinance as yf
+    now = time.time()
+    hit = _quote_cache.get(ticker)
+    if hit and now - hit[0] < (_QUOTE_TTL_OK if hit[1] else _QUOTE_TTL_FAIL):
+        return hit[1]
+    payload = None
+    try:
+        fi = yf.Ticker(ticker).fast_info
+        lp = float(fi.last_price or 0)
+        pc = float(fi.previous_close or 0)
+        if lp:
+            payload = {"price": round(lp, 4), "prev": round(pc, 4),
+                       "chg": round(lp - pc, 4),
+                       "pct": round((lp - pc) / pc * 100 if pc else 0, 2)}
+    except Exception:
+        payload = None
+    _quote_cache[ticker] = (now, payload)
+    return payload
+
 
 def register_analytics_routes(app):
 
@@ -548,21 +576,14 @@ def register_analytics_routes(app):
     @app.route("/api/prices/batch")
     @login_required
     def api_prices_batch():
-        import yfinance as yf
         tickers = [t.upper() for t in request.args.getlist("t")[:60]]
         result  = {}
 
         def _fetch(t):
-            try:
-                fi  = yf.Ticker(t).fast_info
-                lp  = float(fi.last_price or 0)
-                pc  = float(fi.previous_close or 0)
-                pct = round((lp - pc) / pc * 100 if pc else 0, 2)
-                result[t] = {"price": round(lp, 4), "change_pct": pct}
-            except Exception:
-                result[t] = None
+            q = _cached_quote(t)
+            result[t] = {"price": q["price"], "change_pct": q["pct"]} if q else None
 
-        with ThreadPoolExecutor(max_workers=10) as ex:
+        with ThreadPoolExecutor(max_workers=8) as ex:
             ex.map(_fetch, tickers)
         return jsonify(result)
 
@@ -571,7 +592,6 @@ def register_analytics_routes(app):
     @app.route("/api/stream/prices")
     @login_required
     def stream_prices():
-        import yfinance as yf
         tickers = [t.upper() for t in (request.args.getlist("t") or
                                        ["AAPL", "MSFT", "TSLA", "NVDA", "SPY"])[:15]]
 
@@ -579,20 +599,11 @@ def register_analytics_routes(app):
             while True:
                 batch = {}
                 for t in tickers:
-                    try:
-                        fi = yf.Ticker(t).fast_info
-                        lp = float(fi.last_price or 0)
-                        pc = float(fi.previous_close or 0)
-                        batch[t] = {
-                            "price": round(lp, 4),
-                            "prev":  round(pc, 4),
-                            "chg":   round(lp - pc, 4),
-                            "pct":   round((lp - pc) / pc * 100 if pc else 0, 2),
-                        }
-                    except Exception:
-                        pass
+                    q = _cached_quote(t)
+                    if q:
+                        batch[t] = q
                 yield f"data: {_json.dumps(batch)}\n\n"
-                time.sleep(8)
+                time.sleep(15)
 
         return Response(
             stream_with_context(generate()),
