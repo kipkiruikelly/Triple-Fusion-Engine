@@ -158,6 +158,27 @@ class DiscordConfig(db.Model):
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class Payment(db.Model):
+    """Audit record for every payment attempt (Stripe, M-Pesa, gift code).
+
+    Also serves as the durable store for pending M-Pesa STK pushes so a
+    service restart between push and callback cannot lose the payment.
+    """
+    id           = db.Column(db.Integer, primary_key=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    provider     = db.Column(db.String(10), nullable=False)   # 'stripe' | 'mpesa' | 'gift'
+    plan         = db.Column(db.String(10), nullable=True)    # 'monthly' | 'annual'
+    amount       = db.Column(db.Float, nullable=True)
+    currency     = db.Column(db.String(8), nullable=True)
+    days         = db.Column(db.Integer, nullable=True)
+    phone        = db.Column(db.String(15), nullable=True)
+    reference    = db.Column(db.String(80), unique=True, nullable=True)  # CheckoutRequestID / Stripe session id / gift code
+    receipt      = db.Column(db.String(40), nullable=True)               # MpesaReceiptNumber
+    status       = db.Column(db.String(10), default='pending')  # pending | paid | cancelled | failed
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+
 class GiftCode(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     code       = db.Column(db.String(24), unique=True, nullable=False)

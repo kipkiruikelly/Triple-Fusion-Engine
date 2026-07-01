@@ -8,7 +8,7 @@ from flask import render_template, request, jsonify, redirect, url_for
 from flask_login import login_required, current_user
 
 from extensions import db
-from models import User, GiftCode
+from models import User, GiftCode, Payment
 from utils import _add_notification
 
 try:
@@ -33,7 +33,26 @@ except Exception:
     def stk_push(*a, **kw):    raise RuntimeError("M-Pesa not configured")
     def query_status(*a, **kw): raise RuntimeError("M-Pesa not configured")
 
-_mpesa_pending = {}
+def _grant_pro(user, days):
+    """Grant or extend Pro access by `days`."""
+    if user.plan == 'pro' and user.pro_expires_at and user.pro_expires_at >= date.today():
+        user.pro_expires_at = user.pro_expires_at + timedelta(days=days)
+    else:
+        user.pro_expires_at = date.today() + timedelta(days=days)
+    user.plan = 'pro'
+
+
+def _settle_mpesa_payment(payment, receipt=None):
+    """Mark a pending M-Pesa payment paid and grant Pro. Idempotent."""
+    if payment.status == 'paid':
+        return
+    payment.status       = 'paid'
+    payment.receipt      = receipt
+    payment.completed_at = datetime.utcnow()
+    user = db.session.get(User, payment.user_id)
+    if user:
+        _grant_pro(user, payment.days or 30)
+    db.session.commit()
 
 
 def register_payment_routes(app):
@@ -81,6 +100,13 @@ def register_payment_routes(app):
                 current_user.stripe_customer_id     = session.customer
                 current_user.stripe_subscription_id = session.subscription
                 current_user.plan = 'pro'
+                if not Payment.query.filter_by(reference=session_id).first():
+                    db.session.add(Payment(
+                        user_id=current_user.id, provider='stripe',
+                        amount=(session.amount_total or 0) / 100.0,
+                        currency=(session.currency or 'usd').upper(),
+                        reference=session_id, status='paid',
+                        completed_at=datetime.utcnow()))
                 db.session.commit()
             except Exception:
                 pass
@@ -155,7 +181,10 @@ def register_payment_routes(app):
         if resp.get("ResponseCode") != "0":
             return jsonify({"ok": False, "error": resp.get("ResponseDescription", "STK push failed")}), 400
         checkout_id = resp["CheckoutRequestID"]
-        _mpesa_pending[checkout_id] = {"user_id": current_user.id, "days": days}
+        db.session.add(Payment(user_id=current_user.id, provider='mpesa', plan=plan,
+                               amount=float(amount), currency='KES', days=days,
+                               phone=phone, reference=checkout_id, status='pending'))
+        db.session.commit()
         return jsonify({"ok": True, "checkout_request_id": checkout_id,
                         "message": f"Check your phone ({phone}) and enter your M-Pesa PIN."})
 
@@ -169,20 +198,20 @@ def register_payment_routes(app):
             resp = query_status(checkout_id)
         except Exception as e:
             return jsonify({"ok": False, "paid": False, "error": str(e)}), 500
+        payment     = Payment.query.filter_by(reference=checkout_id, provider='mpesa').first()
         result_code = str(resp.get("ResultCode", "-1"))
         if result_code == "0":
-            pending = _mpesa_pending.pop(checkout_id, {})
-            uid     = pending.get("user_id", current_user.id)
-            days    = pending.get("days", 30)
-            user    = db.session.get(User, uid)
-            if user:
-                user.plan = 'pro'
-                user.pro_expires_at = date.today() + timedelta(days=days)
-                db.session.commit()
+            if not payment:
+                return jsonify({"ok": False, "paid": False,
+                                "error": "Payment record not found — contact support with your M-Pesa receipt."}), 404
+            _settle_mpesa_payment(payment)
             return jsonify({"ok": True, "paid": True,
-                            "message": f"Payment confirmed! Pro access granted for {days} days."})
+                            "message": f"Payment confirmed! Pro access granted for {payment.days or 30} days."})
         elif result_code == "1032":
-            _mpesa_pending.pop(checkout_id, None)
+            if payment and payment.status == 'pending':
+                payment.status       = 'cancelled'
+                payment.completed_at = datetime.utcnow()
+                db.session.commit()
             return jsonify({"ok": True, "paid": False, "cancelled": True,
                             "message": "You cancelled the payment on your phone."})
         return jsonify({"ok": True, "paid": False, "result_code": result_code,
@@ -192,15 +221,20 @@ def register_payment_routes(app):
     def mpesa_callback():
         data = request.get_json(silent=True) or {}
         try:
-            body   = data["Body"]["stkCallback"]
-            code   = body.get("ResultCode", -1)
-            chk_id = body.get("CheckoutRequestID", "")
-            if code == 0 and chk_id in _mpesa_pending:
-                pending = _mpesa_pending.pop(chk_id)
-                user    = db.session.get(User, pending["user_id"])
-                if user:
-                    user.plan = 'pro'
-                    user.pro_expires_at = date.today() + timedelta(days=pending["days"])
+            body    = data["Body"]["stkCallback"]
+            code    = body.get("ResultCode", -1)
+            chk_id  = body.get("CheckoutRequestID", "")
+            payment = Payment.query.filter_by(reference=chk_id, provider='mpesa').first()
+            if payment:
+                if code == 0:
+                    receipt = None
+                    for item in (body.get("CallbackMetadata") or {}).get("Item", []):
+                        if item.get("Name") == "MpesaReceiptNumber":
+                            receipt = str(item.get("Value", ""))[:40]
+                    _settle_mpesa_payment(payment, receipt)
+                elif payment.status == 'pending':
+                    payment.status       = 'cancelled' if code == 1032 else 'failed'
+                    payment.completed_at = datetime.utcnow()
                     db.session.commit()
         except Exception:
             pass
@@ -237,14 +271,10 @@ def register_payment_routes(app):
         gc.used_by = current_user.id
         gc.used_at = datetime.utcnow()
         user = db.session.get(User, current_user.id)
-        if user.plan != "pro":
-            user.plan = "pro"
-            user.pro_expires_at = date.today() + timedelta(days=gc.days)
-        else:
-            if user.pro_expires_at:
-                user.pro_expires_at = user.pro_expires_at + timedelta(days=gc.days)
-            else:
-                user.pro_expires_at = date.today() + timedelta(days=gc.days)
+        _grant_pro(user, gc.days)
+        db.session.add(Payment(user_id=current_user.id, provider='gift',
+                               days=gc.days, reference=f"gift:{gc.code}",
+                               status='paid', completed_at=datetime.utcnow()))
         db.session.commit()
         _add_notification(current_user.id, "gift", "Pro activated!",
                           f"Your gift code added {gc.days} days of Pro access.", "/profile")
