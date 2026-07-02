@@ -381,6 +381,8 @@ def register_auth_routes(app):
             "theme":          prefs.theme          if prefs else "dark",
             "default_ticker": prefs.default_ticker if prefs else "AAPL",
             "timezone":       prefs.timezone        if prefs else "UTC",
+            "usage_notice_enabled": prefs.usage_notice_enabled if prefs else True,
+            "risk_intro_seen": prefs.risk_intro_seen if prefs else False,
         })
 
     @app.route("/api/preferences", methods=["POST"])
@@ -399,6 +401,8 @@ def register_auth_routes(app):
             prefs.default_ticker = (data["default_ticker"] or "AAPL").upper()[:12]
         if "timezone" in data:
             prefs.timezone = (data["timezone"] or "UTC")[:50]
+        if "usage_notice_enabled" in data:
+            prefs.usage_notice_enabled = bool(data["usage_notice_enabled"])
         db.session.commit()
         return jsonify({"ok": True})
 

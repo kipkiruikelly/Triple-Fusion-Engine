@@ -416,12 +416,46 @@
       <div id="activity-log-body"><div style="color:var(--muted);font-size:9.5pt">Loading…</div></div>
     </div>
 
+    <!-- Your data -->
+    <div class="danger-zone" style="border-color:var(--border)">
+      <div class="danger-title" style="color:var(--text)">Your data</div>
+      <div class="danger-desc">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:12px">
+          <input type="checkbox" id="usageNotice" onchange="saveUsageNotice(this.checked)">
+          <span>Show a gentle check-in if I run an unusually high number of predictions in one session</span>
+        </label>
+        Download everything we store about you, any time, no questions asked.
+      </div>
+      <a href="/account/export"><button class="btn-danger" style="background:transparent;border:1px solid var(--border);color:var(--text)">Export my data (JSON)</button></a>
+    </div>
+
     <!-- Danger zone -->
     <div class="danger-zone">
       <div class="danger-title">Danger Zone</div>
-      <div class="danger-desc">Logging out will end your current session. To delete your account, please contact support.</div>
+      <div class="danger-desc">Log out everywhere, or permanently delete your account and data. Deletion is immediate and cannot be undone. Payment records are kept anonymized for legal audit only.</div>
       <a href="/logout"><button class="btn-danger">Log out of all sessions</button></a>
+      <button class="btn-danger" onclick="deleteAccount()" style="margin-left:8px">Delete my account</button>
+      <div id="delMsg" style="font-size:8.5pt;color:var(--muted);margin-top:8px"></div>
     </div>
+
+    <script>
+    fetch('/api/preferences').then(r=>r.json()).then(d=>{
+      if (d.ok) document.getElementById('usageNotice').checked = !!d.usage_notice_enabled;
+    });
+    function saveUsageNotice(v){
+      fetch('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({usage_notice_enabled:v})});
+    }
+    function deleteAccount(){
+      if (!confirm('Delete your BullLogic account and all your data permanently? This cannot be undone.')) return;
+      fetch('/account/delete',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({confirm:true})})
+        .then(r=>r.json()).then(d=>{
+          if (d.ok) { location = '/'; }
+          else document.getElementById('delMsg').textContent = d.error || 'Deletion failed.';
+        });
+    }
+    </script>
   </main>
 </div>
 

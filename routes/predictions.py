@@ -40,6 +40,10 @@ def register_prediction_routes(app, metrics):
             interval = "1d"
         if not getattr(current_user, "email_verified", True):
             return redirect(url_for("verify_notice"))
+        from models import UserPreferences
+        pref = UserPreferences.query.filter_by(user_id=current_user.id).first()
+        if not pref or not pref.risk_intro_seen:
+            return redirect(url_for("risk_basics"))
         if not ticker:
             return render_template("index.html", error="Please enter a stock ticker symbol.",
                                    interval=interval)
@@ -56,11 +60,25 @@ def register_prediction_routes(app, metrics):
             _try_azure_download(ticker, interval)
             result = run_prediction(ticker, interval)
             try:
+                # Capture data-quality context so accuracy can later be
+                # analyzed against source confidence and divergence.
+                src_source = src_conf = src_div = None
+                try:
+                    from market_data import get_quotes_verified
+                    vq = get_quotes_verified([ticker]).get(ticker)
+                    if vq:
+                        src_source = vq["source"]
+                        src_conf   = vq["conf_pct"]
+                        src_div    = vq["divergence_pct"]
+                except Exception:
+                    pass
                 ph = PredictionHistory(
                     user_id=current_user.id, ticker=ticker, interval=interval,
                     current_price=result["current_price"],
                     lr_pred=result["lr_pred"], rf_pred=result["rf_pred"],
                     direction=result["direction"], confidence=result["confidence"],
+                    src_source=src_source, src_conf_pct=src_conf,
+                    src_divergence=src_div,
                 )
                 db.session.add(ph)
                 db.session.commit()
@@ -320,6 +338,89 @@ def register_prediction_routes(app, metrics):
         return jsonify({"ok": True, "count": total,
                         "direction_accuracy": round(dir_ok / total * 100, 1),
                         "avg_pct_error": round(avg_err, 2), "recent": recent})
+
+    # ── Risk basics interstitial (shown once before first prediction) ──────────
+
+    @app.route("/risk-basics", methods=["GET", "POST"])
+    @login_required
+    def risk_basics():
+        from models import UserPreferences
+        pref = UserPreferences.query.filter_by(user_id=current_user.id).first()
+        if request.method == "POST":
+            if not pref:
+                pref = UserPreferences(user_id=current_user.id)
+                db.session.add(pref)
+            pref.risk_intro_seen = True
+            db.session.commit()
+            return redirect(url_for("home"))
+        if pref and pref.risk_intro_seen:
+            return redirect(url_for("home"))
+        return render_template("risk_basics.html")
+
+    # ── Account data export and deletion (easy exit, no dark patterns) ─────────
+
+    @app.route("/account/export")
+    @login_required
+    def account_export():
+        from models import (PredictionHistory, WatchlistItem, PriceAlert,
+                            PortfolioPosition, TradeJournal, Payment)
+        u = current_user
+        data = {
+            "account": {"username": u.username, "email": u.email, "plan": u.plan,
+                        "created_at": str(u.created_at or ""),
+                        "auth_provider": u.auth_provider},
+            "predictions": [{"ticker": p.ticker, "interval": p.interval,
+                             "current_price": p.current_price, "lr_pred": p.lr_pred,
+                             "rf_pred": p.rf_pred, "direction": p.direction,
+                             "confidence": p.confidence, "at": str(p.predicted_at)}
+                            for p in PredictionHistory.query.filter_by(user_id=u.id)],
+            "watchlist": [w.ticker for w in WatchlistItem.query.filter_by(user_id=u.id)],
+            "alerts": [{"ticker": a.ticker, "price": a.price, "direction": a.direction}
+                       for a in PriceAlert.query.filter_by(user_id=u.id)],
+            "positions": [{"ticker": p.ticker, "side": p.side, "entry": p.entry_price,
+                           "qty": p.quantity, "status": p.status}
+                          for p in PortfolioPosition.query.filter_by(user_id=u.id)],
+            "journal": [{"title": j.title, "body": j.body, "at": str(j.created_at)}
+                        for j in TradeJournal.query.filter_by(user_id=u.id)],
+            "payments": [{"provider": p.provider, "amount": p.amount,
+                          "currency": p.currency, "status": p.status,
+                          "receipt": p.receipt, "at": str(p.created_at)}
+                         for p in Payment.query.filter_by(user_id=u.id)],
+        }
+        resp = jsonify(data)
+        resp.headers["Content-Disposition"] = "attachment; filename=bulllogic-data.json"
+        return resp
+
+    @app.route("/account/delete", methods=["POST"])
+    @login_required
+    def account_delete():
+        from flask_login import logout_user
+        from models import (User, PredictionAccuracy,
+                            WatchlistItem, PriceAlert, PortfolioPosition,
+                            ApiKey, PasswordResetToken, TelegramConfig,
+                            Notification, TradeJournal, DiscordConfig,
+                            UserWebhook, ActivityLog, TwoFactorAuth,
+                            UserPreferences, Feedback)
+        if (request.get_json() or {}).get("confirm") is not True:
+            return jsonify({"ok": False, "error": "Confirmation required"}), 400
+        uid = current_user.id
+        if getattr(current_user, "role_level", 0) >= 3:
+            return jsonify({"ok": False,
+                            "error": "Admin accounts must transfer admin rights before deletion."}), 400
+        for ph in PredictionHistory.query.filter_by(user_id=uid).all():
+            PredictionAccuracy.query.filter_by(prediction_id=ph.id).delete()
+        for model in (PredictionHistory, WatchlistItem, PriceAlert,
+                      PortfolioPosition, ApiKey, PasswordResetToken,
+                      TelegramConfig, Notification, TradeJournal, DiscordConfig,
+                      UserWebhook, ActivityLog, TwoFactorAuth, UserPreferences,
+                      Feedback):
+            model.query.filter_by(user_id=uid).delete()
+        # Payment rows are retained for the legal audit trail.
+        user = db.session.get(User, uid)
+        logout_user()
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({"ok": True, "message": "Your account and data were deleted. Kwaheri."})
 
     # ── Track record (public, the trust page) ─────────────────────────────────
 

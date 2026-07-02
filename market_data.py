@@ -46,6 +46,117 @@ def _is_rate_limit_error(exc):
     return "ratelimit" in type(exc).__name__.lower() or "Too Many Requests" in str(exc)
 
 
+# ── Multi-source verification (yfinance vs Pyth oracle) ──────────────────────
+
+VERIFY_TOLERANCE_PCT = 0.5     # sources agreeing within this are "verified"
+
+_source_stats = {
+    "yfinance": {"success": 0, "fail": 0, "last_success": None},
+    "pyth":     {"success": 0, "fail": 0, "last_success": None},
+    "failovers": 0, "divergences": 0,
+}
+_divergence_last_logged = {}   # symbol -> ts, throttle ErrorLog spam
+
+
+def source_stats():
+    return dict(_source_stats)
+
+
+def _mark(source, ok):
+    s = _source_stats[source]
+    if ok:
+        s["success"] += 1
+        s["last_success"] = datetime.utcnow().isoformat()
+    else:
+        s["fail"] += 1
+
+
+def _pyth_feed_map(symbols):
+    """Active PythFeed rows for the given symbols; {} outside app context."""
+    try:
+        from models import PythFeed
+        rows = PythFeed.query.filter(PythFeed.symbol.in_([s.upper() for s in symbols]),
+                                     PythFeed.active.is_(True)).all()
+        return {r.symbol: (r.feed_id, r.pyth_symbol) for r in rows}
+    except Exception:
+        return {}
+
+
+def _log_divergence(symbol, yf_price, pyth_price, pct):
+    now = time.time()
+    if now - _divergence_last_logged.get(symbol, 0) < 3600:
+        return
+    _divergence_last_logged[symbol] = now
+    _source_stats["divergences"] += 1
+    try:
+        from extensions import db
+        from models import ErrorLog
+        db.session.add(ErrorLog(
+            severity="warning", endpoint="data.divergence",
+            message=f"{symbol}: yfinance {yf_price} vs pyth {round(pyth_price, 4)} "
+                    f"({pct:.2f}% apart, tolerance {VERIFY_TOLERANCE_PCT}%)"))
+        db.session.commit()
+    except Exception:
+        pass
+
+
+def get_quotes_verified(symbols):
+    """Cross-checked quotes for a list of symbols.
+
+    Returns {symbol: {price, pct, source, verified, divergence_pct,
+    conf, conf_pct, publish_time, market_closed} or None}. Primary source
+    is yfinance; Pyth verifies it and takes over when yfinance is down.
+    """
+    import pyth_client
+
+    feed_map = _pyth_feed_map(symbols)
+    pyth = {}
+    if feed_map:
+        pyth = pyth_client.get_prices(feed_map)
+        _mark("pyth", bool(pyth))
+
+    out = {}
+    for sym in [s.upper() for s in symbols]:
+        yq = get_quote(sym)
+        _mark("yfinance", yq is not None)
+        pq = pyth.get(sym)
+        pq_usable = pq and pq["fresh"]
+
+        if yq and pq_usable:
+            div = abs(yq["price"] - pq["price"]) / pq["price"] * 100
+            verified = div <= VERIFY_TOLERANCE_PCT
+            if not verified:
+                _log_divergence(sym, yq["price"], pq["price"], div)
+            out[sym] = {**yq, "source": "yfinance+pyth",
+                        "verified": verified,
+                        "divergence_pct": round(div, 3),
+                        "pyth_price": round(pq["price"], 4),
+                        "conf": pq["conf"],
+                        "conf_pct": round(pq["conf"] / pq["price"] * 100, 3)
+                                    if pq["price"] else None,
+                        "publish_time": pq["publish_time"],
+                        "market_closed": False}
+        elif yq:
+            out[sym] = {**yq, "source": "yfinance", "verified": False,
+                        "divergence_pct": None, "conf": None, "conf_pct": None,
+                        "publish_time": None,
+                        "market_closed": bool(pq and pq.get("market_closed"))}
+        elif pq_usable:
+            # yfinance down: the oracle keeps prices flowing.
+            _source_stats["failovers"] += 1
+            out[sym] = {"price": round(pq["price"], 4), "prev": None,
+                        "chg": None, "pct": None, "source": "pyth",
+                        "verified": False, "divergence_pct": None,
+                        "conf": pq["conf"],
+                        "conf_pct": round(pq["conf"] / pq["price"] * 100, 3)
+                                    if pq["price"] else None,
+                        "publish_time": pq["publish_time"],
+                        "market_closed": False}
+        else:
+            out[sym] = None
+    return out
+
+
 def data_status():
     """Health snapshot for banners/monitoring."""
     return {
@@ -55,6 +166,17 @@ def data_status():
         "hist_cached": len(_hist_cache),
         "quotes_cached": len(_quote_cache),
     }
+
+
+def _yf_symbol(symbol):
+    """Friendly symbols (BTC, EURUSD, GOLD) to real Yahoo tickers
+    (BTC-USD, EURUSD=X, GC=F). Without this, yfinance quietly returns a
+    tiny equity trust that happens to trade under the ticker BTC."""
+    try:
+        from predictor import YF_SYMBOL_MAP
+        return YF_SYMBOL_MAP.get(symbol.upper(), symbol.upper())
+    except Exception:
+        return symbol.upper()
 
 
 def get_history(symbol, period="1y", interval="1d"):
@@ -75,7 +197,7 @@ def get_history(symbol, period="1y", interval="1d"):
 
     if not _rate_limited_now():
         try:
-            df = yf.download(symbol, period=period, interval=interval,
+            df = yf.download(_yf_symbol(symbol), period=period, interval=interval,
                              auto_adjust=True, progress=False)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
@@ -110,7 +232,7 @@ def get_quote(symbol):
     payload = None
     if not _rate_limited_now():
         try:
-            fi = yf.Ticker(symbol).fast_info
+            fi = yf.Ticker(_yf_symbol(symbol)).fast_info
             lp = float(fi.last_price or 0)
             pc = float(fi.previous_close or 0)
             if lp:

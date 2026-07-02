@@ -1,5 +1,62 @@
 # Changelog
 
+## 2026-07-02, Oracle data layer, resources hub, ethical engagement
+
+### Phase 1: Pyth Network oracle integration
+- New pyth_client.py talks to Pyth's Hermes REST API: fixed-point price
+  parsing (price times 10^expo), confidence intervals, publish times,
+  and an optional PYTH_API_KEY Bearer slot (mandatory from 31 July
+  2026). Stale equity feeds outside US trading hours are reported as
+  "market closed", not as errors.
+- Feed mapping is synced programmatically into a new pyth_feed table
+  (41 of 54 tickers mapped automatically) with an admin manager to
+  enable, disable, or resync feeds.
+- Verified Price: every sidebar price is cross-checked against the
+  oracle. Sources agreeing within 0.5 percent get a Verified badge with
+  an explanatory tooltip; disagreeing sources show both values and a
+  warning, never a silent pick. Divergence incidents are logged and
+  throttled.
+- Automatic failover: when yfinance is down the oracle serves prices
+  with a clear source label; the stale-data banner now appears only
+  when every source fails.
+- Confidence-aware predictions: each prediction records its data
+  source, Pyth confidence percent, and source divergence. The admin
+  system page correlates confidence bands with graded accuracy.
+- Found and fixed along the way: the quote path was sending friendly
+  symbols (BTC, EURUSD, GOLD) to Yahoo unmapped, so BTC quoted a small
+  equity trust at 26 dollars instead of Bitcoin. The oracle divergence
+  check caught it on first run.
+
+### Phase 2: Dashboard organization and resources hub
+- Sidebar navigation regrouped into Markets, My Predictions, Trust
+  (Track Record, Methodology, Resources, Data Sources), and Account.
+- New public /resources hub: curated links in four categories (Learn
+  Trading, Market Data and News, Regulators and Safety, Our Platform)
+  rendered as icon cards with external-link markers, rel=noopener, and
+  a third-party disclaimer. Fully admin-manageable (category, title,
+  URL, description, icon, sort, active) with 12 links seeded, including
+  CMA Kenya and CBK safety resources.
+- New public /methodology page explaining models, data, grading, and
+  limits in plain English, linked from every prediction result.
+
+### Phase 3: Ethical engagement
+- Risk Basics interstitial: three short cards (probabilities not
+  promises, diversification, only trade what you can afford to lose)
+  shown exactly once before a user's first prediction.
+- Gentle usage check-in after 15 predictions in one session, opt-out
+  in Profile, never blocking.
+- Persistent "informational, not financial advice" notice under the
+  predict button; "Why am I seeing this?" tooltip on model signals.
+- Easy exit: one-click JSON export of all personal data and true
+  self-service account deletion with a single confirmation (replacing
+  the old "contact support" dead end). Payment rows are retained for
+  the legal audit trail only.
+- Refund terms one click from the payment button; new public
+  /data-sources page listing every provider and what it supplies.
+- Tests grew to 42, covering fixed-point parsing, divergence
+  detection, failover ordering, resources CRUD permissions, and the
+  interstitial showing exactly once.
+
 ## 2026-07-02, Production auth, email, and payments
 
 Everything in this wave works end to end with real services. Nothing is

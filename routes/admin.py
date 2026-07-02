@@ -1015,6 +1015,141 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
         _audit("settings.update", "setting", None, "; ".join(changed))
         return jsonify({"ok": True, "changed": len(changed)})
 
+    # ══ API: data quality (sources, Pyth feeds, divergences) ═════════════════
+
+    @app.route("/admin/api/data-quality")
+    @admin_required("viewer")
+    def admin_api_data_quality():
+        from market_data import source_stats, data_status
+        from models import PythFeed
+        incidents = (ErrorLog.query.filter_by(endpoint="data.divergence")
+                     .order_by(ErrorLog.id.desc()).limit(20).all())
+        feeds = PythFeed.query.order_by(PythFeed.symbol).all()
+
+        # Does wide Pyth confidence correlate with worse predictions?
+        buckets = []
+        for label, lo, hi in [("tight (<0.05%)", 0, 0.05),
+                              ("normal (0.05-0.2%)", 0.05, 0.2),
+                              ("wide (>0.2%)", 0.2, 1e9)]:
+            from models import PredictionAccuracy
+            n, ok = (db.session.query(
+                         db.func.count(PredictionAccuracy.id),
+                         db.func.sum(db.case((PredictionAccuracy.direction_ok.is_(True), 1),
+                                             else_=0)))
+                     .join(PredictionHistory,
+                           PredictionAccuracy.prediction_id == PredictionHistory.id)
+                     .filter(PredictionHistory.src_conf_pct.isnot(None),
+                             PredictionHistory.src_conf_pct >= lo,
+                             PredictionHistory.src_conf_pct < hi,
+                             PredictionAccuracy.direction_ok.isnot(None))
+                     .first())
+            n = n or 0
+            buckets.append({"bucket": label, "n": n,
+                            "accuracy": round((ok or 0) / n * 100, 1) if n >= 5 else None})
+
+        return jsonify({"ok": True, "sources": source_stats(),
+                        "breaker": data_status(),
+                        "incidents": [{"message": i.message,
+                                       "at": i.created_at.isoformat()}
+                                      for i in incidents],
+                        "feeds": [{"id": f.id, "symbol": f.symbol,
+                                   "feed_id": f.feed_id,
+                                   "pyth_symbol": f.pyth_symbol,
+                                   "active": f.active} for f in feeds],
+                        "conf_accuracy": buckets})
+
+    @app.route("/admin/api/pyth-feeds/sync", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_pyth_sync():
+        from models import TickerConfig
+        import pyth_client
+        symbols = [t.symbol for t in TickerConfig.query.filter_by(enabled=True)]
+        try:
+            mapped, unmapped = pyth_client.sync_feed_mapping(db, symbols)
+        except Exception as e:
+            return jsonify({"ok": False, "error": f"Sync failed: {e}"}), 502
+        _audit("pyth.sync", "pyth_feed", None, f"{mapped} mapped, {unmapped} unmapped")
+        return jsonify({"ok": True, "mapped": mapped, "unmapped": unmapped})
+
+    @app.route("/admin/api/pyth-feeds/<int:fid>", methods=["POST", "DELETE"])
+    @admin_required("admin")
+    def admin_api_pyth_feed_edit(fid):
+        from models import PythFeed
+        f = db.session.get(PythFeed, fid)
+        if not f:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if request.method == "DELETE":
+            _audit("pyth.unlink", "pyth_feed", f.symbol)
+            db.session.delete(f)
+            db.session.commit()
+            return jsonify({"ok": True})
+        data = request.get_json() or {}
+        if "active" in data:
+            f.active = bool(data["active"])
+        if data.get("feed_id"):
+            f.feed_id = str(data["feed_id"])[:70]
+        db.session.commit()
+        _audit("pyth.update", "pyth_feed", f.symbol, f"active={f.active}")
+        return jsonify({"ok": True})
+
+    # ══ API: resource links CRUD ══════════════════════════════════════════════
+
+    @app.route("/admin/api/resources")
+    @admin_required("viewer")
+    def admin_api_resources():
+        from models import ResourceLink
+        rows = ResourceLink.query.order_by(ResourceLink.category,
+                                           ResourceLink.sort).all()
+        return jsonify({"ok": True, "resources": [
+            {"id": r.id, "category": r.category, "title": r.title,
+             "url": r.url, "description": r.description, "icon": r.icon,
+             "sort": r.sort, "active": r.active} for r in rows]})
+
+    @app.route("/admin/api/resources", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_resource_add():
+        from models import ResourceLink
+        d = request.get_json() or {}
+        if not d.get("title") or not d.get("url") or not d.get("category"):
+            return jsonify({"ok": False, "error": "category, title and url are required"}), 400
+        if not str(d["url"]).startswith(("http://", "https://", "/")):
+            return jsonify({"ok": False, "error": "URL must be http(s) or a local path"}), 400
+        r = ResourceLink(category=str(d["category"])[:40], title=str(d["title"])[:80],
+                         url=str(d["url"])[:300],
+                         description=(d.get("description") or "")[:200] or None,
+                         icon=(d.get("icon") or "")[:10] or None,
+                         sort=int(d.get("sort", 0)), active=bool(d.get("active", True)))
+        db.session.add(r)
+        db.session.commit()
+        _audit("resource.add", "resource", r.id, r.title)
+        return jsonify({"ok": True, "id": r.id})
+
+    @app.route("/admin/api/resources/<int:rid>", methods=["POST", "DELETE"])
+    @admin_required("admin")
+    def admin_api_resource_edit(rid):
+        from models import ResourceLink
+        r = db.session.get(ResourceLink, rid)
+        if not r:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        if request.method == "DELETE":
+            _audit("resource.delete", "resource", rid, r.title)
+            db.session.delete(r)
+            db.session.commit()
+            return jsonify({"ok": True})
+        d = request.get_json() or {}
+        for field, limit in (("category", 40), ("title", 80), ("url", 300),
+                             ("description", 200), ("icon", 10)):
+            if field in d:
+                setattr(r, field, (str(d[field])[:limit] or None)
+                        if field in ("description", "icon") else str(d[field])[:limit])
+        if "sort" in d:
+            r.sort = int(d["sort"])
+        if "active" in d:
+            r.active = bool(d["active"])
+        db.session.commit()
+        _audit("resource.update", "resource", rid, r.title)
+        return jsonify({"ok": True})
+
     # ══ API: user feedback ════════════════════════════════════════════════════
 
     @app.route("/admin/api/feedback")

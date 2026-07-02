@@ -365,6 +365,19 @@ def start_ops_thread(app, db):
                 except Exception:
                     db.session.rollback()
                     log.exception("mpesa reconcile failed")
+                if not state.get("pyth_synced"):
+                    try:
+                        from models import PythFeed, TickerConfig
+                        if PythFeed.query.count() == 0:
+                            import pyth_client
+                            syms = [t.symbol for t in
+                                    TickerConfig.query.filter_by(enabled=True)]
+                            m, u = pyth_client.sync_feed_mapping(db, syms)
+                            log.info("pyth auto-sync: %s mapped, %s unmapped", m, u)
+                        state["pyth_synced"] = True
+                    except Exception:
+                        db.session.rollback()
+                        log.warning("pyth auto-sync failed, will retry next tick")
                 if time.time() - state["last_accuracy"] > 6 * 3600:
                     try:
                         r, u = resolve_pending(db)

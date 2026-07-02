@@ -52,6 +52,24 @@
   </div>
   <div class="pager" id="predPager"></div>
 </div>
+<div class="card" style="margin-top:16px">
+  <h2>Resources hub links</h2>
+  {% if current_user.role == 'admin' %}
+  <div class="toolbar">
+    <select id="rCat"><option>Learn Trading</option><option>Market Data &amp; News</option>
+      <option>Regulators &amp; Safety</option><option>Our Platform</option></select>
+    <input type="text" id="rTitle" placeholder="Title" style="width:140px">
+    <input type="text" id="rUrl" placeholder="https://..." style="flex:1;min-width:160px">
+    <input type="text" id="rDesc" placeholder="One-line description" style="flex:1;min-width:160px">
+    <input type="text" id="rIcon" placeholder="🔗" style="width:46px">
+    <button class="btn primary small" id="rAdd">Add link</button>
+  </div>
+  {% endif %}
+  <div style="overflow-x:auto">
+  <table><thead><tr><th>Category</th><th>Title</th><th>URL</th><th>Sort</th><th>Active</th>{% if current_user.role == 'admin' %}<th></th>{% endif %}</tr></thead>
+  <tbody id="resBody"></tbody></table>
+  </div>
+</div>
 {% endblock %}
 
 {% block script %}
@@ -158,5 +176,47 @@ async function loadPreds() {
 document.getElementById('fApply').onclick = () => { ppage = 1; loadPreds(); };
 
 loadTickers(); loadModels(); loadPreds();
+
+// ── resources hub CRUD ────────────────────────────────────────
+async function loadResources() {
+  const d = await api('/admin/api/resources');
+  const tb = document.getElementById('resBody');
+  if (!d.resources.length) { emptyRow(tb, 6, 'No links yet'); return; }
+  tb.innerHTML = d.resources.map(r => `<tr style="${r.active ? '' : 'opacity:.5'}">
+    <td class="muted">${esc(r.category)}</td>
+    <td>${esc(r.icon || '')} <b>${esc(r.title)}</b><br><span class="muted" style="font-size:7.5pt">${esc(r.description || '')}</span></td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;font-size:8pt" title="${esc(r.url)}">${esc(r.url)}</td>
+    <td>${ROLE_LVL >= 3 ? `<input type="number" value="${r.sort}" style="width:52px" class="rSort" data-id="${r.id}">` : r.sort}</td>
+    <td><input type="checkbox" class="rActive" data-id="${r.id}" ${r.active ? 'checked' : ''} ${ROLE_LVL < 3 ? 'disabled' : ''}></td>
+    ${ROLE_LVL >= 3 ? `<td><button class="btn small danger rDel" data-id="${r.id}" data-t="${esc(r.title)}">✕</button></td>` : ''}
+  </tr>`).join('');
+  tb.querySelectorAll('.rActive').forEach(cb => cb.onchange = async () => {
+    await api('/admin/api/resources/' + cb.dataset.id, {method: 'POST', body: {active: cb.checked}});
+    toast('Saved'); loadResources();
+  });
+  tb.querySelectorAll('.rSort').forEach(inp => inp.onchange = async () => {
+    await api('/admin/api/resources/' + inp.dataset.id, {method: 'POST', body: {sort: +inp.value}});
+    toast('Order saved');
+  });
+  tb.querySelectorAll('.rDel').forEach(b => b.onclick = () =>
+    confirmModal(`Delete "${b.dataset.t}"?`, 'The link disappears from the public Resources page.', async () => {
+      await api('/admin/api/resources/' + b.dataset.id, {method: 'DELETE'});
+      toast('Deleted'); loadResources();
+    }));
+}
+const rAdd = document.getElementById('rAdd');
+if (rAdd) rAdd.onclick = async () => {
+  const body = {category: document.getElementById('rCat').value,
+                title: document.getElementById('rTitle').value.trim(),
+                url: document.getElementById('rUrl').value.trim(),
+                description: document.getElementById('rDesc').value.trim(),
+                icon: document.getElementById('rIcon').value.trim()};
+  if (!body.title || !body.url) return toast('Title and URL are required', 'err');
+  await api('/admin/api/resources', {method: 'POST', body});
+  toast('Link added');
+  ['rTitle', 'rUrl', 'rDesc', 'rIcon'].forEach(id => document.getElementById(id).value = '');
+  loadResources();
+};
+loadResources();
 </script>
 {% endblock %}

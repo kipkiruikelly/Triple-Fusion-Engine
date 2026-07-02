@@ -552,15 +552,16 @@ def register_analytics_routes(app):
     @app.route("/api/prices/batch")
     @login_required
     def api_prices_batch():
+        from market_data import get_quotes_verified
         tickers = [t.upper() for t in request.args.getlist("t")[:60]]
-        result  = {}
-
-        def _fetch(t):
-            q = _cached_quote(t)
-            result[t] = {"price": q["price"], "change_pct": q["pct"]} if q else None
-
-        with ThreadPoolExecutor(max_workers=8) as ex:
-            ex.map(_fetch, tickers)
+        result = {}
+        for t, q in get_quotes_verified(tickers).items():
+            result[t] = ({"price": q["price"], "change_pct": q["pct"],
+                          "source": q["source"], "verified": q["verified"],
+                          "divergence_pct": q["divergence_pct"],
+                          "conf": q["conf"], "conf_pct": q["conf_pct"],
+                          "market_closed": q["market_closed"]}
+                         if q else None)
         return jsonify(result)
 
     # ── SSE real-time price stream ─────────────────────────────────────────────

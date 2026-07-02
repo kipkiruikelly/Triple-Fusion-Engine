@@ -24,6 +24,32 @@
 </div>
 
 <div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="margin:0">Data quality, sources &amp; Pyth oracle</h2>
+    {% if current_user.role == 'admin' %}
+    <button class="btn small primary" id="pythSync">Sync Pyth feed mapping</button>
+    {% endif %}
+  </div>
+  <div class="grid g3" style="margin-bottom:14px" id="srcCards"></div>
+  <div class="grid g2">
+    <div>
+      <h2>Feed mapping</h2>
+      <div style="max-height:260px;overflow:auto">
+      <table><thead><tr><th>Symbol</th><th>Pyth feed</th><th>Active</th></tr></thead>
+      <tbody id="feedBody"></tbody></table>
+      </div>
+    </div>
+    <div>
+      <h2>Divergence incidents</h2>
+      <div id="divList" style="max-height:200px;overflow:auto;font-size:8.5pt"></div>
+      <h2 style="margin-top:14px">Prediction accuracy by Pyth confidence</h2>
+      <table><thead><tr><th>Confidence band</th><th>Graded</th><th>Accuracy</th></tr></thead>
+      <tbody id="confBody"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<div class="card">
   <h2>Error logs</h2>
   <div class="toolbar">
     <select id="fSev"><option value="">All severities</option><option>error</option><option>warning</option></select>
@@ -95,5 +121,52 @@ async function loadErrors() {
 document.getElementById('apply').onclick = () => { page = 1; loadErrors(); };
 
 loadSystem(); loadErrors();
+
+// ── data quality ──────────────────────────────────────────────
+async function loadDataQuality() {
+  const d = await api('/admin/api/data-quality');
+  const s = d.sources;
+  const card = (name, st) => `<div class="card" style="margin:0">
+    <div class="stat-label">${name}</div>
+    <div class="stat-val" style="font-size:12pt">${fmtNum(st.success)} ok / ${fmtNum(st.fail)} fail</div>
+    <div class="stat-sub">last ok: ${st.last_success ? fmtDate(st.last_success) : 'never'}</div></div>`;
+  document.getElementById('srcCards').innerHTML =
+    card('yfinance', s.yfinance) + card('Pyth oracle', s.pyth) +
+    `<div class="card" style="margin:0"><div class="stat-label">Failovers / divergences</div>
+     <div class="stat-val" style="font-size:12pt">${s.failovers} / ${s.divergences}</div>
+     <div class="stat-sub">${d.breaker.rate_limited ? 'circuit breaker OPEN' : 'breaker closed'}</div></div>`;
+
+  const fb = document.getElementById('feedBody');
+  fb.innerHTML = d.feeds.length ? d.feeds.map(f => `<tr>
+    <td><b>${esc(f.symbol)}</b></td>
+    <td class="muted" style="font-size:7.5pt" title="${esc(f.feed_id)}">${esc(f.pyth_symbol || f.feed_id.slice(0, 18) + '...')}</td>
+    <td><input type="checkbox" class="feedToggle" data-id="${f.id}" ${f.active ? 'checked' : ''} ${ROLE_LVL < 3 ? 'disabled' : ''}></td>
+  </tr>`).join('') : '';
+  if (!d.feeds.length) emptyRow(fb, 3, 'No feeds mapped. Run a sync.');
+  fb.querySelectorAll('.feedToggle').forEach(cb => cb.onchange = async () => {
+    await api('/admin/api/pyth-feeds/' + cb.dataset.id, {method: 'POST', body: {active: cb.checked}});
+    toast('Feed ' + (cb.checked ? 'enabled' : 'disabled'));
+  });
+
+  document.getElementById('divList').innerHTML = d.incidents.length
+    ? d.incidents.map(i => `<div style="padding:5px 0;border-bottom:1px solid var(--border)">
+        <span class="muted">${fmtDate(i.at)}</span> ${esc(i.message)}</div>`).join('')
+    : '<div class="empty" style="padding:14px">No divergence incidents</div>';
+
+  document.getElementById('confBody').innerHTML = d.conf_accuracy.map(b => `<tr>
+    <td>${esc(b.bucket)}</td><td>${fmtNum(b.n)}</td>
+    <td>${b.accuracy != null ? b.accuracy + '%' : '<span class="muted">insufficient data</span>'}</td>
+  </tr>`).join('');
+}
+const syncBtn = document.getElementById('pythSync');
+if (syncBtn) syncBtn.onclick = async () => {
+  syncBtn.disabled = true;
+  try {
+    const d = await api('/admin/api/pyth-feeds/sync', {method: 'POST', body: {}});
+    toast(`Pyth sync: ${d.mapped} mapped, ${d.unmapped} unmapped`);
+    loadDataQuality();
+  } finally { syncBtn.disabled = false; }
+};
+loadDataQuality();
 </script>
 {% endblock %}

@@ -146,6 +146,38 @@ def create_app():
         from flask import render_template
         return render_template("terms.html")
 
+    @app.route("/resources")
+    def resources_page():
+        from flask import render_template
+        return render_template("resources.html")
+
+    @app.route("/api/resources")
+    def api_resources_public():
+        from models import ResourceLink
+        rows = (ResourceLink.query.filter_by(active=True)
+                .order_by(ResourceLink.sort).all())
+        cats = {}
+        order = ["Learn Trading", "Market Data & News", "Regulators & Safety",
+                 "Our Platform"]
+        for r in rows:
+            cats.setdefault(r.category, []).append(
+                {"title": r.title, "url": r.url, "description": r.description,
+                 "icon": r.icon})
+        ordered = ([c for c in order if c in cats]
+                   + [c for c in cats if c not in order])
+        return jsonify({"ok": True, "categories": [
+            {"name": c, "links": cats[c]} for c in ordered]})
+
+    @app.route("/methodology")
+    def methodology_page():
+        from flask import render_template
+        return render_template("methodology.html")
+
+    @app.route("/data-sources")
+    def data_sources_page():
+        from flask import render_template
+        return render_template("data_sources.html")
+
     @app.route("/health")
     def health():
         return jsonify({"status": "ok", "uptime_s": round(time.time() - _APP_START, 1)})
@@ -313,6 +345,36 @@ def _seed_defaults(db):
                      "NDX": "Nasdaq-100 Index", "DIA": "SPDR Dow Jones ETF"}
             for sym in PRO_TICKERS:
                 db.session.add(TickerConfig(symbol=sym, name=names.get(sym), enabled=True))
+        from models import ResourceLink
+        if ResourceLink.query.count() == 0:
+            seed_links = [
+                ("Learn Trading", "Investopedia", "https://www.investopedia.com/trading-4427765",
+                 "Plain-English explanations of every trading concept", "📚", 1),
+                ("Learn Trading", "Babypips School of Pipsology", "https://www.babypips.com/learn/forex",
+                 "The classic free forex course, from beginner to advanced", "🎓", 2),
+                ("Learn Trading", "NSE Investor Education", "https://www.nse.co.ke/investor-education/",
+                 "Nairobi Securities Exchange guides for Kenyan investors", "🇰🇪", 3),
+                ("Market Data & News", "Yahoo Finance", "https://finance.yahoo.com",
+                 "Quotes, charts, and news for global markets", "📈", 1),
+                ("Market Data & News", "TradingView", "https://www.tradingview.com",
+                 "Professional charting and community trade ideas", "📊", 2),
+                ("Market Data & News", "Pyth Price Feeds", "https://www.pyth.network/price-feeds",
+                 "Explore the oracle feeds that verify our prices", "🔮", 3),
+                ("Regulators & Safety", "Capital Markets Authority Kenya", "https://www.cma.or.ke",
+                 "Kenya's markets regulator. Check if a broker is licensed", "🛡", 1),
+                ("Regulators & Safety", "Central Bank of Kenya", "https://www.centralbank.go.ke",
+                 "Forex rates and warnings about unlicensed schemes", "🏦", 2),
+                ("Regulators & Safety", "CMA Investor Alerts", "https://www.cma.or.ke/cautionary-statements/",
+                 "Official alerts about fraudulent investment operations", "⚠️", 3),
+                ("Our Platform", "Track Record", "/track-record",
+                 "Our live, ungraded-nothing prediction accuracy", "✅", 1),
+                ("Our Platform", "Methodology", "/methodology",
+                 "How the models work and how accuracy is graded", "🔬", 2),
+                ("Our Platform", "FAQ", "/faq", "Common questions answered", "❓", 3),
+            ]
+            for cat, title, url, desc, icon, sort in seed_links:
+                db.session.add(ResourceLink(category=cat, title=title, url=url,
+                                            description=desc, icon=icon, sort=sort))
         defaults = {
             "app_name":          "BullLogic",
             "maintenance_mode":  "0",
@@ -355,6 +417,11 @@ def _run_migrations(db):
         ("user",                "google_sub",      "VARCHAR(64)"),
         ("user",                "session_token",   "VARCHAR(32)"),
         ("payment",             "flagged",         "BOOLEAN DEFAULT 0"),
+        ("prediction_history",  "src_source",      "VARCHAR(12)"),
+        ("prediction_history",  "src_conf_pct",    "FLOAT"),
+        ("prediction_history",  "src_divergence",  "FLOAT"),
+        ("user_preferences",    "risk_intro_seen", "BOOLEAN DEFAULT 0"),
+        ("user_preferences",    "usage_notice_enabled", "BOOLEAN DEFAULT 1"),
         ("prediction_history",  "interval",        "VARCHAR(4) DEFAULT '1d'"),
         ("price_alert",         "note",            "VARCHAR(100)"),
         ("price_alert",         "triggered_at",    "DATETIME"),

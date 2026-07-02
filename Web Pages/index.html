@@ -702,27 +702,60 @@
              oninput="filterSidebar(this.value)" autocomplete="off" />
     </div>
 
-    <!-- Navigation -->
+    <!-- Navigation, grouped -->
     <div class="sidebar-section" id="sec-nav">
-      <div class="sidebar-label">&#9889; Quick Nav</div>
+      <div class="sidebar-label">📈 Markets</div>
       <div class="sidebar-item active" onclick="window.scrollTo({top:0,behavior:'smooth'})">
         <div class="sym-name"><div class="dot"></div><span>Price Predictor</span></div>
       </div>
-      <a class="sidebar-item" href="/leaderboard" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Signal Leaderboard</span></div>
-      </a>
-      <a class="sidebar-item" href="/pipeline" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Strategy Pipeline</span></div>
-      </a>
-      <a class="sidebar-item" href="/research/AAPL" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Deep Research</span></div>
-      </a>
       <div class="sidebar-item" onclick="showSection('markets')">
         <div class="sym-name"><div class="dot"></div><span>Market Overview</span></div>
       </div>
       <div class="sidebar-item" onclick="showSection('movers')">
         <div class="sym-name"><div class="dot"></div><span>Top Movers</span></div>
       </div>
+      <a class="sidebar-item" href="/leaderboard" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Signal Leaderboard</span></div>
+      </a>
+      <a class="sidebar-item" href="/research/AAPL" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Deep Research</span></div>
+      </a>
+
+      <div class="sidebar-label" style="margin-top:12px">🎯 My Predictions</div>
+      <a class="sidebar-item" href="/history" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Prediction History</span></div>
+      </a>
+      <a class="sidebar-item" href="/watchlist" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Watchlist</span></div>
+      </a>
+      <a class="sidebar-item" href="/portfolio" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Portfolio</span></div>
+      </a>
+      <a class="sidebar-item" href="/pipeline" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Strategy Pipeline</span></div>
+      </a>
+
+      <div class="sidebar-label" style="margin-top:12px">✅ Trust</div>
+      <a class="sidebar-item" href="/track-record" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Track Record</span></div>
+      </a>
+      <a class="sidebar-item" href="/methodology" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Methodology</span></div>
+      </a>
+      <a class="sidebar-item" href="/resources" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Resources</span></div>
+      </a>
+      <a class="sidebar-item" href="/data-sources" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Data Sources</span></div>
+      </a>
+
+      <div class="sidebar-label" style="margin-top:12px">👤 Account</div>
+      <a class="sidebar-item" href="/profile" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Profile &amp; Settings</span></div>
+      </a>
+      <a class="sidebar-item" href="/pricing" style="text-decoration:none;">
+        <div class="sym-name"><div class="dot"></div><span>Plans &amp; Billing</span></div>
+      </a>
     </div>
 
     <!-- US Stocks -->
@@ -838,6 +871,9 @@
             <button type="button" id="btn1d"  class="iv-btn {% if (interval or '1d') == '1d' %}active{% endif %}" onclick="setIntervalAndPredict('1d')">1D</button>
           </div>
           <button type="submit" class="btn-predict" id="predictBtn">Predict</button>
+          <div style="flex-basis:100%;color:var(--muted);font-size:8pt;margin-top:8px">
+            Predictions are informational, not financial advice.
+            <a href="/methodology" style="color:var(--accent);text-decoration:none">How this works</a></div>
         </div>
 
         <!-- Kill zone indicator -->
@@ -897,7 +933,7 @@
     <!-- Pro ticker live signal grid -->
     <div class="info-section" style="margin-bottom:20px;" id="pro-signal-section">
       <div class="info-header" style="display:flex;align-items:center;justify-content:space-between;">
-        <span>Live Signals, Pro Models</span>
+        <span>Live Signals, Pro Models <span title="Why am I seeing this? These are automatic model outputs for the ten Pro tickers, refreshed on demand. They are not personalized to you and are not recommendations." style="cursor:help;color:var(--muted);font-size:9pt">ⓘ</span></span>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="sig-tf-label" style="font-size:8.5pt;color:var(--muted)">1d</span>
           <button onclick="refreshSignals()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:8.5pt;font-weight:600;padding:4px 10px;border-radius:4px;cursor:pointer;">Refresh</button>
@@ -1489,12 +1525,22 @@ function _fmtPrice(p) {
   return p.toFixed(4);
 }
 
-function _applyLiveData(sym, price, chg) {
+function _applyLiveData(sym, price, chg, v) {
   const el = document.getElementById('ld-' + sym);
   if (!el) return;
   const up = chg >= 0;
+  let badge = '';
+  if (v) {
+    if (v.verified) {
+      badge = `<span title="Verified: this price was cross-checked against the Pyth oracle network and both sources agree${v.conf != null ? '. Oracle confidence: about ±$' + _fmtPrice(v.conf) : ''}" style="color:var(--green);font-size:8pt;cursor:help"> ✓</span>`;
+    } else if (v.divergence_pct != null) {
+      badge = `<span title="Sources disagree: yfinance says $${_fmtPrice(price)} but the Pyth oracle says $${_fmtPrice(v.pyth_price ?? price)} (${v.divergence_pct}% apart). Treat this price with caution." style="color:var(--accent);font-size:8pt;cursor:help"> ⚠</span>`;
+    } else if (v.source === 'pyth') {
+      badge = `<span title="Primary source is down. This price comes from the Pyth oracle network." style="color:var(--blue,#3B82F6);font-size:7.5pt;cursor:help"> oracle</span>`;
+    }
+  }
   el.innerHTML = `
-    <div class="live-price">$${_fmtPrice(price)}</div>
+    <div class="live-price">$${_fmtPrice(price)}${badge}</div>
     <div class="live-chg ${up ? 'up' : 'down'}">${up ? '+' : ''}${chg.toFixed(2)}%</div>`;
 }
 
@@ -1505,7 +1551,7 @@ async function _loadSidebarBatch(batch) {
     if (!r.ok) return;
     const data = await r.json();
     Object.entries(data).forEach(([sym, v]) => {
-      if (v && v.price != null) _applyLiveData(sym, v.price, v.change_pct ?? 0);
+      if (v && v.price != null) _applyLiveData(sym, v.price, v.change_pct ?? 0, v);
     });
   } catch(e) {}
 }
@@ -1558,6 +1604,32 @@ function toggleTheme() {
     const d = await r.json();
     if (d.rate_limited) document.getElementById('dataBanner').style.display = '';
   } catch (e) {}
+})();
+</script>
+
+<!-- Gentle usage check-in (opt-out in Profile), never blocks anything -->
+<script>
+(function () {
+  const KEY = 'bl-session-preds', SHOWN = 'bl-checkin-shown', THRESHOLD = 15;
+  const form = document.querySelector('form[action="/predict"]') ||
+               (document.getElementById('predictBtn') && document.getElementById('predictBtn').closest('form'));
+  if (form) form.addEventListener('submit', () => {
+    sessionStorage.setItem(KEY, (+sessionStorage.getItem(KEY) || 0) + 1);
+  });
+  const count = +sessionStorage.getItem(KEY) || 0;
+  if (count < THRESHOLD || sessionStorage.getItem(SHOWN)) return;
+  fetch('/api/preferences').then(r => r.json()).then(d => {
+    if (!d.ok || !d.usage_notice_enabled) return;
+    sessionStorage.setItem(SHOWN, '1');
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;bottom:70px;right:18px;z-index:850;background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;padding:14px 16px;width:min(300px,90vw);font-size:9pt;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.4)';
+    el.innerHTML = 'You have run ' + count + ' predictions this session. A quick check-in: ' +
+      'are these informing a plan, or chasing a move? No judgement, just a nudge. ' +
+      '<a href="/methodology" style="color:var(--accent)">Reading on limits</a> can help.' +
+      '<div style="text-align:right;margin-top:8px"><button onclick="this.parentNode.parentNode.remove()" ' +
+      'style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:8.5pt">Thanks, got it</button></div>';
+    document.body.appendChild(el);
+  }).catch(() => {});
 })();
 </script>
 

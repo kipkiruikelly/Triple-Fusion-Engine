@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Data Sources, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35}
+    body{font-family:'Inter',sans-serif;font-size:10.5pt;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between}
+    .logo{font-size:14pt;font-weight:700;color:#fff;text-decoration:none}.logo span{color:var(--accent)}
+    .btn{padding:6px 14px;border-radius:6px;font-size:9pt;font-weight:600;text-decoration:none;color:var(--text);border:1px solid var(--border)}
+    .wrap{max-width:760px;margin:0 auto;padding:36px 20px;flex:1}
+    h1{font-size:18pt;margin-bottom:6px}
+    .sub{color:var(--muted);margin-bottom:24px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-bottom:12px}
+    .card b{font-size:11pt}
+    .card p{color:var(--muted);font-size:9.5pt;line-height:1.7;margin-top:6px}
+    .tag{display:inline-block;font-size:7.5pt;font-weight:600;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:1px 6px;margin-left:8px;text-transform:uppercase}
+    a{color:var(--accent);text-decoration:none}
+    footer{border-top:1px solid var(--border);padding:16px;text-align:center;font-size:8.5pt;color:var(--muted)}
+    footer a{color:var(--muted);margin:0 8px}
+  </style>
+</head>
+<body>
+<div class="topbar"><a href="/" class="logo">Bull<span>Logic</span></a><a href="/" class="btn">Back to app</a></div>
+<div class="wrap">
+  <h1>Data Sources</h1>
+  <div class="sub">Every provider that powers BullLogic and exactly what each supplies.</div>
+
+  <div class="card"><b>Yahoo Finance</b><span class="tag">primary prices</span>
+    <p>Live quotes, historical daily and intraday candles for stocks, ETFs, crypto, forex,
+    commodities, and indices. Used for model training, live predictions, charts, and the
+    price sidebar. Data may be delayed by up to 15 minutes for some exchanges.</p></div>
+
+  <div class="card"><b>Pyth Network (Hermes)</b><span class="tag">verification + failover</span>
+    <p>An oracle network aggregating prices from major exchanges and trading firms, delivered
+    with a confidence interval. We cross-check displayed prices against Pyth and show a
+    Verified badge when sources agree. If Yahoo is unavailable, Pyth prices take over with a
+    clear source label. Equity feeds pause outside US market hours by design.</p></div>
+
+  <div class="card"><b>Alpaca Markets</b><span class="tag">training data</span>
+    <p>High-resolution 1-minute historical bars used to train the short-timeframe models.
+    Not used for live display.</p></div>
+
+  <div class="card"><b>Microsoft Azure Blob Storage</b><span class="tag">infrastructure</span>
+    <p>Encrypted storage for trained model files. No personal data is stored there.</p></div>
+
+  <div class="card"><b>Safaricom Daraja and Stripe</b><span class="tag">payments</span>
+    <p>Payment processing only. See the <a href="/privacy-policy">Privacy Policy</a> for what
+    payment data we retain.</p></div>
+
+  <p style="color:var(--muted);font-size:9pt;line-height:1.7">Where sources disagree beyond
+  tolerance we show both values rather than choosing silently. When all sources fail you see
+  an honest "last known price" banner with the timestamp, never a fabricated number.</p>
+</div>
+<footer>
+  <a href="/methodology">Methodology</a> · <a href="/track-record">Track Record</a> ·
+  <a href="/resources">Resources</a> · <a href="/faq">FAQ</a> ·
+  <a href="/privacy-policy">Privacy</a> · <a href="/terms">Terms</a>
+</footer>
+</body>
+</html>

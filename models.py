@@ -76,6 +76,10 @@ class PredictionHistory(db.Model):
     direction     = db.Column(db.String(8), nullable=False)
     confidence    = db.Column(db.Float, nullable=False)
     predicted_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    # Data-quality context captured at prediction time (nullable, best effort)
+    src_source     = db.Column(db.String(12), nullable=True)   # yfinance|pyth|both
+    src_conf_pct   = db.Column(db.Float, nullable=True)        # Pyth conf / price * 100
+    src_divergence = db.Column(db.Float, nullable=True)        # % gap between sources
 
 
 class WatchlistItem(db.Model):
@@ -295,6 +299,29 @@ class ErrorLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class PythFeed(db.Model):
+    """Mapping from our ticker symbols to Pyth Network price feed ids."""
+    id          = db.Column(db.Integer, primary_key=True)
+    symbol      = db.Column(db.String(12), unique=True, nullable=False)
+    feed_id     = db.Column(db.String(70), nullable=False)
+    pyth_symbol = db.Column(db.String(40), nullable=True)
+    active      = db.Column(db.Boolean, default=True)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ResourceLink(db.Model):
+    """Curated external links shown on the Resources hub, admin managed."""
+    id          = db.Column(db.Integer, primary_key=True)
+    category    = db.Column(db.String(40), nullable=False)
+    title       = db.Column(db.String(80), nullable=False)
+    url         = db.Column(db.String(300), nullable=False)
+    description = db.Column(db.String(200), nullable=True)
+    icon        = db.Column(db.String(10), nullable=True)      # emoji
+    sort        = db.Column(db.Integer, default=0)
+    active      = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Feedback(db.Model):
     """User feedback from the in-app widget, scored for sentiment."""
     id         = db.Column(db.Integer, primary_key=True)
@@ -314,3 +341,5 @@ class UserPreferences(db.Model):
     theme          = db.Column(db.String(10), default='dark')
     default_ticker = db.Column(db.String(12), default='AAPL')
     timezone       = db.Column(db.String(50), default='UTC')
+    risk_intro_seen      = db.Column(db.Boolean, default=False)
+    usage_notice_enabled = db.Column(db.Boolean, default=True)
