@@ -1,6 +1,6 @@
 """
 app_new.py
-ML-based Quantitative Trading System — refactored entry point.
+ML-based Quantitative Trading System, refactored entry point.
 
 Flask application factory wiring all route modules together.
 Drop-in replacement for app.py: start with `python app_new.py` or point
@@ -64,7 +64,7 @@ def create_app():
     app.config["REMEMBER_COOKIE_HTTPONLY"] = True
     app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
     if os.environ.get("SECURE_COOKIES", "").lower() == "true":
-        # Enable when all traffic is HTTPS (Caddy) — breaks plain-HTTP logins.
+        # Enable when all traffic is HTTPS (Caddy), breaks plain-HTTP logins.
         app.config["SESSION_COOKIE_SECURE"] = True
         app.config["REMEMBER_COOKIE_SECURE"] = True
 
@@ -88,7 +88,16 @@ def create_app():
     from models import User
     @login_manager.user_loader
     def load_user(user_id):
-        return db.session.get(User, int(user_id))
+        # Session ids are "id:session_token"; a mismatched token means the
+        # user reset their password and this session is revoked.
+        raw, _, tok = str(user_id).partition(":")
+        try:
+            user = db.session.get(User, int(raw))
+        except (TypeError, ValueError):
+            return None
+        if user and (user.session_token or "") != tok:
+            return None
+        return user
 
     # ── Register all route modules ────────────────────────────────────────────
     from routes.auth          import register_auth_routes
@@ -119,6 +128,23 @@ def create_app():
     def offline_page():
         from flask import render_template
         return render_template("offline.html")
+
+    # ── Public info pages ─────────────────────────────────────────────────────
+
+    @app.route("/faq")
+    def faq_page():
+        from flask import render_template
+        return render_template("faq.html")
+
+    @app.route("/privacy-policy")
+    def privacy_page():
+        from flask import render_template
+        return render_template("privacy.html")
+
+    @app.route("/terms")
+    def terms_page():
+        from flask import render_template
+        return render_template("terms.html")
 
     @app.route("/health")
     def health():
@@ -153,7 +179,7 @@ def create_app():
         path = os.path.join(BASE_DIR, "Data", "model_metrics.json")
         if not os.path.exists(path):
             return jsonify({"ok": False,
-                            "error": "No metrics file — run train_professional.py first"})
+                            "error": "No metrics file, run train_professional.py first"})
         try:
             with open(path) as f:
                 data = _json.load(f)
@@ -322,6 +348,12 @@ def _run_migrations(db):
         ("user",                "status",          "VARCHAR(12) DEFAULT 'active'"),
         ("user",                "created_at",      "DATETIME"),
         ("user",                "last_seen",       "DATETIME"),
+        # Existing accounts predate verification; treat them as verified so
+        # the feature only gates new signups.
+        ("user",                "email_verified",  "BOOLEAN DEFAULT 1"),
+        ("user",                "auth_provider",   "VARCHAR(10) DEFAULT 'local'"),
+        ("user",                "google_sub",      "VARCHAR(64)"),
+        ("user",                "session_token",   "VARCHAR(32)"),
         ("payment",             "flagged",         "BOOLEAN DEFAULT 0"),
         ("prediction_history",  "interval",        "VARCHAR(4) DEFAULT '1d'"),
         ("price_alert",         "note",            "VARCHAR(100)"),
@@ -382,8 +414,8 @@ def _start_alert_thread(app, db):
                 f"Your price alert for {alert.ticker} has triggered.\n\n"
                 f"Condition: Price {alert.direction} ${alert.price:.4f}\n"
                 f"Current price: ${price:.4f}\n"
-                f"Note: {alert.note or '—'}\n\n"
-                f"— BullLogic"
+                f"Note: {alert.note or '-'}\n\n"
+                f", BullLogic"
             )
             with app.app_context():
                 mail.send(MailMessage(subject=subject, recipients=[user.email], body=body))
@@ -426,7 +458,7 @@ def _start_alert_thread(app, db):
                                             f"🔔 *BullLogic Alert*\n"
                                             f"*{alert.ticker}* hit `${price:.4f}`\n"
                                             f"Condition: price {alert.direction} `${alert.price:.4f}`\n"
-                                            f"Note: {alert.note or '—'}"
+                                            f"Note: {alert.note or '-'}"
                                         )
                                         threading.Thread(
                                             target=_send_telegram,

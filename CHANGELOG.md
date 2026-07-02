@@ -1,6 +1,68 @@
 # Changelog
 
-## 2026-07-02 — Product upgrade wave: trust, resilience, operations
+## 2026-07-02, Production auth, email, and payments
+
+Everything in this wave works end to end with real services. Nothing is
+mocked or stubbed.
+
+### Authentication
+- Google Sign-In (OAuth 2.0 authorization-code flow via Authlib) on the
+  redesigned login and registration pages. First Google sign-in creates
+  the account; later sign-ins reuse it. A Google email matching an
+  existing password account links to it instead of duplicating. The
+  button hides itself until GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET
+  are set.
+- Email verification on signup: signed 24 hour links (itsdangerous),
+  "check your inbox" screen with a rate limited resend, and a hard gate:
+  unverified accounts cannot run predictions or pay. Google users are
+  treated as verified. Existing accounts were grandfathered in as
+  verified. Addresses are validated with email-validator and normalized
+  before saving.
+- Password reset now sends a real branded email with a single-use link
+  valid for 1 hour, never reveals whether an address exists, enforces
+  the 8 character minimum, and invalidates every other active session by
+  rotating a per-user session token checked on each request.
+- Registration requires agreeing to the Terms of Service and Privacy
+  Policy.
+
+### Email
+- New emails.py module: branded HTML templates with plain-text
+  fallbacks for verification, password reset, and payment receipts.
+  Sending is asynchronous so requests never block on SMTP. Works with
+  Gmail app passwords or a transactional provider (Brevo recommended)
+  purely via MAIL_* environment variables.
+
+### Payments
+- M-Pesa flow audited end to end. Every Daraja STK result code is now
+  handled with a specific user message: cancelled prompt, timeout,
+  insufficient balance, wrong PIN, expired request, busy session.
+- Backup reconciliation job: if Safaricom's callback never arrives, the
+  ops thread polls the query API for pending payments after 2 minutes
+  and settles or fails them; anything still pending after an hour is
+  expired. Nothing is ever marked paid without a verified ResultCode 0
+  from Safaricom.
+- Confirmed payments activate the plan instantly, store the M-Pesa
+  receipt number, email the user a branded receipt, and appear in the
+  admin transactions table. Sandbox to production is a pure .env change
+  (MPESA_ENV plus credentials).
+
+### Legal and support pages
+- /faq (14 real questions), /privacy-policy (Kenya Data Protection Act
+  2019 rights, third parties, retention), and /terms (not-financial-
+  advice disclaimer, acceptable use, payments and refunds, liability,
+  termination). Linked from footers on the main pages, required at
+  registration, and shown next to the payment button. Each policy page
+  carries a template notice recommending legal review before launch.
+
+### Housekeeping
+- Removed every em dash (561) and en dash (47) across 74 project files,
+  replaced with commas, periods, or hyphens as reads best. Zero remain.
+- .env.example added covering every configurable value.
+- Test suite grew to 29 tests, adding Google OAuth callback handling,
+  verification token expiry, reset single-use and session invalidation,
+  and M-Pesa settlement verification.
+
+## 2026-07-02, Product upgrade wave: trust, resilience, operations
 
 Built after a full codebase audit, prioritizing what earns user trust and
 what keeps the business observable. All features are live end-to-end
@@ -10,14 +72,14 @@ what keeps the business observable. All features are live end-to-end
 
 - **Accuracy Engine + public Track Record** (`/track-record`).
   Every prediction is now automatically graded against what the market
-  actually did once its horizon passes — platform-wide, in the background,
+  actually did once its horizon passes, platform-wide, in the background,
   including the wrong ones. Previously grading only ran when a user
   manually requested it, so the accuracy tables were empty and the
   question "how right has this model been?" was unanswerable.
   - Public track-record page with per-ticker/timeframe directional
     accuracy and average price error, 30/90-day windows.
   - Honest by design: models with fewer than 10 graded calls display
-    "insufficient data" — no metric is ever fabricated.
+    "insufficient data", no metric is ever fabricated.
   - Each prediction result now carries its model's track-record badge.
 - **Failed predictions no longer cost quota.** The free-tier slot is
   refunded whenever a prediction errors out (data outage, bad symbol).
@@ -32,7 +94,7 @@ what keeps the business observable. All features are live end-to-end
   rate-limited, with Swahili-flavored thanks.
 - **44 new tradeable symbols.** Models trained for crypto (BTC, ETH, …),
   forex (EURUSD, …), commodities (GOLD, OIL, …), indices (SPX, FTSE,
-  NIKKEI, …) and more US stocks/ETFs — 54 tickers total now supported.
+  NIKKEI, …) and more US stocks/ETFs, 54 tickers total now supported.
 
 ### For admins
 
@@ -42,11 +104,11 @@ what keeps the business observable. All features are live end-to-end
   Deduped to one alert per model per 3 days.
 - **Daily digest.** Every morning: yesterday's signups, actives,
   predictions, KES revenue, errors, at-risk users, and 30-day model
-  accuracy — as an in-app notification to all staff (+ email to admins
+  accuracy, as an in-app notification to all staff (+ email to admins
   when mail is configured). Disable with AppSetting
   `admin_digest_enabled=0`.
 - **Churn-risk flags.** Users are bucketed by recency (engaged / at risk
-  7–30d / churned >30d / never active). Filter in the users table, badge
+  7-30d / churned >30d / never active). Filter in the users table, badge
   per row, and a "N at churn risk →" link on the dashboard KPI.
 - **Feedback inbox** on the analytics page with average rating, word-list
   sentiment scoring, and resolve/reopen workflow.
@@ -55,11 +117,11 @@ what keeps the business observable. All features are live end-to-end
 
 ### Engineering
 
-- **`market_data.py`** — single choke-point for all Yahoo access: TTL
+- **`market_data.py`**, single choke-point for all Yahoo access: TTL
   caches, stale-while-error fallback, and a global rate-limit circuit
   breaker (a repeat of today's `YFRateLimitError` outage now degrades
   gracefully instead of blanking the app).
-- **`ops.py`** — one background thread runs the accuracy engine, drift
+- **`ops.py`**, one background thread runs the accuracy engine, drift
   checks, and the daily digest; each job is idempotent.
 - **Security**: rate limiting on `/login` (10/15 min) and `/register`
   (5/hour) per IP; session/remember cookies are HttpOnly + SameSite=Lax
@@ -73,16 +135,16 @@ what keeps the business observable. All features are live end-to-end
   idempotency, accuracy grading, insufficient-data honesty, drift
   alerting + dedupe, admin RBAC, and CSRF enforcement.
   Run: `.venv\Scripts\python.exe -m pytest tests\`.
-- **yfinance upgraded 0.2.54 → ≥1.5.1** — the pinned version was being
+- **yfinance upgraded 0.2.54 → ≥1.5.1**, the pinned version was being
   rejected by Yahoo (persistent `YFRateLimitError`), which had broken all
   quotes and training.
 
 ### Config notes
 
-- `WEB_THREADS` (default 24) — waitress worker threads.
-- `SECURE_COOKIES=true` — enable Secure cookie flag (HTTPS-only setups).
-- `ADMIN_SESSION_MINUTES` (default 30) — admin console session timeout.
-- `DISABLE_OPS_THREAD=true` — skip background ops (used by tests).
+- `WEB_THREADS` (default 24), waitress worker threads.
+- `SECURE_COOKIES=true`, enable Secure cookie flag (HTTPS-only setups).
+- `ADMIN_SESSION_MINUTES` (default 30), admin console session timeout.
+- `DISABLE_OPS_THREAD=true`, skip background ops (used by tests).
 - Email digest/broadcasts need the existing `MAIL_*` variables.
 
 ### Future ideas (considered, not built)

@@ -1,4 +1,4 @@
-"""ops.py — background platform operations.
+"""ops.py, background platform operations.
 
   • Accuracy engine: resolves every past prediction against what the
     market actually did, platform-wide (the old flow only checked when a
@@ -25,7 +25,7 @@ _HORIZON = {"1d": timedelta(days=1), "4h": timedelta(hours=4),
             "1h": timedelta(hours=1), "30m": timedelta(minutes=30),
             "15m": timedelta(minutes=15), "5m": timedelta(minutes=5),
             "1m": timedelta(minutes=1)}
-# yfinance lookback limits per bar size — beyond these a prediction is
+# yfinance lookback limits per bar size, beyond these a prediction is
 # recorded as unresolvable rather than retried forever.
 _MAX_AGE = {"1d": timedelta(days=365), "4h": timedelta(days=55),
             "1h": timedelta(days=55), "30m": timedelta(days=55),
@@ -66,7 +66,7 @@ def resolve_pending(db, limit=300):
         if due_at > now:
             continue                          # not matured yet
         if now - pred.predicted_at > _MAX_AGE.get(ivl, _MAX_AGE["1d"]):
-            # Too old to grade at this granularity — record honestly as
+            # Too old to grade at this granularity, record honestly as
             # unresolvable so it is never retried.
             db.session.add(PredictionAccuracy(prediction_id=pred.id,
                                               checked_at=now))
@@ -140,7 +140,7 @@ def platform_stats(db, days=90):
 
 
 def ticker_stats(db, ticker, interval, days=90):
-    """Track record for one model — used for the badge on results."""
+    """Track record for one model, used for the badge on results."""
     from models import PredictionHistory, PredictionAccuracy
     since = datetime.utcnow() - timedelta(days=days)
     n, ok = (db.session.query(
@@ -185,7 +185,7 @@ def check_drift(db):
         state[key] = today
         msg = (f"{m['ticker']} {m['interval']} model at "
                f"{m['direction_accuracy']}% directional accuracy "
-               f"({m['n']} graded, 30d) — below {DRIFT_FLOOR}% floor")
+               f"({m['n']} graded, 30d), below {DRIFT_FLOOR}% floor")
         alerts.append(msg)
         db.session.add(ErrorLog(severity="warning", endpoint="ops.drift",
                                 message=msg[:500]))
@@ -203,7 +203,7 @@ def check_drift(db):
 
 
 def active_drift_alerts(db):
-    """Models currently under the floor — shown in admin overview."""
+    """Models currently under the floor, shown in admin overview."""
     stats = platform_stats(db, days=30)
     return [f"Drift: {m['ticker']} {m['interval']} at {m['direction_accuracy']}% (30d)"
             for m in stats["per_model"]
@@ -214,7 +214,7 @@ def active_drift_alerts(db):
 # ── Churn ─────────────────────────────────────────────────────────────────────
 
 def churn_bucket(user):
-    """active (<7d) | at_risk (7–30d) | churned (>30d) | new (never seen)."""
+    """active (<7d) | at_risk (7-30d) | churned (>30d) | new (never seen)."""
     if not user.last_seen:
         return "new"
     days = (datetime.utcnow() - user.last_seen).days
@@ -235,6 +235,52 @@ def churn_counts(db):
         "churned": User.query.filter(User.last_seen <  now - timedelta(days=30)).count(),
         "new":     User.query.filter(User.last_seen.is_(None)).count(),
     }
+
+
+# ── M-Pesa reconciliation (backup for lost callbacks) ─────────────────────────
+
+def reconcile_mpesa_payments(db):
+    """Poll Daraja's query API for pending STK pushes whose callback never
+    arrived. Settles verified payments, fails terminal ones, and expires
+    anything still pending after an hour. Never marks paid without a
+    confirmed ResultCode of 0 from Safaricom."""
+    from models import Payment
+    try:
+        from mpesa import query_status, MPESA_OK
+        from routes.payments import (_settle_mpesa_payment, _fail_mpesa_payment,
+                                     MPESA_RESULT_CODES)
+    except Exception:
+        return 0
+    if not MPESA_OK:
+        return 0
+
+    now = datetime.utcnow()
+    stale = (Payment.query
+             .filter(Payment.provider == "mpesa", Payment.status == "pending",
+                     Payment.created_at < now - timedelta(minutes=2))
+             .limit(20).all())
+    handled = 0
+    for p in stale:
+        if now - p.created_at > timedelta(hours=1):
+            p.status = "failed"
+            p.completed_at = now
+            db.session.commit()
+            handled += 1
+            continue
+        try:
+            resp = query_status(p.reference)
+        except Exception as e:
+            log.warning("mpesa query failed for %s: %s", p.reference, e)
+            continue
+        code = str(resp.get("ResultCode", ""))
+        if code == "0":
+            _settle_mpesa_payment(p)
+            log.info("mpesa reconcile: settled %s", p.reference)
+            handled += 1
+        elif code in MPESA_RESULT_CODES:
+            _fail_mpesa_payment(p, code)
+            handled += 1
+    return handled
 
 
 # ── Daily digest ──────────────────────────────────────────────────────────────
@@ -277,7 +323,7 @@ def send_daily_digest(app, db):
     staff = User.query.filter(User.role.in_(["viewer", "support", "admin"])).all()
     for s in staff:
         db.session.add(Notification(user_id=s.id, type="digest",
-                                    title=f"Daily digest — {today}",
+                                    title=f"Daily digest, {today}",
                                     body=body[:300], link="/admin"))
     if marker:
         marker.value = today
@@ -314,6 +360,11 @@ def start_ops_thread(app, db):
                 except Exception:
                     db.session.rollback()
                     log.exception("digest failed")
+                try:
+                    reconcile_mpesa_payments(db)
+                except Exception:
+                    db.session.rollback()
+                    log.exception("mpesa reconcile failed")
                 if time.time() - state["last_accuracy"] > 6 * 3600:
                     try:
                         r, u = resolve_pending(db)

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{ ticker }} — BullLogic</title>
+  <title>{{ ticker }}, BullLogic</title>
   <script>if(localStorage.getItem('bl-theme')==='light')document.documentElement.classList.add('light');</script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
@@ -938,7 +938,7 @@
           </div>
           <div>
             <label style="font-size:8.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px;">Note</label>
-            <input id="pt-note" type="text" value="ML {{ direction }} signal — {{ confidence }}% conf" maxlength="200" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;">
+            <input id="pt-note" type="text" value="ML {{ direction }} signal, {{ confidence }}% conf" maxlength="200" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;">
           </div>
           <div id="pt-msg" style="font-size:9pt;color:var(--green);display:none;"></div>
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
@@ -952,7 +952,7 @@
     <!-- TradingView Chart -->
     <div class="chart-section">
       <div class="chart-header">
-        <div class="chart-title">{{ ticker }} — Live Chart</div>
+        <div class="chart-title">{{ ticker }}, Live Chart</div>
         <div style="display:flex;align-items:center;gap:8px;">
           {% if current_user.is_pro %}
             <a href="/mt5" style="background:var(--accent);color:var(--white);text-decoration:none;font-size:8.5pt;font-weight:700;padding:4px 10px;border-radius:4px;letter-spacing:0.3px;">&#9654; MT5 Algo Trading</a>
@@ -981,7 +981,7 @@
           </div>
           <!-- connected state (hidden until connected) -->
           <div id="ctb-connected" style="display:none;align-items:center;gap:6px;">
-            <div class="ctb-acct" id="ctb-acct-info">Balance: <span id="ctb-balance">—</span></div>
+            <div class="ctb-acct" id="ctb-acct-info">Balance: <span id="ctb-balance">-</span></div>
             <button class="ctb-buy"   onclick="placeOrder('BUY')">▲ BUY</button>
             <button class="ctb-sell"  onclick="placeOrder('SELL')">▼ SELL</button>
             <button class="ctb-close" onclick="closeAll()" title="Close all positions for {{ ticker }}">✕</button>
@@ -1030,16 +1030,16 @@
               <input id="mapi-id"    class="trade-input" type="text"     placeholder="Account ID"    style="width:160px;" />
               <button class="trade-conn-btn" onclick="connectTrade('metaapi')">Connect</button>
             </div>
-            <div class="trade-conn-hint">Get token at metaapi.cloud — free tier available</div>
+            <div class="trade-conn-hint">Get token at metaapi.cloud, free tier available</div>
           </div>
         </div>
 
         <!-- Connected view -->
         <div id="trade-connected-section" style="display:none;">
           <div class="trade-account-bar">
-            <div class="trade-acct-item"><span class="trade-acct-label">Mode</span><span id="acct-mode" class="trade-acct-val">—</span></div>
-            <div class="trade-acct-item"><span class="trade-acct-label">Balance</span><span id="acct-balance" class="trade-acct-val">—</span></div>
-            <div class="trade-acct-item"><span class="trade-acct-label">Equity</span><span id="acct-equity" class="trade-acct-val">—</span></div>
+            <div class="trade-acct-item"><span class="trade-acct-label">Mode</span><span id="acct-mode" class="trade-acct-val">-</span></div>
+            <div class="trade-acct-item"><span class="trade-acct-label">Balance</span><span id="acct-balance" class="trade-acct-val">-</span></div>
+            <div class="trade-acct-item"><span class="trade-acct-label">Equity</span><span id="acct-equity" class="trade-acct-val">-</span></div>
             <div class="trade-acct-item"><span class="trade-acct-label">Positions</span><span id="acct-pos-count" class="trade-acct-val">0</span></div>
             <button class="trade-disconnect-btn" onclick="disconnectTrade()">Disconnect</button>
           </div>
@@ -1113,13 +1113,13 @@
           <tr>
             <td>RSI (14)</td>
             <td class="{% if rsi_signal == 'Overbought' %}val-down{% elif rsi_signal == 'Oversold' %}val-up{% endif %}">
-              {{ rsi }} — {{ rsi_signal }}
+              {{ rsi }}, {{ rsi_signal }}
             </td>
           </tr>
           <tr>
             <td>MACD</td>
             <td class="{% if macd_signal == 'Bullish' %}val-up{% else %}val-down{% endif %}">
-              {{ macd }} — {{ macd_signal }}
+              {{ macd }}, {{ macd_signal }}
             </td>
           </tr>
           <tr>
@@ -1190,7 +1190,7 @@
             {{ pd_zone }}
           </div>
           <div class="ict-cell-sub">{{ (pd_position * 100)|round(1) }}% of range
-            {% if pd_zone == 'Discount' %} — buy zone{% elif pd_zone == 'Premium' %} — sell zone{% else %} — wait for expansion{% endif %}
+            {% if pd_zone == 'Discount' %}, buy zone{% elif pd_zone == 'Premium' %}, sell zone{% else %}, wait for expansion{% endif %}
           </div>
         </div>
 
@@ -1229,7 +1229,7 @@
 
         <!-- OTE Zone -->
         <div class="ict-cell">
-          <div class="ict-cell-label">OTE Zone (0.62–0.79 Fib)</div>
+          <div class="ict-cell-label">OTE Zone (0.62-0.79 Fib)</div>
           <div class="ict-cell-value {% if in_ote_buy %}ict-bull{% elif in_ote_sell %}ict-bear{% else %}ict-neut{% endif %}">
             {% if in_ote_buy %}Buy OTE{% elif in_ote_sell %}Sell OTE{% else %}Outside OTE{% endif %}
           </div>
@@ -1294,19 +1294,19 @@
           <tbody>
             <tr>
               <td><span class="tf-badge">1D</span></td>
-              <td id="mtf-1d-prev">—</td>
-              <td id="mtf-1d-pred">—</td>
-              <td id="mtf-1d-dir">—</td>
-              <td id="mtf-1d-chg">—</td>
-              <td id="mtf-1d-conf">—</td>
+              <td id="mtf-1d-prev">-</td>
+              <td id="mtf-1d-pred">-</td>
+              <td id="mtf-1d-dir">-</td>
+              <td id="mtf-1d-chg">-</td>
+              <td id="mtf-1d-conf">-</td>
             </tr>
             <tr>
               <td><span class="tf-badge">1H</span></td>
               <td id="mtf-1h-prev" style="color:var(--muted);font-size:9pt;">current bar</td>
-              <td id="mtf-1h-pred">—</td>
-              <td id="mtf-1h-dir">—</td>
-              <td id="mtf-1h-chg">—</td>
-              <td id="mtf-1h-conf">—</td>
+              <td id="mtf-1h-pred">-</td>
+              <td id="mtf-1h-dir">-</td>
+              <td id="mtf-1h-chg">-</td>
+              <td id="mtf-1h-conf">-</td>
             </tr>
           </tbody>
         </table>
@@ -1364,9 +1364,9 @@
         </div>
         <div id="sentResult" style="display:none">
           <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-            <div id="sent-score" style="font-size:28pt;font-weight:700">—</div>
+            <div id="sent-score" style="font-size:28pt;font-weight:700">-</div>
             <div>
-              <div id="sent-label" style="font-size:12pt;font-weight:700">—</div>
+              <div id="sent-label" style="font-size:12pt;font-weight:700">-</div>
               <div id="sent-meta" style="font-size:9pt;color:var(--muted)"></div>
             </div>
           </div>
@@ -1417,7 +1417,7 @@
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div>
           <h3 style="font-size:11pt;font-weight:600">Market Analysis</h3>
-          <div style="font-size:8.5pt;color:var(--muted);margin-top:2px">Powered by Claude — professional commentary on this prediction</div>
+          <div style="font-size:8.5pt;color:var(--muted);margin-top:2px">Powered by Claude, professional commentary on this prediction</div>
         </div>
         <button id="aiBtn" onclick="runAIAnalysis()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">✦ Analyze</button>
       </div>
@@ -1427,7 +1427,7 @@
     <!-- News Feed -->
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:18px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <h3 style="font-size:11pt;font-weight:600">Latest News — {{ ticker }}</h3>
+        <h3 style="font-size:11pt;font-weight:600">Latest News, {{ ticker }}</h3>
         <span id="newsStatus" style="font-size:8.5pt;color:var(--muted)">Loading…</span>
       </div>
       <div id="newsFeed" style="display:flex;flex-direction:column;gap:10px"></div>
@@ -1691,7 +1691,7 @@ function applyConnected(d) {
   document.getElementById('trade-connect-section').style.display  = 'none';
   document.getElementById('trade-connected-section').style.display = '';
   var acct = d.account || {};
-  document.getElementById('acct-mode').textContent    = d.mode || '—';
+  document.getElementById('acct-mode').textContent    = d.mode || '-';
   document.getElementById('acct-balance').textContent = '$' + (acct.balance||0).toFixed(2);
   document.getElementById('acct-equity').textContent  = '$' + (acct.equity||0).toFixed(2);
   document.getElementById('trade-status-badge').className  = 'trade-badge trade-connected';
@@ -1839,7 +1839,7 @@ if (_isPro) {
         var cls = dir === 'Up' ? 'val-up' : 'val-down';
         var arr = dir === 'Up' ? '↑' : '↓';
         var sgn = tfData.price_change >= 0 ? '+' : '';
-        document.getElementById(idPfx+'-prev').textContent  = prevTxt || '—';
+        document.getElementById(idPfx+'-prev').textContent  = prevTxt || '-';
         document.getElementById(idPfx+'-pred').innerHTML  = '<span class="'+cls+'">$'+tfData.pred.toFixed(2)+'</span>';
         document.getElementById(idPfx+'-dir').innerHTML   = '<span class="'+cls+'">'+arr+' '+dir+'</span>';
         document.getElementById(idPfx+'-chg').innerHTML   = '<span class="'+cls+'">'+sgn+'$'+tfData.price_change.toFixed(2)+' ('+sgn+tfData.change_pct.toFixed(2)+'%)</span>';
@@ -1945,10 +1945,10 @@ async function loadAnalystTargets() {
     const d = await r.json();
     if (!d.ok) { el.innerHTML = `<span style="color:var(--red)">${d.error}</span>`; return; }
     const recColor = {buy:'#69F0AE',strong_buy:'#00C853',hold:'#FFD54F',sell:'#FF5252',underperform:'#FF8A65'}[d.recommendation] || '#7A8499';
-    const upside = d.current_price > 0 ? ((d.target_mean / d.current_price - 1) * 100).toFixed(1) : '—';
+    const upside = d.current_price > 0 ? ((d.target_mean / d.current_price - 1) * 100).toFixed(1) : '-';
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <span style="font-size:18pt;font-weight:700;color:${recColor}">${(d.recommendation||'—').toUpperCase().replace('_',' ')}</span>
+        <span style="font-size:18pt;font-weight:700;color:${recColor}">${(d.recommendation||'-').toUpperCase().replace('_',' ')}</span>
         <div style="font-size:9pt;color:var(--muted)">${d.analyst_count} analysts</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:9.5pt">

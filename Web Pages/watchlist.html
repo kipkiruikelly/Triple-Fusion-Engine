@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Watchlist — BullLogic</title>
+  <title>Watchlist, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -182,12 +182,12 @@
       </div>
       <div class="stat-card">
         <div class="stat-label">Bullish Signals</div>
-        <div class="stat-value" style="color:var(--green)" id="bullCount">—</div>
+        <div class="stat-value" style="color:var(--green)" id="bullCount">-</div>
         <div class="stat-sub">ML consensus</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Bearish Signals</div>
-        <div class="stat-value" style="color:var(--red)" id="bearCount">—</div>
+        <div class="stat-value" style="color:var(--red)" id="bearCount">-</div>
         <div class="stat-sub">ML consensus</div>
       </div>
       <div class="stat-card">
@@ -207,10 +207,10 @@
         {% for ticker in watchlist %}
         <div class="wl-row" id="row-{{ ticker }}">
           <div><div class="ticker-sym">{{ ticker }}</div><div class="ticker-co" id="co-{{ ticker }}">Loading…</div></div>
-          <div class="cell-price" id="price-{{ ticker }}">—</div>
-          <div class="cell-chg" id="chg-{{ ticker }}">—</div>
-          <div id="sig-{{ ticker }}"><span class="signal-pill signal-hold">—</span></div>
-          <div id="conf-{{ ticker }}" style="color:var(--muted)">—</div>
+          <div class="cell-price" id="price-{{ ticker }}">-</div>
+          <div class="cell-chg" id="chg-{{ ticker }}">-</div>
+          <div id="sig-{{ ticker }}"><span class="signal-pill signal-hold">-</span></div>
+          <div id="conf-{{ ticker }}" style="color:var(--muted)">-</div>
           <div class="cell-actions">
             <a class="btn-predict-sm" href="/predict" onclick="return submitPredict('{{ ticker }}')">Predict</a>
           </div>

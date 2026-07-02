@@ -1,5 +1,5 @@
 """
-train_1min.py — 1-minute model training via Alpaca historical data
+train_1min.py, 1-minute model training via Alpaca historical data
 
 Pulls 2+ years of 1-min bars from Alpaca for each ticker, engineers
 features, trains LR + RF classifiers, and saves models to Saved Models/
@@ -46,7 +46,7 @@ END       = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 MODEL_DIR = "Saved Models"
 INTERVAL  = "1m"
 
-# NDX isn't a tradeable stock on Alpaca — use QQQ as proxy
+# NDX isn't a tradeable stock on Alpaca, use QQQ as proxy
 ALPACA_SYMBOL_MAP = {"NDX": "QQQ"}
 
 os.makedirs(MODEL_DIR, exist_ok=True)
@@ -91,7 +91,7 @@ def fetch_1min(ticker: str) -> pd.DataFrame:
                              "close": "Close", "volume": "Volume"})
     df.index.name = "Date"
 
-    # Keep only market hours (09:30–16:00 ET)
+    # Keep only market hours (09:30-16:00 ET)
     df.index = pd.to_datetime(df.index, utc=True).tz_convert("America/New_York")
     df = df.between_time("09:30", "16:00")
 
@@ -155,7 +155,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     df["VWAP_ratio"]   = c / (ta.volume.volume_weighted_average_price(h, l, c, v, window=14) + 1e-9)
 
     # ── ICT-style intraday features ──────────────────────────────────────────
-    # Session VWAP (rolling intraday — approximate with 390-bar window)
+    # Session VWAP (rolling intraday, approximate with 390-bar window)
     df["Session_VWAP"]    = ta.volume.volume_weighted_average_price(h, l, c, v, window=390)
     df["VWAP_dist"]       = (c - df["Session_VWAP"]) / df["Session_VWAP"]
 
@@ -196,7 +196,7 @@ def make_target(df: pd.DataFrame, lookahead: int = 5) -> pd.Series:
 
 def train_ticker(ticker: str):
     print(f"\n{'='*55}")
-    print(f"  Training {ticker} — 1-minute")
+    print(f"  Training {ticker}, 1-minute")
     print(f"{'='*55}")
 
     # 1. Fetch data
@@ -211,7 +211,7 @@ def train_ticker(ticker: str):
     df = df[df["Target"].notna()]
 
     if len(df) < 1000:
-        print(f"  SKIP — only {len(df)} usable rows after feature engineering")
+        print(f"  SKIP, only {len(df)} usable rows after feature engineering")
         return
 
     print(f"  Usable rows: {len(df):,}")
@@ -256,7 +256,7 @@ def train_ticker(ticker: str):
 
     print(f"  Saved: lr_model{suffix}.pkl  rf_model{suffix}.pkl")
     print(f"         scaler_sklearn{suffix}.pkl  feature_cols_sklearn{suffix}.pkl")
-    print(f"  Done — LR={lr_acc:.3f}  RF={rf_acc:.3f}")
+    print(f"  Done, LR={lr_acc:.3f}  RF={rf_acc:.3f}")
 
     return {"ticker": ticker, "rows": len(df), "lr_acc": lr_acc, "rf_acc": rf_acc}
 

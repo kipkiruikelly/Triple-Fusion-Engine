@@ -1,4 +1,4 @@
-"""routes/analytics.py — screener, scanner, calendar, fear-greed, Monte Carlo,
+"""routes/analytics.py, screener, scanner, calendar, fear-greed, Monte Carlo,
 correlation, sentiment, feature-importance, options, dividends, insiders,
 analyst targets, batch prices, SSE stream."""
 
@@ -13,7 +13,7 @@ from flask_login import login_required, current_user
 
 from utils import SCREENER_TICKERS, CALENDAR_TICKERS, _POSITIVE_WORDS, _NEGATIVE_WORDS, _SECTOR_ETFS
 
-# Quotes go through market_data — one shared cache and rate-limit circuit
+# Quotes go through market_data, one shared cache and rate-limit circuit
 # breaker for the whole app.
 from market_data import get_quote as _cached_quote
 

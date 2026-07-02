@@ -1,5 +1,5 @@
 """
-sync_daemon.py — BullLogic live-sync watcher
+sync_daemon.py, BullLogic live-sync watcher
 
 Watches the project directory for file changes and automatically reloads
 the Gunicorn server so every save is live within ~1 second.
@@ -94,7 +94,7 @@ def reload_gunicorn(git_pull: bool = False) -> bool:
 
     pid = find_gunicorn_pid()
     if pid is None:
-        log_err("Gunicorn master not found — is the server running?")
+        log_err("Gunicorn master not found, is the server running?")
         return False
 
     try:
@@ -105,7 +105,7 @@ def reload_gunicorn(git_pull: bool = False) -> bool:
         log_err(f"PID {pid} not found")
         return False
     except PermissionError:
-        log_err(f"No permission to signal PID {pid} — try sudo")
+        log_err(f"No permission to signal PID {pid}, try sudo")
         return False
 
 
@@ -188,7 +188,7 @@ def main():
     if pid:
         log_ok(f"Gunicorn master found at PID {pid}")
     else:
-        log_warn("Gunicorn master not found — start the server first")
+        log_warn("Gunicorn master not found, start the server first")
     print()
 
     handler  = ChangeHandler(debounce=args.debounce, git_pull=args.git_pull)

@@ -8,14 +8,14 @@ A production-grade machine-learning web application that predicts next-day stock
 
 ## Features
 
-- **ML Price Predictions** — LR + RF models predict next-day closing price; LSTM slot available via Colab
-- **Technical Analysis** — RSI, MACD, Bollinger Bands, EMA, ATR computed live from yfinance data
-- **TradingView Charts** — Interactive live chart with RSI and MACD studies for any ticker
-- **User Accounts** — Registration, login, subscription tiers (Free: 5 predictions/day, Pro: unlimited)
-- **Algorithmic Trading** — ML-fused signals automatically placed as real or paper trades
-- **MetaApi Integration** — Connect to any MT5 broker from Mac, Linux, or Windows without Wine
-- **Paper Trading** — $10,000 virtual account with real market data; no broker needed
-- **Risk Management** — ATR-based SL/TP (1.5× / 3×), 1% risk per trade, 5% daily loss circuit-breaker
+- **ML Price Predictions**, LR + RF models predict next-day closing price; LSTM slot available via Colab
+- **Technical Analysis**, RSI, MACD, Bollinger Bands, EMA, ATR computed live from yfinance data
+- **TradingView Charts**, Interactive live chart with RSI and MACD studies for any ticker
+- **User Accounts**, Registration, login, subscription tiers (Free: 5 predictions/day, Pro: unlimited)
+- **Algorithmic Trading**, ML-fused signals automatically placed as real or paper trades
+- **MetaApi Integration**, Connect to any MT5 broker from Mac, Linux, or Windows without Wine
+- **Paper Trading**, $10,000 virtual account with real market data; no broker needed
+- **Risk Management**, ATR-based SL/TP (1.5× / 3×), 1% risk per trade, 5% daily loss circuit-breaker
 
 ---
 
@@ -36,9 +36,9 @@ mt5_trading.py     →  trading engine (MetaApi / paper / direct MT5 bridge)
 | `Saved Models/scaler_sklearn_AAPL.pkl` | LR + RF pipeline (25 features incl. lag terms) |
 
 ### ML Signal Fusion (trading loop)
-- **BUY** — LR predicts price up AND RF predicts positive return
-- **SELL** — both models predict down
-- **HOLD** — models disagree, or tech indicator conflicts with ML direction
+- **BUY**, LR predicts price up AND RF predicts positive return
+- **SELL**, both models predict down
+- **HOLD**, models disagree, or tech indicator conflicts with ML direction
 
 ---
 
@@ -90,18 +90,18 @@ Requires Tailscale installed and connected to the `kipkiruikelly.github` tailnet
 
 ## Algorithmic Trading
 
-### Option A — MetaApi (recommended, works on Mac/Linux/Windows)
+### Option A, MetaApi (recommended, works on Mac/Linux/Windows)
 1. Sign up at [metaapi.cloud](https://metaapi.cloud) (free tier available)
 2. Add your broker's MT5 account in the MetaApi dashboard
 3. In the app: go to **MT5 Algo Trading** → **MetaApi** tab
 4. Paste your **API Token** and **Account ID** → Connect
 5. Set symbol, timeframe, risk % → **Start Algorithm**
 
-### Option B — Paper Trading (no account needed)
+### Option B, Paper Trading (no account needed)
 - Click the **Paper** tab → Connect instantly
 - Trades execute against live yfinance prices with $10,000 virtual balance
 
-### Option C — Direct MT5 Bridge (Linux only)
+### Option C, Direct MT5 Bridge (Linux only)
 Requires Wine ≥ 10.12 with Python + MetaTrader5 + rpyc installed inside the Wine prefix.
 ```bash
 sudo apt install wine-devel
@@ -114,11 +114,11 @@ WINEPREFIX=~/.mt5 wine python.exe -m mt5linux -p 18812 --host 0.0.0.0
 
 ```
 Stock-Market-Predictor/
-├── app.py                        # Flask app — auth, prediction routes, MT5 API
+├── app.py                        # Flask app, auth, prediction routes, MT5 API
 ├── predictor.py                  # Shared ML inference (run_prediction, ml_signal)
 ├── mt5_trading.py                # Trading engine (MetaApi / paper / direct MT5)
-├── data_pipeline.py              # Step 1 — download OHLCV data, engineer features
-├── model_training.py             # Step 2 — train LR + RF, evaluate, save models
+├── data_pipeline.py              # Step 1, download OHLCV data, engineer features
+├── model_training.py             # Step 2, train LR + RF, evaluate, save models
 ├── requirements.txt
 ├── Procfile                      # gunicorn entry point for deployment
 │
@@ -135,7 +135,7 @@ Stock-Market-Predictor/
 │   └── lstm_model_AAPL.keras    # from Colab
 │
 ├── Web Pages/
-│   ├── index.html                # Home — ticker input, quota counter
+│   ├── index.html                # Home, ticker input, quota counter
 │   ├── result.html               # Prediction result + TradingView chart
 │   ├── mt5.html                  # Algo trading dashboard
 │   ├── login.html

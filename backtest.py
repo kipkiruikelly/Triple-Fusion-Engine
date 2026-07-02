@@ -4,7 +4,7 @@ backtest.py
 Walk-forward backtest for the Stock Market Price Prediction System.
 
 Tests the triple-fusion signal (ICT gate + ML + Technical) against historical
-daily OHLCV data. No lookahead bias — signals use only data up to the signal bar.
+daily OHLCV data. No lookahead bias, signals use only data up to the signal bar.
 
 Entry  : next trading day's open
 Exit   : SL (1.5×ATR) / TP (3.0×ATR) hit intraday, or force-close after 5 bars
@@ -12,23 +12,23 @@ Risk   : 1% of equity per trade (ATR position sizing)
 Guards : 5% daily loss circuit-breaker, max 3 concurrent positions
 
 Signal architecture (ICT has highest priority):
-  1. ICT gate — directional bias (200 SMA + market structure) required to trade
-  2. ICT score — OBs, FVGs, liquidity sweeps, PD zone (max weight)
-  3. ML score  — LR + RF directional agreement (confirmation)
-  4. Tech score — RSI, MACD, EMA (confirmation)
+  1. ICT gate, directional bias (200 SMA + market structure) required to trade
+  2. ICT score, OBs, FVGs, liquidity sweeps, PD zone (max weight)
+  3. ML score , LR + RF directional agreement (confirmation)
+  4. Tech score, RSI, MACD, EMA (confirmation)
   Entry when: ICT bias present AND ICT score >= 3 AND total score >= 5
 
 Usage:
-    python backtest.py                                        # QQQ, 2022–2024
+    python backtest.py                                        # QQQ, 2022-2024
     python backtest.py --ticker QQQ --start 2022-01-01 --end 2024-12-31
     python backtest.py --signal ict --no-plot
     python backtest.py --risk 2.0 --save-trades trades.csv --save-chart chart.png
 
 Signal modes:
-    fused  (default) — ICT gate + ML (LR+RF) + Technical (RSI/MACD/EMA)
-    ml               — ICT gate + ML only
-    tech             — ICT gate + Technical only
-    ict              — Pure ICT (no ML, no tech indicators)
+    fused  (default), ICT gate + ML (LR+RF) + Technical (RSI/MACD/EMA)
+    ml              , ICT gate + ML only
+    tech            , ICT gate + Technical only
+    ict             , Pure ICT (no ML, no tech indicators)
 
 Author: BullLogic
 """
@@ -51,7 +51,7 @@ MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 WARMUP_BARS      = 100   # minimum bars of history before first signal
 MAX_HOLD         = 10    # force-close after this many bars (2 trading weeks)
 SL_ATR_MULT      = 1.5
-TP_ATR_MULT      = 2.5   # 1.67:1 R:R — closer TP, more hits over 10-bar hold
+TP_ATR_MULT      = 2.5   # 1.67:1 R:R, closer TP, more hits over 10-bar hold
 MAX_POSITIONS    = 2     # cap concurrent positions to limit cluster drawdowns
 DAILY_LOSS_LIMIT = 0.05  # halt new entries if equity drops 5% intraday
 
@@ -170,24 +170,24 @@ def _build_features(df: pd.DataFrame) -> pd.DataFrame:
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
-    # ICT 2022 — IPDA lookback levels (20 / 40 / 60 bars)
+    # ICT 2022, IPDA lookback levels (20 / 40 / 60 bars)
     for n in [20, 40, 60]:
         df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
         df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
 
-    # ICT 2022 — Equal Highs / Equal Lows (liquidity pools)
+    # ICT 2022, Equal Highs / Equal Lows (liquidity pools)
     tol  = close * 0.001
     r10h = high.rolling(10).max().shift(1)
     r10l = low.rolling(10).min().shift(1)
     df["Equal_Highs"] = ((high - r10h).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
     df["Equal_Lows"]  = ((low  - r10l).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
 
-    # ICT 2022 — OTE zone (Optimal Trade Entry: 0.62–0.79 Fibonacci of 20-bar swing)
+    # ICT 2022, OTE zone (Optimal Trade Entry: 0.62-0.79 Fibonacci of 20-bar swing)
     rng20 = (sh20 - sl20).replace(0, np.nan)
     df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
     df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
 
-    # ICT 2022 — Consequent Encroachment (CE) of most recent FVG midpoint
+    # ICT 2022, Consequent Encroachment (CE) of most recent FVG midpoint
     bull_ce = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
     bear_ce = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
     df["CE_Bull_FVG_Dist"] = ((close - bull_ce) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
@@ -279,7 +279,7 @@ def _ict_signal(lookback: pd.DataFrame) -> dict:
 
     Returns directional bias + per-side scores:
       Bias : Above_200SMA AND Structure_Bullish (bullish) / neither (bearish) / mixed (neutral)
-      Score: OBs (+2), FVGs (+1), Liquidity sweeps (+2), PD zone (+1–3), Displacement (+1)
+      Score: OBs (+2), FVGs (+1), Liquidity sweeps (+2), PD zone (+1-3), Displacement (+1)
     """
     row   = lookback.iloc[-1]
     close = float(lookback["Close"].iloc[-1])
@@ -316,25 +316,25 @@ def _ict_signal(lookback: pd.DataFrame) -> dict:
 
     buy = sell = 0
 
-    # Premium / discount zone (highest weight — this is the "where to trade" filter)
+    # Premium / discount zone (highest weight, this is the "where to trade" filter)
     if pd_pos < 0.40:    buy  += 3   # deep discount
     elif pd_pos < 0.50:  buy  += 1   # mild discount
     if pd_pos > 0.60:    sell += 3   # deep premium
     elif pd_pos > 0.50:  sell += 1   # mild premium
 
-    # Order blocks (+2 each — confirmed institutional interest)
+    # Order blocks (+2 each, confirmed institutional interest)
     if bull_ob > 0:  buy  += 2
     if bear_ob > 0:  sell += 2
 
-    # Fair Value Gaps (+1 each — imbalance zones)
+    # Fair Value Gaps (+1 each, imbalance zones)
     if bull_fvg > 0: buy  += 1
     if bear_fvg > 0: sell += 1
 
-    # Liquidity sweeps (+2 each — stop hunt / reversal confirmation)
+    # Liquidity sweeps (+2 each, stop hunt / reversal confirmation)
     if swept_l > 0:  buy  += 2
     if swept_h > 0:  sell += 2
 
-    # Displacement in direction of trade (+1 — impulsive candle)
+    # Displacement in direction of trade (+1, impulsive candle)
     if disp > 0 and close > open_: buy  += 1
     if disp > 0 and close < open_: sell += 1
 
@@ -352,7 +352,7 @@ def _fuse(ict: dict, ml: dict, tech: dict) -> dict:
     """
     Triple-layer signal fusion.
 
-    ICT sets the directional gate — must have bias AND score >= 3.
+    ICT sets the directional gate, must have bias AND score >= 3.
     ML adds 2 pts when it agrees, -1 when it conflicts, 0 when neutral.
     Tech adds its raw score when it agrees, -1 when it conflicts, 0 when neutral.
     Entry fires when ICT bias present AND total score >= 5.
@@ -401,7 +401,7 @@ class _Pos:
             sl_hit = high >= self.sl
             tp_hit = low  <= self.tp
 
-        if sl_hit and tp_hit:  # both hit same bar — assume SL (conservative)
+        if sl_hit and tp_hit:  # both hit same bar, assume SL (conservative)
             return self.sl, "SL"
         if sl_hit:
             return self.sl, "SL"
@@ -435,7 +435,7 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
     df   = _build_features(raw)
     test = df[df.index >= start].copy()
     if test.empty:
-        print(f"ERROR: No data in {start} – {end}")
+        print(f"ERROR: No data in {start} - {end}")
         sys.exit(1)
 
     if verbose:
@@ -501,7 +501,7 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
         if len(lookback) < WARMUP_BARS:
             continue
 
-        # ICT is always computed — it is the primary signal gate
+        # ICT is always computed, it is the primary signal gate
         ict = _ict_signal(lookback)
 
         if mode == "fused":
@@ -514,7 +514,7 @@ def run_backtest(ticker, start, end, initial, risk_pct, mode, commission, verbos
         elif mode == "tech":
             tech_sig = _tech_signal(lookback)
             sig      = _fuse(ict, _HOLD, tech_sig)
-        else:  # "ict" — pure ICT, stricter standalone threshold (score >= 5)
+        else:  # "ict", pure ICT, stricter standalone threshold (score >= 5)
             if ict["bullish_bias"] and ict["buy_score"] >= 5:
                 sig = {"action": "BUY",  "score": ict["buy_score"],  "atr": ict["atr"]}
             elif ict["bearish_bias"] and ict["sell_score"] >= 5:
@@ -663,7 +663,7 @@ def plot_results(ticker, eq_series, raw_df, trades, metrics, show=True, save_pat
         import matplotlib.pyplot as plt
         import matplotlib.dates as mdates
     except ImportError:
-        print("matplotlib not installed — pip install matplotlib")
+        print("matplotlib not installed, pip install matplotlib")
         return
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 10))
@@ -728,7 +728,7 @@ def main():
     p.add_argument("--ticker",      default="QQQ",        metavar="SYM",
                    help="Ticker symbol (default: QQQ)")
     p.add_argument("--tickers",     nargs="+",            metavar="SYM",
-                   help="Multiple tickers — runs each and prints aggregated summary")
+                   help="Multiple tickers, runs each and prints aggregated summary")
     p.add_argument("--start",       default="2022-01-01", metavar="DATE",
                    help="Test start date (default: 2022-01-01)")
     p.add_argument("--end",         default="2024-12-31", metavar="DATE",

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Portfolio — BullLogic</title>
+  <title>Portfolio, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -85,11 +85,11 @@
   <p class="subtitle">Log your trades and track live P&L with real-time prices.</p>
 
   <div class="stat-row" id="statsRow">
-    <div class="stat-card"><div class="stat-label">Open Positions</div><div class="stat-val" id="sOpen">—</div></div>
-    <div class="stat-card"><div class="stat-label">Unrealized P&L</div><div class="stat-val" id="sUnreal">—</div></div>
-    <div class="stat-card"><div class="stat-label">Realized P&L</div><div class="stat-val" id="sReal">—</div></div>
-    <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-val" id="sTotal">—</div></div>
-    <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-val" id="sWin">—</div></div>
+    <div class="stat-card"><div class="stat-label">Open Positions</div><div class="stat-val" id="sOpen">-</div></div>
+    <div class="stat-card"><div class="stat-label">Unrealized P&L</div><div class="stat-val" id="sUnreal">-</div></div>
+    <div class="stat-card"><div class="stat-label">Realized P&L</div><div class="stat-val" id="sReal">-</div></div>
+    <div class="stat-card"><div class="stat-label">Total Trades</div><div class="stat-val" id="sTotal">-</div></div>
+    <div class="stat-card"><div class="stat-label">Win Rate</div><div class="stat-val" id="sWin">-</div></div>
   </div>
 
   <div class="card">
@@ -186,7 +186,7 @@ function updateStats() {
   document.getElementById('sUnreal').textContent = fmt(unreal);
   document.getElementById('sReal').textContent   = fmt(real);
   document.getElementById('sTotal').textContent  = _allPositions.length;
-  document.getElementById('sWin').textContent    = closed.length ? (wins/closed.length*100).toFixed(1)+'%' : '—';
+  document.getElementById('sWin').textContent    = closed.length ? (wins/closed.length*100).toFixed(1)+'%' : '-';
   document.getElementById('sUnreal').className   = 'stat-val ' + (unreal >= 0 ? 'green' : 'red');
   document.getElementById('sReal').className     = 'stat-val ' + (real >= 0 ? 'green' : 'red');
 }

@@ -1,4 +1,4 @@
-"""extensions.py — shared Flask extension instances (no project imports)."""
+"""extensions.py, shared Flask extension instances (no project imports)."""
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager

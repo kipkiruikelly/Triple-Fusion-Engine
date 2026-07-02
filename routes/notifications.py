@@ -1,4 +1,4 @@
-"""routes/notifications.py — alerts, Telegram, Discord, in-app notifications, digest."""
+"""routes/notifications.py, alerts, Telegram, Discord, in-app notifications, digest."""
 
 import os
 import threading
@@ -219,13 +219,13 @@ def register_notification_routes(app):
                 "",
                 "Log in at bulllogic.app for full analysis.",
                 "",
-                "— BullLogic",
+                ", BullLogic",
             ]
             from extensions import mail
             if mail and app.config.get("MAIL_USERNAME") and user.email:
                 from flask_mail import Message as MailMessage
                 msg = MailMessage(
-                    subject="BullLogic — Daily Market Digest",
+                    subject="BullLogic, Daily Market Digest",
                     recipients=[user.email],
                     body="\n".join(body_lines),
                 )

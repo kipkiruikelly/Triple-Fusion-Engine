@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Signal Leaderboard — BullLogic</title>
+  <title>Signal Leaderboard, BullLogic</title>
   <script>if(localStorage.getItem('bl-theme')==='light')document.documentElement.classList.add('light');</script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
@@ -151,10 +151,10 @@ function render() {
       </div>
       <div class="action-badge ${actionClass}">${action}</div>
       <div class="card-stats">
-        <div class="stat"><div class="stat-label">Price</div><div class="stat-value">$${r.price > 0 ? r.price.toFixed(2) : '—'}</div></div>
-        <div class="stat"><div class="stat-label">Confidence</div><div class="stat-value">${r.confidence ? r.confidence.toFixed(0) + '%' : '—'}</div></div>
-        <div class="stat"><div class="stat-label">RSI</div><div class="stat-value" style="color:${r.rsi < 30 ? 'var(--green)' : r.rsi > 70 ? 'var(--red)' : 'var(--text)'}">${r.rsi ? r.rsi.toFixed(0) : '—'}</div></div>
-        <div class="stat"><div class="stat-label">Direction Acc</div><div class="stat-value" style="color:${accColor}">${acc != null ? acc + '%' : r.n_checked < 3 ? 'Need data' : '—'}</div></div>
+        <div class="stat"><div class="stat-label">Price</div><div class="stat-value">$${r.price > 0 ? r.price.toFixed(2) : '-'}</div></div>
+        <div class="stat"><div class="stat-label">Confidence</div><div class="stat-value">${r.confidence ? r.confidence.toFixed(0) + '%' : '-'}</div></div>
+        <div class="stat"><div class="stat-label">RSI</div><div class="stat-value" style="color:${r.rsi < 30 ? 'var(--green)' : r.rsi > 70 ? 'var(--red)' : 'var(--text)'}">${r.rsi ? r.rsi.toFixed(0) : '-'}</div></div>
+        <div class="stat"><div class="stat-label">Direction Acc</div><div class="stat-value" style="color:${accColor}">${acc != null ? acc + '%' : r.n_checked < 3 ? 'Need data' : '-'}</div></div>
       </div>
       <div class="acc-bar"><div class="acc-fill" style="width:${acc ?? 0}%;background:${accColor}"></div></div>
     </a>`;

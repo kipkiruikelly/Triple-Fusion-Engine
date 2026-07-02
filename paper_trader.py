@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 paper_trader.py
-Daily paper-trade signal logger — builds a live, auditable track record.
+Daily paper-trade signal logger, builds a live, auditable track record.
 
 Uses the same triple-fusion signal as backtest.py.
 All positions and P&L are persisted to Data/paper_trades.db.
@@ -338,7 +338,7 @@ def _send_signal_email(signals: list):
 <html><body style="font-family:Inter,Arial,sans-serif;background:#0F1217;color:#E2E8F0;margin:0;padding:24px">
 <div style="max-width:560px;margin:0 auto">
   <div style="font-size:18pt;font-weight:800;color:#fff;margin-bottom:6px">
-    Bull<span style="color:#FF6B35">Logic</span> — Daily Signal Alert
+    Bull<span style="color:#FF6B35">Logic</span>, Daily Signal Alert
   </div>
   <div style="color:#7A8499;font-size:10pt;margin-bottom:24px">{today_str}</div>
   <div style="background:#1A1F2E;border:1px solid #2A3150;border-radius:10px;overflow:hidden;margin-bottom:20px">
@@ -365,10 +365,10 @@ def _send_signal_email(signals: list):
 </div>
 </body></html>"""
 
-    text = f"BullLogic Daily Signal Alert — {today_str}\n\n{rows_txt}\nNot financial advice.\n"
+    text = f"BullLogic Daily Signal Alert, {today_str}\n\n{rows_txt}\nNot financial advice.\n"
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"BullLogic: {len(signals)} signal{'s' if len(signals) != 1 else ''} — {today_str}"
+    msg["Subject"] = f"BullLogic: {len(signals)} signal{'s' if len(signals) != 1 else ''}, {today_str}"
     msg["From"]    = MAIL_FROM
     msg["To"]      = MAIL_USER
     msg.attach(MIMEText(text, "plain"))
@@ -397,7 +397,7 @@ def scan(conn, tickers):
     new_signals = []
 
     if len(open_pos) >= MAX_POSITIONS:
-        print(f"  [scan] Max positions ({MAX_POSITIONS}) open — skipping scan.")
+        print(f"  [scan] Max positions ({MAX_POSITIONS}) open, skipping scan.")
         return
 
     for ticker in tickers:

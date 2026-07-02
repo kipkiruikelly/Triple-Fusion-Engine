@@ -311,7 +311,7 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
 
     df["Structure_Bullish"] = (sh20 > sh60.shift(20)).astype(int)
 
-    # CHoCH — trend-reversal canaries
+    # CHoCH, trend-reversal canaries
     hl_mask = (l > l.shift(2)) & (h < sh20.shift(1))
     lh_mask = (h < h.shift(2)) & (l > sl20.shift(1))
     recent_hl = l.where(hl_mask).rolling(10, min_periods=1).max().ffill()
@@ -325,7 +325,7 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
     df["In_Premium"]  = (df["PD_Position"] >= 0.55).astype(int)
     df["In_Discount"] = (df["PD_Position"] <= 0.45).astype(int)
 
-    # ── ICT: Optimal Trade Entry (OTE: 0.62–0.79 Fibonacci retracement) ──────
+    # ── ICT: Optimal Trade Entry (OTE: 0.62-0.79 Fibonacci retracement) ──────
     rng20 = (sh20 - sl20).replace(0, np.nan)
     df["In_OTE_Buy"]  = ((c >= sh20 - rng20 * 0.79) & (c <= sh20 - rng20 * 0.62)).astype(int)
     df["In_OTE_Sell"] = ((c >= sl20 + rng20 * 0.62) & (c <= sl20 + rng20 * 0.79)).astype(int)
@@ -337,7 +337,7 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
     df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
     df["FVG_Net"]        = df["Bull_FVG_Count"] - df["Bear_FVG_Count"]
 
-    # Consequent Encroachment (CE) — midpoint of most recent FVG
+    # Consequent Encroachment (CE), midpoint of most recent FVG
     bull_ce = ((h.shift(2) + l) / 2).where(bull_fvg.astype(bool)).ffill()
     bear_ce = ((l.shift(2) + h) / 2).where(bear_fvg.astype(bool)).ffill()
     df["CE_Bull_Dist"] = ((c - bull_ce) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
@@ -435,7 +435,7 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
         df["Sess_H_Dist"] = ((sess_hi - c) / (atr14 + 1e-8)).clip(-10, 10)
         df["Sess_L_Dist"] = ((c - sess_lo) / (atr14 + 1e-8)).clip(-10, 10)
 
-        # Asia session range (8 PM – 2 AM ET)  — use Series for .where() alignment
+        # Asia session range (8 PM - 2 AM ET) , use Series for .where() alignment
         is_asia_s = pd.Series((hour >= 20) | (hour < 2), index=df.index)
         asia_h    = h.where(is_asia_s).rolling(14, min_periods=1).max().ffill()
         asia_l    = l.where(is_asia_s).rolling(14, min_periods=1).min().ffill()
@@ -445,7 +445,7 @@ def compute_ict_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.DataF
         df["Above_AsiaH"] = (c > asia_h).astype(int)
         df["Below_AsiaL"] = (c < asia_l).astype(int)
 
-        # NWOG — New Week Opening Gap (Monday open vs prior Friday close)
+        # NWOG, New Week Opening Gap (Monday open vs prior Friday close)
         is_mon_s   = pd.Series(dow == 0, index=df.index)
         prev_close = c.shift(1)
         nwog_open  = df["Open"].where(is_mon_s).ffill()
@@ -501,7 +501,7 @@ def train_one(ticker: str, tf: str, df: pd.DataFrame) -> dict | None:
     df.dropna(inplace=True)
 
     if len(df) < min_rows:
-        log.warning(f"    [{ticker}/{tf}] SKIP — {len(df)} rows < {min_rows}")
+        log.warning(f"    [{ticker}/{tf}] SKIP, {len(df)} rows < {min_rows}")
         return None
 
     feat_cols = [c for c in df.columns
@@ -631,7 +631,7 @@ def main():
         try:
             df_1m = fetch_1min(ticker)
         except Exception as exc:
-            log.error(f"  {ticker}: fetch failed — {exc}")
+            log.error(f"  {ticker}: fetch failed, {exc}")
             continue
 
         # 2. Resample 1m → short timeframes
@@ -687,14 +687,14 @@ def main():
         # 4. Train each requested timeframe
         for tf in timeframes:
             if tf not in tf_feat or tf_feat[tf].empty:
-                log.warning(f"  [{ticker}/{tf}] skip — no feature data")
+                log.warning(f"  [{ticker}/{tf}] skip, no feature data")
                 continue
 
             if args.skip_existing:
                 suf  = _model_suffix(tf)
                 path = os.path.join(MODELS_DIR, f"lr_model_{ticker}{suf}.pkl")
                 if os.path.exists(path):
-                    log.info(f"  [{ticker}/{tf}] skip — model already exists")
+                    log.info(f"  [{ticker}/{tf}] skip, model already exists")
                     continue
 
             try:
@@ -710,7 +710,7 @@ def main():
     # ── Summary ───────────────────────────────────────────────────────────────
     wall = time.time() - wall_start
     log.info(f"\n{'=' * 80}")
-    log.info(f"  COMPLETE — {len(all_results)} models trained in {wall:.0f}s  ({wall/60:.1f} min)")
+    log.info(f"  COMPLETE, {len(all_results)} models trained in {wall:.0f}s  ({wall/60:.1f} min)")
     log.info(f"{'=' * 80}")
 
     if all_results:

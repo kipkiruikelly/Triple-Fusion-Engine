@@ -1,4 +1,4 @@
-"""routes/trading.py — MT5, quick-trade API, performance, backtest."""
+"""routes/trading.py, MT5, quick-trade API, performance, backtest."""
 
 import logging
 import os
@@ -125,7 +125,7 @@ def register_trading_routes(app):
             return jsonify({"ok": False, "error": "Pro required"}), 403
         if not mt5_trader.connected:
             return jsonify({"ok": False,
-                            "error": "Not connected — use Connect Paper Account first"}), 400
+                            "error": "Not connected, use Connect Paper Account first"}), 400
         data     = request.get_json() or {}
         ticker   = data.get("ticker", "").upper()
         action   = data.get("action", "").upper()

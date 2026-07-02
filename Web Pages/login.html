@@ -1,199 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sign In — BullLogic</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign in, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:      #0F1217;
-      --surface: #1A1F2E;
-      --border:  #2A3150;
-      --text:    #E2E8F0;
-      --muted:   #7A8499;
-      --accent:  #FF6B35;
-      --red:     #FF4D4D;
-      --white:   #FFFFFF;
-    }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; }
-    .logo span { color: var(--accent); }
-
-    .topbar-right a {
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 10pt;
-      font-weight: 500;
-    }
-
-    .topbar-right a:hover { color: var(--white); }
-
-    .auth-wrapper {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 16px;
-    }
-
-    .auth-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 36px 40px;
-      width: 100%;
-      max-width: 420px;
-    }
-
-    .auth-title {
-      font-size: 18pt;
-      font-weight: 700;
-      color: var(--white);
-      margin-bottom: 6px;
-    }
-
-    .auth-subtitle {
-      font-size: 10pt;
-      color: var(--muted);
-      margin-bottom: 28px;
-    }
-
-    .form-group { margin-bottom: 16px; }
-
-    .form-label {
-      display: block;
-      font-size: 9.5pt;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      margin-bottom: 7px;
-    }
-
-    .form-input {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 11px 14px;
-      font-family: 'Inter', sans-serif;
-      font-size: 11pt;
-      color: var(--white);
-      outline: none;
-      transition: border-color 0.2s;
-    }
-
-    .form-input:focus { border-color: var(--accent); }
-    .form-input::placeholder { color: var(--muted); font-size: 10pt; }
-
-    .btn-submit {
-      width: 100%;
-      padding: 12px;
-      background: var(--accent);
-      color: var(--white);
-      border: none;
-      border-radius: 6px;
-      font-family: 'Inter', sans-serif;
-      font-size: 11pt;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 8px;
-      transition: opacity 0.15s;
-    }
-
-    .btn-submit:hover { opacity: 0.88; }
-
-    .error-box {
-      background: rgba(255,77,77,0.1);
-      border: 1px solid rgba(255,77,77,0.3);
-      border-radius: 6px;
-      padding: 10px 14px;
-      margin-bottom: 18px;
-      font-size: 10pt;
-      color: var(--red);
-    }
-
-    .auth-footer {
-      margin-top: 22px;
-      text-align: center;
-      font-size: 10pt;
-      color: var(--muted);
-    }
-
-    .auth-footer a { color: var(--accent); text-decoration: none; font-weight: 600; }
-    .auth-footer a:hover { text-decoration: underline; }
-
-    .divider {
-      border: none;
-      border-top: 1px solid var(--border);
-      margin: 22px 0;
-    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--surface2:#222840;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--red:#FF4D4D;--green:#00C076}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+    .main{flex:1;display:flex;align-items:center;justify-content:center;padding:24px}
+    .box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;width:min(400px,94vw)}
+    .logo{font-size:17pt;font-weight:700;color:#fff;text-align:center}
+    .logo span{color:var(--accent)}
+    .sub{color:var(--muted);font-size:9.5pt;text-align:center;margin:6px 0 24px}
+    label{display:block;font-size:8.5pt;font-weight:600;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px}
+    input{width:100%;padding:11px 13px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:10pt;font-family:inherit}
+    input:focus{outline:none;border-color:var(--accent)}
+    .btn{width:100%;margin-top:20px;padding:12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:700;font-size:10.5pt;cursor:pointer;font-family:inherit}
+    .btn:hover{filter:brightness(1.08)}
+    .gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px;border-radius:8px;border:1px solid var(--border);background:#fff;color:#1a1a1a;font-weight:600;font-size:10pt;cursor:pointer;font-family:inherit;text-decoration:none;margin-bottom:6px}
+    .gbtn:hover{background:#f2f2f2}
+    .divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--muted);font-size:8.5pt}
+    .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--border)}
+    .err{background:rgba(255,77,77,.1);border:1px solid rgba(255,77,77,.4);color:var(--red);border-radius:8px;padding:10px 13px;font-size:9pt;margin-bottom:8px}
+    .links{margin-top:18px;text-align:center;font-size:9pt;color:var(--muted)}
+    .links a{color:var(--accent);text-decoration:none;font-weight:600}
+    footer{border-top:1px solid var(--border);padding:16px;text-align:center;font-size:8.5pt;color:var(--muted)}
+    footer a{color:var(--muted);text-decoration:none;margin:0 8px}
+    footer a:hover{color:var(--text)}
   </style>
 </head>
 <body>
+<div class="main">
+  <form class="box" method="POST">
+    <div class="logo">Bull<span>Logic</span></div>
+    <div class="sub">Welcome back. Sign in to your account.</div>
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
 
-<div class="topbar">
-  <a href="/" class="logo" style="text-decoration:none;">Market<span>Predict</span></a>
-  <div class="topbar-right">
-    <a href="/register">Create account</a>
-  </div>
-</div>
-
-<div class="auth-wrapper">
-  <div class="auth-card">
-    <div class="auth-title">Welcome back</div>
-    <div class="auth-subtitle">Sign in to your BullLogic account</div>
-
-    {% if error %}
-    <div class="error-box">{{ error }}</div>
+    {% if google_enabled %}
+    <a class="gbtn" href="/auth/google">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.2 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.1 18.9 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.2 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+      Continue with Google
+    </a>
+    <div class="divider">or sign in with email</div>
     {% endif %}
 
-    <form method="POST" action="/login">
-      <div class="form-group">
-        <label class="form-label" for="identifier">Username or Email</label>
-        <input class="form-input" type="text" id="identifier" name="identifier"
-               placeholder="Enter username or email" autocomplete="username" autofocus />
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="password">Password</label>
-        <input class="form-input" type="password" id="password" name="password"
-               placeholder="Enter password" autocomplete="current-password" />
-      </div>
-      <button type="submit" class="btn-submit">Sign In</button>
-      <div style="text-align:right;margin-top:8px">
-        <a href="/forgot-password" style="font-size:9pt;color:var(--muted);text-decoration:none">Forgot password?</a>
-      </div>
-    </form>
-
-    <hr class="divider" />
-
-    <div class="auth-footer">
-      Don't have an account? <a href="/register">Create one for free</a>
+    <label>Username or email</label>
+    <input name="identifier" autofocus autocomplete="username" required>
+    <label>Password</label>
+    <input name="password" type="password" autocomplete="current-password" required>
+    <button class="btn" type="submit">Sign in</button>
+    <div class="links">
+      <a href="/forgot-password">Forgot password?</a><br><br>
+      New here? <a href="/register">Create an account</a>
     </div>
-  </div>
+  </form>
 </div>
-
+<footer>
+  <a href="/track-record">Track Record</a> · <a href="/faq">FAQ</a> ·
+  <a href="/privacy-policy">Privacy</a> · <a href="/terms">Terms</a>
+  <div style="margin-top:6px">BullLogic is not financial advice.</div>
+</footer>
 </body>
 </html>

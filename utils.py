@@ -1,4 +1,4 @@
-"""utils.py — shared constants, decorators, and stateless helpers."""
+"""utils.py, shared constants, decorators, and stateless helpers."""
 
 import json as _json
 import os
@@ -90,7 +90,7 @@ def consume_quota(user):
 
 
 def refund_quota(user):
-    """Give back one prediction — used when a prediction fails after the
+    """Give back one prediction, used when a prediction fails after the
     quota was already consumed, so errors never cost free users a slot."""
     try:
         if not user.is_pro and (user.predictions_today or 0) > 0:

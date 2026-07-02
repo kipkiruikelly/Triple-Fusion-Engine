@@ -1,6 +1,6 @@
 """
 wsgi.py
-Production entry point — serves the Flask app with waitress instead of
+Production entry point, serves the Flask app with waitress instead of
 the Flask/Werkzeug development server (no interactive debugger, no
 reloader, safe for long-running/background use).
 

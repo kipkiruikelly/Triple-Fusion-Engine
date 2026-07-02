@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>{{ ticker }} Research — BullLogic</title>
+  <title>{{ ticker }} Research, BullLogic</title>
   <script>if(localStorage.getItem('bl-theme')==='light')document.documentElement.classList.add('light');</script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
@@ -106,7 +106,7 @@
         <div class="meta" id="compMeta"></div>
       </div>
       <div class="price-block">
-        <div class="price" id="compPrice">—</div>
+        <div class="price" id="compPrice">-</div>
         <div class="chg" id="compChg"></div>
       </div>
     </div>
@@ -122,16 +122,16 @@
 
     <!-- ML Signal -->
     <div id="signalBanner" class="signal-banner" style="display:none">
-      <div id="sigDir" class="sig-direction sig-hold">—</div>
+      <div id="sigDir" class="sig-direction sig-hold">-</div>
       <div class="sig-details">
         <div class="sig-label">ML Signal · 1D</div>
-        <div id="sigConf" style="font-size:11pt;font-weight:700;color:var(--white)">—% confidence</div>
+        <div id="sigConf" style="font-size:11pt;font-weight:700;color:var(--white)">, % confidence</div>
         <div style="font-size:9pt;color:var(--muted);margin-top:3px" id="sigPrice"></div>
         <div class="conf-bar"><div class="conf-fill" id="confFill" style="width:0%"></div></div>
       </div>
       <div style="text-align:right">
         <div style="font-size:8.5pt;color:var(--muted);margin-bottom:4px">RSI(14)</div>
-        <div id="sigRsi" style="font-size:14pt;font-weight:700;color:var(--white)">—</div>
+        <div id="sigRsi" style="font-size:14pt;font-weight:700;color:var(--white)">-</div>
         <div style="font-size:8.5pt;color:var(--muted);margin-top:6px" id="sigMacd"></div>
         <div style="font-size:8.5pt;color:var(--muted);margin-top:2px" id="sigIct"></div>
       </div>
@@ -139,14 +139,14 @@
 
     <!-- Fundamentals -->
     <div class="grid-4" id="fundamentals" style="display:none">
-      <div class="stat-mini"><div class="stat-mini-label">Market Cap</div><div class="stat-mini-val" id="fMcap">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">P/E Ratio</div><div class="stat-mini-val" id="fPe">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">Beta</div><div class="stat-mini-val" id="fBeta">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">Short Float</div><div class="stat-mini-val" id="fShort">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">52W High</div><div class="stat-mini-val" id="f52h">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">52W Low</div><div class="stat-mini-val" id="f52l">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">Div Yield</div><div class="stat-mini-val" id="fDiv">—</div></div>
-      <div class="stat-mini"><div class="stat-mini-label">EPS</div><div class="stat-mini-val" id="fEps">—</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">Market Cap</div><div class="stat-mini-val" id="fMcap">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">P/E Ratio</div><div class="stat-mini-val" id="fPe">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">Beta</div><div class="stat-mini-val" id="fBeta">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">Short Float</div><div class="stat-mini-val" id="fShort">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">52W High</div><div class="stat-mini-val" id="f52h">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">52W Low</div><div class="stat-mini-val" id="f52l">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">Div Yield</div><div class="stat-mini-val" id="fDiv">-</div></div>
+      <div class="stat-mini"><div class="stat-mini-label">EPS</div><div class="stat-mini-val" id="fEps">-</div></div>
     </div>
 
     <div class="grid-2">
@@ -164,7 +164,7 @@
         </div>
         <div class="card">
           <div class="card-title">&#127970; About</div>
-          <div class="description" id="descBlock">—</div>
+          <div class="description" id="descBlock">-</div>
         </div>
       </div>
     </div>
@@ -219,7 +219,7 @@ async function load() {
   document.getElementById('compName').textContent = info.name || TICKER;
   document.getElementById('compMeta').textContent = [info.sector, info.industry].filter(Boolean).join(' · ');
   _currentPrice = px.price || 0;
-  document.getElementById('compPrice').textContent = px.price ? '$' + px.price.toFixed(2) : '—';
+  document.getElementById('compPrice').textContent = px.price ? '$' + px.price.toFixed(2) : '-';
   const chg = px.price && px.prev ? ((px.price - px.prev) / px.prev * 100) : 0;
   const chgEl = document.getElementById('compChg');
   chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '% today';
@@ -228,25 +228,25 @@ async function load() {
   // Fundamentals
   if (Object.keys(info).length) {
     document.getElementById('fundamentals').style.display = 'grid';
-    const fmt = (n, pre='', suf='') => n ? pre + n.toLocaleString() + suf : '—';
+    const fmt = (n, pre='', suf='') => n ? pre + n.toLocaleString() + suf : '-';
     const mcap = info.market_cap;
-    document.getElementById('fMcap').textContent = mcap ? (mcap >= 1e12 ? '$' + (mcap/1e12).toFixed(1)+'T' : mcap >= 1e9 ? '$'+(mcap/1e9).toFixed(1)+'B' : '$'+mcap.toLocaleString()) : '—';
-    document.getElementById('fPe').textContent   = info.pe   || '—';
-    document.getElementById('fBeta').textContent = info.beta || '—';
-    document.getElementById('fShort').textContent= info.short_float ? info.short_float + '%' : '—';
-    document.getElementById('f52h').textContent  = info['52w_high'] ? '$' + info['52w_high'] : '—';
-    document.getElementById('f52l').textContent  = info['52w_low']  ? '$' + info['52w_low']  : '—';
-    document.getElementById('fDiv').textContent  = info.div_yield   ? info.div_yield + '%'   : '—';
-    document.getElementById('fEps').textContent  = info.eps         ? '$' + info.eps          : '—';
-    document.getElementById('descBlock').textContent = info.description || '—';
+    document.getElementById('fMcap').textContent = mcap ? (mcap >= 1e12 ? '$' + (mcap/1e12).toFixed(1)+'T' : mcap >= 1e9 ? '$'+(mcap/1e9).toFixed(1)+'B' : '$'+mcap.toLocaleString()) : '-';
+    document.getElementById('fPe').textContent   = info.pe   || '-';
+    document.getElementById('fBeta').textContent = info.beta || '-';
+    document.getElementById('fShort').textContent= info.short_float ? info.short_float + '%' : '-';
+    document.getElementById('f52h').textContent  = info['52w_high'] ? '$' + info['52w_high'] : '-';
+    document.getElementById('f52l').textContent  = info['52w_low']  ? '$' + info['52w_low']  : '-';
+    document.getElementById('fDiv').textContent  = info.div_yield   ? info.div_yield + '%'   : '-';
+    document.getElementById('fEps').textContent  = info.eps         ? '$' + info.eps          : '-';
+    document.getElementById('descBlock').textContent = info.description || '-';
 
     // Analyst
     const rec   = (info.recommendation || '').toUpperCase().replace('_',' ');
     const upside = info.target_mean && px.price ? ((info.target_mean / px.price - 1) * 100).toFixed(1) : null;
     const recColor = {'BUY':'var(--green)','STRONG BUY':'#00C853','HOLD':'#FFD54F','SELL':'var(--red)','UNDERPERFORM':'#FF8A65'}[rec] || 'var(--muted)';
     document.getElementById('analystBlock').innerHTML = `
-      <div style="font-size:16pt;font-weight:700;color:${recColor};margin-bottom:8px">${rec || '—'}</div>
-      <div style="font-size:9.5pt;color:var(--muted)">${info.analyst_count || 0} analysts &nbsp;·&nbsp; Mean target: <strong style="color:var(--white)">$${info.target_mean || '—'}</strong></div>
+      <div style="font-size:16pt;font-weight:700;color:${recColor};margin-bottom:8px">${rec || '-'}</div>
+      <div style="font-size:9.5pt;color:var(--muted)">${info.analyst_count || 0} analysts &nbsp;·&nbsp; Mean target: <strong style="color:var(--white)">$${info.target_mean || '-'}</strong></div>
       ${upside ? `<div style="font-size:9.5pt;margin-top:6px">Upside: <strong style="color:${upside>0?'var(--green)':'var(--red)'}">${upside > 0 ? '+' : ''}${upside}%</strong></div>` : ''}`;
   }
 
@@ -271,10 +271,10 @@ async function load() {
     const fill = document.getElementById('confFill');
     fill.style.width      = (pred.confidence || 0) + '%';
     fill.style.background = isUp ? 'var(--green)' : 'var(--red)';
-    document.getElementById('sigRsi').textContent  = pred.rsi ? pred.rsi.toFixed(1) : '—';
+    document.getElementById('sigRsi').textContent  = pred.rsi ? pred.rsi.toFixed(1) : '-';
     document.getElementById('sigRsi').style.color  = pred.rsi < 30 ? 'var(--green)' : pred.rsi > 70 ? 'var(--red)' : 'var(--text)';
-    document.getElementById('sigMacd').textContent = 'MACD: ' + (pred.macd || '—');
-    document.getElementById('sigIct').textContent  = 'ICT: ' + (pred.ict_bias || '—');
+    document.getElementById('sigMacd').textContent = 'MACD: ' + (pred.macd || '-');
+    document.getElementById('sigIct').textContent  = 'ICT: ' + (pred.ict_bias || '-');
     document.getElementById('ptPrice').value = pred.current_price || _currentPrice;
     if (pred.direction === 'Up')   document.getElementById('ptSide').value = 'long';
     if (pred.direction === 'Down') document.getElementById('ptSide').value = 'short';
@@ -295,11 +295,11 @@ async function runAI() {
         interval:      '1d',
         current_price: _pred?.current_price || _currentPrice,
         lr_pred:       _pred?.lr_pred,
-        direction:     _pred?.direction || '—',
+        direction:     _pred?.direction || '-',
         confidence:    _pred?.confidence || 0,
         rsi:           _pred?.rsi || 50,
-        macd_signal:   _pred?.macd || '—',
-        ict_bias:      _pred?.ict_bias || '—',
+        macd_signal:   _pred?.macd || '-',
+        ict_bias:      _pred?.ict_bias || '-',
       })
     });
     const d = await r.json();
@@ -334,7 +334,7 @@ async function submitPT() {
       side:   document.getElementById('ptSide').value,
       entry_price: parseFloat(document.getElementById('ptPrice').value),
       quantity:    parseFloat(document.getElementById('ptQty').value),
-      note:  `Research page — ${_direction} signal`
+      note:  `Research page, ${_direction} signal`
     })
   });
   const d = await r.json();

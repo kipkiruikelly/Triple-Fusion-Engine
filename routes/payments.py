@@ -1,4 +1,4 @@
-"""routes/payments.py — Stripe, M-Pesa, pricing, gift codes."""
+"""routes/payments.py, Stripe, M-Pesa, pricing, gift codes."""
 
 import os
 import secrets
@@ -42,8 +42,22 @@ def _grant_pro(user, days):
     user.plan = 'pro'
 
 
+# Daraja STK Push result codes and what to tell the user.
+MPESA_RESULT_CODES = {
+    "1":    ("failed",    "Insufficient M-Pesa balance. Top up and try again."),
+    "1001": ("failed",    "Another M-Pesa session is active on this number. Wait a minute and retry."),
+    "1019": ("failed",    "The payment request expired. Start a new payment."),
+    "1025": ("failed",    "M-Pesa could not send the prompt. Try again."),
+    "1032": ("cancelled", "You cancelled the payment on your phone."),
+    "1037": ("failed",    "No response from your phone. Make sure it is on and unlocked, then retry."),
+    "2001": ("failed",    "Wrong M-Pesa PIN entered. Try again."),
+    "9999": ("failed",    "M-Pesa error. Try again in a moment."),
+}
+
+
 def _settle_mpesa_payment(payment, receipt=None):
-    """Mark a pending M-Pesa payment paid and grant Pro. Idempotent."""
+    """Mark a pending M-Pesa payment paid and grant Pro. Idempotent.
+    Only ever called after a verified callback or query confirmation."""
     if payment.status == 'paid':
         return
     payment.status       = 'paid'
@@ -53,6 +67,24 @@ def _settle_mpesa_payment(payment, receipt=None):
     if user:
         _grant_pro(user, payment.days or 30)
     db.session.commit()
+    if user:
+        try:
+            import emails
+            from flask import current_app
+            emails.send_receipt(current_app._get_current_object(), user, payment)
+        except Exception:
+            pass
+
+
+def _fail_mpesa_payment(payment, result_code):
+    """Record a terminal non-success outcome. Returns the user message."""
+    status, message = MPESA_RESULT_CODES.get(
+        str(result_code), ("failed", "Payment did not complete. Try again."))
+    if payment and payment.status == 'pending':
+        payment.status       = status
+        payment.completed_at = datetime.utcnow()
+        db.session.commit()
+    return message
 
 
 def register_payment_routes(app):
@@ -71,6 +103,8 @@ def register_payment_routes(app):
     @app.route("/stripe/checkout", methods=["POST"])
     @login_required
     def stripe_checkout():
+        if not getattr(current_user, "email_verified", True):
+            return redirect(url_for("verify_notice"))
         if not _STRIPE_OK:
             current_user.plan = 'pro'
             db.session.commit()
@@ -162,6 +196,9 @@ def register_payment_routes(app):
     @app.route("/mpesa/pay", methods=["POST"])
     @login_required
     def mpesa_pay():
+        if not getattr(current_user, "email_verified", True):
+            return jsonify({"ok": False,
+                            "error": "Verify your email address before paying. Check your inbox."}), 403
         if not MPESA_OK:
             return jsonify({"ok": False, "error": "M-Pesa payments are not configured yet."}), 503
         data  = request.get_json() or {}
@@ -203,19 +240,18 @@ def register_payment_routes(app):
         if result_code == "0":
             if not payment:
                 return jsonify({"ok": False, "paid": False,
-                                "error": "Payment record not found — contact support with your M-Pesa receipt."}), 404
+                                "error": "Payment record not found. Contact support with your M-Pesa receipt."}), 404
             _settle_mpesa_payment(payment)
             return jsonify({"ok": True, "paid": True,
                             "message": f"Payment confirmed! Pro access granted for {payment.days or 30} days."})
-        elif result_code == "1032":
-            if payment and payment.status == 'pending':
-                payment.status       = 'cancelled'
-                payment.completed_at = datetime.utcnow()
-                db.session.commit()
-            return jsonify({"ok": True, "paid": False, "cancelled": True,
-                            "message": "You cancelled the payment on your phone."})
+        elif result_code in MPESA_RESULT_CODES:
+            message = _fail_mpesa_payment(payment, result_code)
+            return jsonify({"ok": True, "paid": False,
+                            "cancelled": result_code == "1032",
+                            "result_code": result_code, "message": message})
+        # Request still processing on Safaricom's side.
         return jsonify({"ok": True, "paid": False, "result_code": result_code,
-                        "message": resp.get("ResultDesc", "Waiting for payment…")})
+                        "message": resp.get("ResultDesc", "Waiting for payment confirmation...")})
 
     @app.route("/mpesa/callback", methods=["POST"])
     def mpesa_callback():

@@ -2,7 +2,7 @@
 """
 precompute_backtest.py
 Runs 2-year backtest for all trained tickers and saves results to
-Data/backtest_summary.json — used by the /performance page to show
+Data/backtest_summary.json, used by the /performance page to show
 historical equity curves before live paper trades accumulate.
 
 Run once manually, then re-run after retraining.

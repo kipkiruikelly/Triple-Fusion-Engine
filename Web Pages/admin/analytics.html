@@ -37,7 +37,7 @@
 </div>
 
 <div class="card">
-  <h2>Weekly retention <span class="muted" style="text-transform:none;letter-spacing:0">— signups still active in the last 7 days</span></h2>
+  <h2>Weekly retention <span class="muted" style="text-transform:none;letter-spacing:0">, signups still active in the last 7 days</span></h2>
   <table><thead><tr><th>Cohort</th><th>Signups</th><th>Still active</th><th>Retention</th></tr></thead>
   <tbody id="retBody"></tbody></table>
 </div>
@@ -89,7 +89,7 @@ async function load(days) {
   const rb = document.getElementById('retBody');
   rb.innerHTML = d.retention.some(r => r.size) ? d.retention.map(r => `<tr>
     <td>${esc(r.week)}</td><td>${fmtNum(r.size)}</td><td>${fmtNum(r.retained)}</td>
-    <td>${r.pct == null ? '—' : `<div style="display:flex;align-items:center;gap:8px"><div style="flex:0 0 120px;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${r.pct}%;height:100%;background:var(--green)"></div></div>${r.pct}%</div>`}</td>
+    <td>${r.pct == null ? '-' : `<div style="display:flex;align-items:center;gap:8px"><div style="flex:0 0 120px;height:8px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${r.pct}%;height:100%;background:var(--green)"></div></div>${r.pct}%</div>`}</td>
   </tr>`).join('') : '';
   if (!d.retention.some(r => r.size)) emptyRow(rb, 4, 'No signup cohorts yet');
 }
@@ -108,18 +108,18 @@ async function loadFeedback() {
   if (document.getElementById('fbUnresolved').checked) p.set('unresolved', '1');
   const d = await api('/admin/api/feedback?' + p);
   document.getElementById('fbStats').textContent = d.avg_rating != null
-    ? `— avg ${d.avg_rating}★ · sentiment ${d.avg_sentiment ?? 'n/a'}` : '';
+    ? `, avg ${d.avg_rating}★ · sentiment ${d.avg_sentiment ?? 'n/a'}` : '';
   if (!d.items.length) { emptyRow(tb, 7, 'No feedback yet'); return; }
-  const sentBadge = s => s == null ? '<span class="muted">—</span>'
+  const sentBadge = s => s == null ? '<span class="muted">-</span>'
     : (s > 0.2 ? '<span class="badge b-green">positive</span>'
        : s < -0.2 ? '<span class="badge b-red">negative</span>'
        : '<span class="badge b-muted">neutral</span>');
   tb.innerHTML = d.items.map(f => `<tr style="${f.resolved ? 'opacity:.55' : ''}">
     <td><a href="/admin/users/${f.user_id}">${esc(f.user)}</a></td>
     <td>${'★'.repeat(f.rating)}<span class="muted">${'★'.repeat(5 - f.rating)}</span></td>
-    <td style="max-width:320px">${esc(f.comment || '—')}</td>
+    <td style="max-width:320px">${esc(f.comment || '-')}</td>
     <td>${sentBadge(f.sentiment)}</td>
-    <td class="muted">${esc(f.page || '—')}</td>
+    <td class="muted">${esc(f.page || '-')}</td>
     <td class="muted" style="white-space:nowrap">${fmtDate(f.at)}</td>
     <td>${ROLE_LVL >= 2 ? `<button class="btn small fb-res" data-id="${f.id}">${f.resolved ? 'Reopen' : 'Resolve'}</button>` : ''}</td>
   </tr>`).join('');

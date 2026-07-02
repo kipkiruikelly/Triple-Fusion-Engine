@@ -6,10 +6,10 @@
 <div class="subtitle">M-Pesa, Stripe, and gift-code transactions</div>
 
 <div class="grid g4" style="margin-bottom:16px">
-  <div class="card" style="margin:0"><div class="stat-label">Today</div><div class="stat-val green" id="r-today">—</div></div>
-  <div class="card" style="margin:0"><div class="stat-label">This week</div><div class="stat-val" id="r-week">—</div></div>
-  <div class="card" style="margin:0"><div class="stat-label">This month</div><div class="stat-val" id="r-month">—</div></div>
-  <div class="card" style="margin:0"><div class="stat-label">All time</div><div class="stat-val orange" id="r-all">—</div><div class="stat-sub" id="r-counts"></div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Today</div><div class="stat-val green" id="r-today">-</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">This week</div><div class="stat-val" id="r-week">-</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">This month</div><div class="stat-val" id="r-month">-</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">All time</div><div class="stat-val orange" id="r-all">-</div><div class="stat-sub" id="r-counts"></div></div>
 </div>
 
 <div class="card">
@@ -77,11 +77,11 @@ async function load() {
   tb.innerHTML = d.payments.map(p => `<tr>
     <td class="muted">${p.id} ${p.flagged ? '🚩' : ''}</td>
     <td><a href="/admin/users/${p.user_id}">${esc(p.user)}</a></td>
-    <td>${esc(p.provider)}</td><td class="muted">${esc(p.plan || '—')}</td>
-    <td><b>${p.amount != null ? fmtNum(p.amount) : '—'} ${esc(p.currency || '')}</b></td>
+    <td>${esc(p.provider)}</td><td class="muted">${esc(p.plan || '-')}</td>
+    <td><b>${p.amount != null ? fmtNum(p.amount) : '-'} ${esc(p.currency || '')}</b></td>
     <td><span class="badge ${stBadge(p.status)}">${p.status}</span></td>
     <td class="muted" style="font-size:8pt;max-width:190px;overflow:hidden;text-overflow:ellipsis" title="${esc(p.reference || '')}">
-      ${esc(p.reference || '—')}${p.receipt ? '<br>rcpt: ' + esc(p.receipt) : ''}</td>
+      ${esc(p.reference || '-')}${p.receipt ? '<br>rcpt: ' + esc(p.receipt) : ''}</td>
     <td class="muted">${fmtDate(p.created_at)}</td>
     <td class="muted">${fmtDate(p.completed_at)}</td>
     <td style="white-space:nowrap">${ROLE_LVL >= 2 ? `
@@ -90,7 +90,7 @@ async function load() {
   </tr>`).join('');
   tb.querySelectorAll('.act-refund').forEach(b => b.onclick = () =>
     confirmModal('Refund transaction #' + b.dataset.id + '?',
-      'Marks ' + b.dataset.desc + ' as refunded and revokes the granted Pro days.\n\nNote: the actual M-Pesa reversal must be done in the Daraja portal — this records it and updates the account.',
+      'Marks ' + b.dataset.desc + ' as refunded and revokes the granted Pro days.\n\nNote: the actual M-Pesa reversal must be done in the Daraja portal, this records it and updates the account.',
       async () => {
         const r = await api(`/admin/api/payments/${b.dataset.id}/refund`, {method: 'POST', body: {}});
         toast(r.note || 'Refunded'); load(); loadSummary();

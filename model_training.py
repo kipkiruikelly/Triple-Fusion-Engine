@@ -181,7 +181,7 @@ def save_charts(y_true, lr_pred, rf_pred, rf_model):
         ax.plot(x, y_true, color="#1F4E79", lw=1.5, label="Actual Price")
         ax.plot(x, pred,   color=color,     lw=1.5, linestyle="--", label=f"{name} Prediction")
         ax.fill_between(x, y_true, pred, alpha=0.08, color=color)
-        ax.set_title(f"{TICKER} — {name}: Actual vs Predicted", fontweight="bold")
+        ax.set_title(f"{TICKER}, {name}: Actual vs Predicted", fontweight="bold")
         ax.set_ylabel("Price (USD)")
         ax.legend(fontsize=9)
 
@@ -196,7 +196,7 @@ def save_charts(y_true, lr_pred, rf_pred, rf_model):
 
     fig, ax = plt.subplots(figsize=(10, 6))
     bars = ax.barh(imp["Feature"], imp["Importance"], color="#2E75B6", alpha=0.8, edgecolor="white")
-    ax.set_title(f"{TICKER} — Random Forest Feature Importances (Top 10)", fontweight="bold")
+    ax.set_title(f"{TICKER}, Random Forest Feature Importances (Top 10)", fontweight="bold")
     ax.set_xlabel("Importance Score")
     for bar, val in zip(bars, imp["Importance"]):
         ax.text(bar.get_width() + 0.001, bar.get_y() + bar.get_height() / 2,
@@ -208,7 +208,7 @@ def save_charts(y_true, lr_pred, rf_pred, rf_model):
 
 
 def main():
-    print(f"\nML-based Quantitative Trading System — Model Training")
+    print(f"\nML-based Quantitative Trading System, Model Training")
     print(f"Ticker: {TICKER}\n")
 
     data = load_data(TICKER)

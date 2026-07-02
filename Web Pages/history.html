@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Prediction History — BullLogic</title>
+  <title>Prediction History, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -148,7 +148,7 @@
       <div class="page-title" style="margin-bottom:0">Prediction History</div>
       <a href="/history/export" style="background:var(--surface);border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;font-size:8.5pt;font-weight:600;text-decoration:none;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">⬇ Export CSV</a>
     </div>
-    <div class="page-subtitle">Your last 100 ML price predictions — track accuracy and revisit past signals</div>
+    <div class="page-subtitle">Your last 100 ML price predictions, track accuracy and revisit past signals</div>
 
     {% set total = records | length %}
     {% set up_count = records | selectattr('direction', 'eq', 'Up') | list | length %}

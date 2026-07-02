@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pricing — BullLogic</title>
+  <title>Pricing, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -163,12 +163,12 @@
         <li><span class="check">✓</span> LR + RF price prediction</li>
         <li><span class="check">✓</span> ICT structure analysis</li>
         <li><span class="check">✓</span> RSI / MACD / Bollinger</li>
-        <li><span class="dash">–</span> Unlimited predictions</li>
-        <li><span class="dash">–</span> XGBoost direction classifier</li>
-        <li><span class="dash">–</span> VIX / sector / earnings features</li>
-        <li><span class="dash">–</span> Daily signal alerts by email</li>
-        <li><span class="dash">–</span> REST API access</li>
-        <li><span class="dash">–</span> Backtesting engine</li>
+        <li><span class="dash">-</span> Unlimited predictions</li>
+        <li><span class="dash">-</span> XGBoost direction classifier</li>
+        <li><span class="dash">-</span> VIX / sector / earnings features</li>
+        <li><span class="dash">-</span> Daily signal alerts by email</li>
+        <li><span class="dash">-</span> REST API access</li>
+        <li><span class="dash">-</span> Backtesting engine</li>
       </ul>
       {% if current_user.is_authenticated and not current_user.is_pro %}
         <span class="btn-plan btn-free current">Current Plan</span>
@@ -183,7 +183,7 @@
       <div class="plan-label pro-label">Pro</div>
       <div class="plan-name">Professional</div>
       <div class="plan-price" id="price-display">$29 <span class="per">/ month</span></div>
-      <div class="plan-billed" id="billed-display">Billed $29/month — cancel anytime</div>
+      <div class="plan-billed" id="billed-display">Billed $29/month, cancel anytime</div>
       <div class="plan-desc">For active traders who need edge, speed, and automation.</div>
       <ul class="plan-features">
         <li><span class="check">✓</span> Unlimited predictions</li>
@@ -245,17 +245,17 @@
           <tr><td>Trained tickers</td><td>11</td><td class="col-pro">11 (expanding)</td></tr>
           <tr><td>Linear Regression model</td><td class="col-pro">✓</td><td class="col-pro">✓</td></tr>
           <tr><td>Random Forest model</td><td class="col-pro">✓</td><td class="col-pro">✓</td></tr>
-          <tr><td>XGBoost direction classifier</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>VIX regime features</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>Sector rotation signals</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>Earnings proximity features</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
+          <tr><td>XGBoost direction classifier</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>VIX regime features</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>Sector rotation signals</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>Earnings proximity features</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
           <tr><td>ICT structure analysis</td><td class="col-pro">✓</td><td class="col-pro">✓</td></tr>
           <tr><td>RSI / MACD / Bollinger Bands</td><td class="col-pro">✓</td><td class="col-pro">✓</td></tr>
-          <tr><td>Multi-timeframe (Daily + 1H + 15M)</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>Daily email signal alerts</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>REST API access</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>Backtesting engine</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
-          <tr><td>MT5 / MetaAPI live trading</td><td class="col-no">–</td><td class="col-pro">✓</td></tr>
+          <tr><td>Multi-timeframe (Daily + 1H + 15M)</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>Daily email signal alerts</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>REST API access</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>Backtesting engine</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
+          <tr><td>MT5 / MetaAPI live trading</td><td class="col-no">-</td><td class="col-pro">✓</td></tr>
           <tr><td>Watchlist with live signals</td><td class="col-pro">✓</td><td class="col-pro">✓</td></tr>
           <tr><td>Prediction history</td><td class="col-pro">✓</td><td class="col-pro">✓</td></tr>
           <tr><td>Support</td><td>Community</td><td class="col-pro">Priority email</td></tr>
@@ -268,15 +268,15 @@
     <h2>Frequently asked questions</h2>
     <div class="faq-item">
       <div class="faq-q">How accurate is the signal engine?</div>
-      <div class="faq-a">The XGBoost direction classifier achieves 47–58% out-of-sample accuracy on walk-forward cross-validation — higher than random, with AMZN reaching 58.7% AUC. See the <a href="/performance" style="color:var(--accent)">live track record</a> for ongoing paper-trading results.</div>
+      <div class="faq-a">The XGBoost direction classifier achieves 47-58% out-of-sample accuracy on walk-forward cross-validation, higher than random, with AMZN reaching 58.7% AUC. See the <a href="/performance" style="color:var(--accent)">live track record</a> for ongoing paper-trading results.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">What tickers are supported?</div>
-      <div class="faq-a">AAPL, MSFT, TSLA, NVDA, GOOGL, AMZN, META, QQQ, SPY, DIA, and ADBE — with Daily, 1-Hour, and 15-Minute models for each. More tickers are added regularly.</div>
+      <div class="faq-a">AAPL, MSFT, TSLA, NVDA, GOOGL, AMZN, META, QQQ, SPY, DIA, and ADBE, with Daily, 1-Hour, and 15-Minute models for each. More tickers are added regularly.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">Can I cancel my subscription?</div>
-      <div class="faq-a">Yes — cancel any time from your profile page. You keep Pro access until the end of the billing period.</div>
+      <div class="faq-a">Yes, cancel any time from your profile page. You keep Pro access until the end of the billing period.</div>
     </div>
     <div class="faq-item">
       <div class="faq-q">What are the daily email alerts?</div>
@@ -309,6 +309,11 @@
                font-size:11pt;font-weight:700;cursor:pointer;font-family:Inter,sans-serif">
         Send STK Push
       </button>
+      <div style="color:#7A8499;font-size:8pt;margin-top:10px;text-align:center;line-height:1.5">
+        By paying you agree to the <a href="/terms" target="_blank" style="color:#FF6B35;text-decoration:none">Terms of Service</a>
+        and <a href="/privacy-policy" target="_blank" style="color:#FF6B35;text-decoration:none">Privacy Policy</a>.
+        A receipt is emailed after confirmation.
+      </div>
     </div>
 
     <div id="mpesa-waiting" style="display:none;text-align:center;padding:16px 0">
@@ -350,11 +355,11 @@ function setBilling(mode) {
 
   if (isAnnual) {
     document.getElementById('price-display').innerHTML = '$199 <span class="per">/ year</span>';
-    document.getElementById('billed-display').textContent = 'Billed $199 once per year — save $149';
+    document.getElementById('billed-display').textContent = 'Billed $199 once per year, save $149';
     document.getElementById('mpesa-subtitle').textContent = 'KES ' + ANNUAL_KES + ' / 1 year';
   } else {
     document.getElementById('price-display').innerHTML = '$29 <span class="per">/ month</span>';
-    document.getElementById('billed-display').textContent = 'Billed $29/month — cancel anytime';
+    document.getElementById('billed-display').textContent = 'Billed $29/month, cancel anytime';
     document.getElementById('mpesa-subtitle').textContent = 'KES ' + MONTHLY_KES + ' / 30 days';
   }
   var inp = document.getElementById('price-id-input');
@@ -432,5 +437,11 @@ function pollPayment() {
 setBilling('monthly');
 </script>
 
+<footer style="border-top:1px solid #2A3150;padding:16px;text-align:center;font-size:8.5pt;color:#7A8499">
+  <a href="/track-record" style="color:inherit;text-decoration:none;margin:0 8px">Track Record</a> ·
+  <a href="/faq" style="color:inherit;text-decoration:none;margin:0 8px">FAQ</a> ·
+  <a href="/privacy-policy" style="color:inherit;text-decoration:none;margin:0 8px">Privacy</a> ·
+  <a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px">Terms</a>
+</footer>
 </body>
 </html>

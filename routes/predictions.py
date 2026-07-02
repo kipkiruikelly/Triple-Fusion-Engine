@@ -1,4 +1,4 @@
-"""routes/predictions.py — core predictions, watchlist, history, profile, AI analyst."""
+"""routes/predictions.py, core predictions, watchlist, history, profile, AI analyst."""
 
 import csv
 import io
@@ -38,6 +38,8 @@ def register_prediction_routes(app, metrics):
         interval = request.form.get("interval", "1d").strip()
         if interval not in VALID_INTERVALS:
             interval = "1d"
+        if not getattr(current_user, "email_verified", True):
+            return redirect(url_for("verify_notice"))
         if not ticker:
             return render_template("index.html", error="Please enter a stock ticker symbol.",
                                    interval=interval)
@@ -84,7 +86,7 @@ def register_prediction_routes(app, metrics):
             refund_quota(current_user)
             return render_template("index.html",
                                    error=f'Could not fetch data for "{ticker}". '
-                                         'Please check the symbol and try again — this attempt '
+                                         'Please check the symbol and try again, this attempt '
                                          'was not deducted from your quota.',
                                    interval=interval)
 
@@ -319,7 +321,7 @@ def register_prediction_routes(app, metrics):
                         "direction_accuracy": round(dir_ok / total * 100, 1),
                         "avg_pct_error": round(avg_err, 2), "recent": recent})
 
-    # ── Track record (public — the trust page) ─────────────────────────────────
+    # ── Track record (public, the trust page) ─────────────────────────────────
 
     @app.route("/track-record")
     def track_record_page():
@@ -354,7 +356,7 @@ def register_prediction_routes(app, metrics):
         except (TypeError, ValueError):
             rating = 0
         if rating < 1 or rating > 5:
-            return jsonify({"ok": False, "error": "Rating must be 1–5"}), 400
+            return jsonify({"ok": False, "error": "Rating must be 1-5"}), 400
         comment = (data.get("comment") or "").strip()[:500] or None
         sentiment = None
         if comment:
@@ -468,8 +470,8 @@ def register_prediction_routes(app, metrics):
                 i = yf.Ticker(ticker).info
                 return {
                     "name":           i.get("longName", ticker),
-                    "sector":         i.get("sector", "—"),
-                    "industry":       i.get("industry", "—"),
+                    "sector":         i.get("sector", "-"),
+                    "industry":       i.get("industry", "-"),
                     "market_cap":     i.get("marketCap"),
                     "pe":             round(float(i.get("trailingPE") or 0), 2),
                     "eps":            round(float(i.get("trailingEps") or 0), 2),
@@ -479,7 +481,7 @@ def register_prediction_routes(app, metrics):
                     "beta":           round(float(i.get("beta") or 0), 2),
                     "div_yield":      round(float((i.get("dividendYield") or 0) * 100), 2),
                     "target_mean":    round(float(i.get("targetMeanPrice") or 0), 2),
-                    "recommendation": i.get("recommendationKey", "—"),
+                    "recommendation": i.get("recommendationKey", "-"),
                     "analyst_count":  i.get("numberOfAnalystOpinions", 0),
                     "short_float":    round(float((i.get("shortPercentOfFloat") or 0) * 100), 2),
                     "description":    (i.get("longBusinessSummary") or "")[:400],
@@ -601,12 +603,12 @@ def register_prediction_routes(app, metrics):
             interval    = data.get("interval", "1d")
             cur_price   = data.get("current_price", 0)
             lr_pred     = data.get("lr_pred", 0)
-            direction   = data.get("direction", "—")
+            direction   = data.get("direction", "-")
             confidence  = data.get("confidence", 0)
             rsi         = data.get("rsi", 50)
-            macd_signal = data.get("macd_signal", "—")
-            ict_bias    = data.get("ict_bias", "—")
-            pd_zone     = data.get("pd_zone", "—")
+            macd_signal = data.get("macd_signal", "-")
+            ict_bias    = data.get("ict_bias", "-")
+            pd_zone     = data.get("pd_zone", "-")
             prompt = (
                 f"You are a professional quantitative trader and market analyst. "
                 f"Provide a concise, actionable market commentary (3-4 short paragraphs) for "

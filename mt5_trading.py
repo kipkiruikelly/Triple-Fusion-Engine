@@ -7,10 +7,10 @@ Two modes:
   - PAPER: Simulates trades against live yfinance data. No MT5 needed.
 
 Triple-fusion signal (ICT primary, ML + tech as confirmation):
-  1. ICT gate — 200 SMA + market structure bias required to enter
-  2. ICT score — order blocks, FVGs, liquidity sweeps, PD zone
-  3. ML models — LR + RF direction agreement adds 2 pts confirmation
-  4. Tech indicators — RSI/MACD/EMA confluence adds score
+  1. ICT gate, 200 SMA + market structure bias required to enter
+  2. ICT score, order blocks, FVGs, liquidity sweeps, PD zone
+  3. ML models, LR + RF direction agreement adds 2 pts confirmation
+  4. Tech indicators, RSI/MACD/EMA confluence adds score
   Entry fires when ICT bias present AND ICT score >= 3 AND total >= 5.
   Falls back to ML + tech fusion when ICT data unavailable.
   - ATR(14) dynamic SL/TP (SL=1.5×ATR, TP=3×ATR)
@@ -390,7 +390,7 @@ class MT5Trader:
             try:
                 mapi = MetaApiBackend()
                 mapi.start()
-                self._log("INFO", "Connecting to MetaApi — deploying account, please wait…")
+                self._log("INFO", "Connecting to MetaApi, deploying account, please wait…")
                 info = mapi.connect(metaapi_token, metaapi_account_id)
                 self._mapi       = mapi
                 self._paper      = None
@@ -408,7 +408,7 @@ class MT5Trader:
                     "leverage"   : info.get("leverage", 100),
                 }
                 self.equity_open = self.account["equity"]
-                self.status_msg  = f"Connected (MetaApi) — {self.account['name']} @ {self.account['server']}"
+                self.status_msg  = f"Connected (MetaApi), {self.account['name']} @ {self.account['server']}"
                 self._log("INFO", f"MetaApi connected: {self.account['name']} balance {self.account['currency']} {self.account['balance']:,.2f}")
                 return {"ok": True, "account": self.account, "mode": "metaapi"}
             except Exception as e:
@@ -421,7 +421,7 @@ class MT5Trader:
             self.account     = self._paper.info()
             self.equity_open = self._paper.balance
             self.status_msg  = "Connected (Paper Trading)"
-            self._log("INFO", "Paper trading mode activated — $10,000 virtual balance")
+            self._log("INFO", "Paper trading mode activated, $10,000 virtual balance")
             return {"ok": True, "account": self.account, "mode": "paper"}
 
         # Live MT5 bridge
@@ -461,7 +461,7 @@ class MT5Trader:
                 "leverage"   : info.leverage,
             }
             self.equity_open = info.equity
-            self.status_msg  = f"Connected (Live) — {info.name} @ {info.server}"
+            self.status_msg  = f"Connected (Live), {info.name} @ {info.server}"
             self._log("INFO", f"Connected to {info.server} as {info.name}")
             return {"ok": True, "account": self.account, "mode": "live"}
 
@@ -621,7 +621,7 @@ class MT5Trader:
 
     def generate_signal_ml(self, symbol: str, timeframe=None) -> dict:
         """
-        Triple-layer signal fusion — ICT has highest priority.
+        Triple-layer signal fusion, ICT has highest priority.
 
         Layer 1 (ICT gate): Above_200SMA + Structure_Bullish sets directional bias.
                             ICT score from OBs, FVGs, liquidity sweeps, PD zone.
@@ -632,7 +632,7 @@ class MT5Trader:
 
         Falls back to original ML + tech fusion if ICT data is unavailable.
         """
-        # 1. ICT features (daily bars — primary gate)
+        # 1. ICT features (daily bars, primary gate)
         ict = self._ict_row(symbol)
 
         # 2. ML signal (LR + RF on daily 18-month data from predictor)
@@ -685,7 +685,7 @@ class MT5Trader:
                 reason = f"{action} total={score} | " + reason
 
         else:
-            # ICT unavailable — fall back to ML + tech fusion
+            # ICT unavailable, fall back to ML + tech fusion
             if ml_action == "HOLD":
                 reason = f"ML=HOLD | Tech={tec_action}"
             elif ml_action == tec_action:
@@ -983,7 +983,7 @@ class MT5Trader:
         tf = tf_map.get(timeframe, None)
 
         mode = "Paper" if self.is_paper else "Live"
-        self._log("INFO", f"{mode} trading started — {symbol} {timeframe} risk={risk_pct}% interval={interval}s")
+        self._log("INFO", f"{mode} trading started, {symbol} {timeframe} risk={risk_pct}% interval={interval}s")
 
         while self.trading:
             try:
@@ -996,7 +996,7 @@ class MT5Trader:
                     if drawdown >= DAILY_LOSS_LIMIT:
                         self._log("WARN", f"Daily loss limit hit ({drawdown*100:.1f}%). Trading halted.")
                         self.trading    = False
-                        self.status_msg = f"Halted — {DAILY_LOSS_LIMIT*100:.0f}% daily loss limit"
+                        self.status_msg = f"Halted, {DAILY_LOSS_LIMIT*100:.0f}% daily loss limit"
                         break
 
                 # Max positions guard
@@ -1042,7 +1042,7 @@ class MT5Trader:
         self.trading    = True
         mode = "Paper" if self.is_paper else ("MetaApi" if self.is_metaapi else "Live")
         ml_tag = "+ML" if self.use_ml else ""
-        self.status_msg = f"{mode} Trading{ml_tag} — {symbol} {timeframe}"
+        self.status_msg = f"{mode} Trading{ml_tag}, {symbol} {timeframe}"
         self._thread = threading.Thread(
             target=self._trading_loop,
             args=(symbol, timeframe, risk_pct, interval),
@@ -1056,7 +1056,7 @@ class MT5Trader:
             return {"ok": False, "error": "Not currently trading"}
         self.trading = False
         mode = "Paper" if self.is_paper else "Live"
-        self.status_msg = f"{mode} — trading stopped"
+        self.status_msg = f"{mode}, trading stopped"
         if self._thread:
             self._thread.join(timeout=5)
         return {"ok": True}

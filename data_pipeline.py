@@ -72,7 +72,7 @@ def download_data(ticker, start, end):
     if df.empty:
         raise ValueError(f"No data returned for {ticker}. Check the ticker and date range.")
 
-    print(f"  {len(df):,} trading days — {df.index.min().date()} to {df.index.max().date()}")
+    print(f"  {len(df):,} trading days, {df.index.min().date()} to {df.index.max().date()}")
     return df
 
 
@@ -93,15 +93,15 @@ def engineer_ict_features(df: pd.DataFrame) -> pd.DataFrame:
     ICT (Inner Circle Trader) inspired features derived from OHLCV data.
 
     Concepts:
-      Trend filter      — 200-day SMA direction and distance
-      Candle character  — body ratio, displacement bars (large range expansion)
-      Market structure  — distance to 20-bar swing high/low, bullish/bearish bias
-      Premium/Discount  — price position inside the 60-bar range (0=discount, 1=premium)
-      Fair Value Gaps   — 3-bar imbalance (bullish/bearish)
-      Order Blocks      — last opposing candle before a displacement move
-      Weekly levels     — previous 5-bar high/low as liquidity reference
-      Liquidity sweeps  — price exceeds swing level then reverses
-      Seasonal encoding — quarterly and monthly sin/cos
+      Trend filter     , 200-day SMA direction and distance
+      Candle character , body ratio, displacement bars (large range expansion)
+      Market structure , distance to 20-bar swing high/low, bullish/bearish bias
+      Premium/Discount , price position inside the 60-bar range (0=discount, 1=premium)
+      Fair Value Gaps  , 3-bar imbalance (bullish/bearish)
+      Order Blocks     , last opposing candle before a displacement move
+      Weekly levels    , previous 5-bar high/low as liquidity reference
+      Liquidity sweeps , price exceeds swing level then reverses
+      Seasonal encoding, quarterly and monthly sin/cos
     """
     close = df["Close"]
     high  = df["High"]
@@ -128,7 +128,7 @@ def engineer_ict_features(df: pd.DataFrame) -> pd.DataFrame:
     df["Dist_to_SL"]       = ((close - sl20)  / (atr14 + 1e-8)).clip(-10, 10)
     df["Structure_Bullish"] = (sh20 > high.rolling(60).max().shift(20)).astype(int)
 
-    # Premium / Discount — position in 60-bar range
+    # Premium / Discount, position in 60-bar range
     rh = high.rolling(60).max()
     rl = low.rolling(60).min()
     df["PD_Position"] = ((close - rl) / (rh - rl).replace(0, np.nan)).fillna(0.5).clip(0, 1)
@@ -139,7 +139,7 @@ def engineer_ict_features(df: pd.DataFrame) -> pd.DataFrame:
     df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
     df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
 
-    # Order Blocks — opposing candle before a displacement move
+    # Order Blocks, opposing candle before a displacement move
     bearish = (close < open_)
     bullish = (close > open_)
     bull_ob = (bearish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bullish
@@ -153,7 +153,7 @@ def engineer_ict_features(df: pd.DataFrame) -> pd.DataFrame:
     df["Dist_PWH"] = ((pwh - close) / (atr14 + 1e-8)).clip(-10, 10)
     df["Dist_PWL"] = ((close - pwl)  / (atr14 + 1e-8)).clip(-10, 10)
 
-    # Liquidity sweeps — price exceeded swing level but closed back inside
+    # Liquidity sweeps, price exceeded swing level but closed back inside
     df["Swept_High"] = ((high > sh20.shift(1)) & (close < sh20.shift(1))).astype(int)
     df["Swept_Low"]  = ((low  < sl20.shift(1)) & (close > sl20.shift(1))).astype(int)
 
@@ -250,14 +250,14 @@ def save_charts(df, df_train, df_val, df_test, ticker):
     axes[0].plot(df.index, df["SMA_21"], color="#27AE60", lw=1.1, linestyle="--", label="SMA 21")
     axes[0].fill_between(df.index, df["BB_Upper"], df["BB_Lower"],
                          alpha=0.08, color="#2E75B6", label="Bollinger Bands")
-    axes[0].set_title(f"{ticker} — Price, Moving Averages & Bollinger Bands", fontweight="bold")
+    axes[0].set_title(f"{ticker}, Price, Moving Averages & Bollinger Bands", fontweight="bold")
     axes[0].set_ylabel("Price (USD)")
     axes[0].legend(loc="upper left", fontsize=9)
 
     axes[1].plot(df.index, df["RSI_14"], color="#8E44AD", lw=1.2, label="RSI (14)")
     axes[1].axhline(70, color="red",   lw=0.8, linestyle="--", alpha=0.6, label="Overbought (70)")
     axes[1].axhline(30, color="green", lw=0.8, linestyle="--", alpha=0.6, label="Oversold (30)")
-    axes[1].set_title(f"{ticker} — RSI (14-period)", fontweight="bold")
+    axes[1].set_title(f"{ticker}, RSI (14-period)", fontweight="bold")
     axes[1].set_ylabel("RSI")
     axes[1].set_ylim(0, 100)
     axes[1].legend(fontsize=9)
@@ -267,7 +267,7 @@ def save_charts(df, df_train, df_val, df_test, ticker):
     axes[2].plot(df.index, df["MACD_Signal"], color="#E74C3C", lw=1.2, label="Signal")
     axes[2].bar(df.index, df["MACD_Hist"], color=colors, alpha=0.4, width=1)
     axes[2].axhline(0, color="black", lw=0.5)
-    axes[2].set_title(f"{ticker} — MACD", fontweight="bold")
+    axes[2].set_title(f"{ticker}, MACD", fontweight="bold")
     axes[2].set_ylabel("MACD")
     axes[2].set_xlabel("Date")
     axes[2].legend(fontsize=9)
@@ -285,7 +285,7 @@ def save_charts(df, df_train, df_val, df_test, ticker):
             label=f"Test ({len(df_test):,})")
     ax.axvline(df_val.index[0],  color="#F39C12", linestyle="--", lw=1, alpha=0.5)
     ax.axvline(df_test.index[0], color="#E74C3C", linestyle="--", lw=1, alpha=0.5)
-    ax.set_title(f"{ticker} — Train / Validation / Test Split", fontweight="bold")
+    ax.set_title(f"{ticker}, Train / Validation / Test Split", fontweight="bold")
     ax.set_ylabel("Close Price (USD)")
     ax.set_xlabel("Date")
     ax.legend()
@@ -296,7 +296,7 @@ def save_charts(df, df_train, df_val, df_test, ticker):
 
 
 def main():
-    print(f"\nML-based Quantitative Trading System — Data Pipeline")
+    print(f"\nML-based Quantitative Trading System, Data Pipeline")
     print(f"Ticker: {TICKER} | Period: {START_DATE} to {END_DATE}\n")
 
     df_raw      = download_data(TICKER, START_DATE, END_DATE)

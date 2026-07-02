@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/train_batch.py — wait out any Yahoo rate limit, then train a ticker
+tools/train_batch.py, wait out any Yahoo rate limit, then train a ticker
 batch with train_all_tickers.py and register the results in TickerConfig.
 
 Usage:
@@ -48,10 +48,10 @@ def wait_for_yahoo():
         try:
             price = yf.Ticker("AAPL").fast_info.last_price
             if price:
-                _log(f"Yahoo reachable (AAPL={price:.2f}) — starting training")
+                _log(f"Yahoo reachable (AAPL={price:.2f}), starting training")
                 return True
         except Exception as e:
-            _log(f"Yahoo still unavailable ({type(e).__name__}) — retry in {PROBE_EVERY_S//60} min")
+            _log(f"Yahoo still unavailable ({type(e).__name__}), retry in {PROBE_EVERY_S//60} min")
         time.sleep(PROBE_EVERY_S)
     return False
 
@@ -81,7 +81,7 @@ def main():
     tickers = [t.upper() for t in sys.argv[1:]] or STANDARD_BATCH
     _log(f"Batch: {len(tickers)} tickers")
     if not wait_for_yahoo():
-        _log("Gave up waiting for Yahoo — rerun later")
+        _log("Gave up waiting for Yahoo, rerun later")
         sys.exit(2)
     cmd = [sys.executable, os.path.join(BASE_DIR, "train_all_tickers.py"),
            "--tickers", *tickers, "--fast", "--workers", "2"]

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>Strategy Pipeline — BullLogic</title>
+  <title>Strategy Pipeline, BullLogic</title>
   <script>if(localStorage.getItem('bl-theme')==='light')document.documentElement.classList.add('light');</script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
@@ -80,7 +80,7 @@
 
 <div class="container">
   <h1>Strategy Pipeline</h1>
-  <p class="subtitle">End-to-end quantitative workflow — from model research to live signal generation.</p>
+  <p class="subtitle">End-to-end quantitative workflow, from model research to live signal generation.</p>
 
   <div class="pipeline">
     <div class="stage stage-1">
@@ -88,8 +88,8 @@
       <div class="stage-title">Research</div>
       <div class="stage-desc">ML model training on ICT features across 10 tickers × 7 timeframes</div>
       <div class="stage-metrics" id="researchMetrics">
-        <div class="metric"><span class="metric-label">Models Trained</span><span class="metric-val" id="nModels">—</span></div>
-        <div class="metric"><span class="metric-label">Avg XGB AUC</span><span class="metric-val" id="avgAuc">—</span></div>
+        <div class="metric"><span class="metric-label">Models Trained</span><span class="metric-val" id="nModels">-</span></div>
+        <div class="metric"><span class="metric-label">Avg XGB AUC</span><span class="metric-val" id="avgAuc">-</span></div>
         <div class="metric"><span class="metric-label">Timeframes</span><span class="metric-val">7</span></div>
         <div class="metric"><span class="metric-label">Tickers</span><span class="metric-val">10</span></div>
       </div>
@@ -99,8 +99,8 @@
       <div class="stage-title">Backtest</div>
       <div class="stage-desc">Historical validation against out-of-sample price data with risk metrics</div>
       <div class="stage-metrics">
-        <div class="metric"><span class="metric-label">Total Return</span><span class="metric-val" id="btReturn">—</span></div>
-        <div class="metric"><span class="metric-label">Sharpe Ratio</span><span class="metric-val" id="btSharpe">—</span></div>
+        <div class="metric"><span class="metric-label">Total Return</span><span class="metric-val" id="btReturn">-</span></div>
+        <div class="metric"><span class="metric-label">Sharpe Ratio</span><span class="metric-val" id="btSharpe">-</span></div>
         <div class="metric"><span class="metric-label">Engine</span><span class="metric-val">Custom</span></div>
         <div class="metric"><span class="metric-label">Data Source</span><span class="metric-val">Alpaca</span></div>
       </div>
@@ -110,10 +110,10 @@
       <div class="stage-title">Paper Trading</div>
       <div class="stage-desc">Track signals against real prices before committing capital</div>
       <div class="stage-metrics">
-        <div class="metric"><span class="metric-label">Open Positions</span><span class="metric-val" id="paperOpen">—</span></div>
-        <div class="metric"><span class="metric-label">Total Logged</span><span class="metric-val" id="paperTotal">—</span></div>
-        <div class="metric"><span class="metric-label">Direction Acc.</span><span class="metric-val good" id="paperAcc">—</span></div>
-        <div class="metric"><span class="metric-label">Checked</span><span class="metric-val" id="paperChecked">—</span></div>
+        <div class="metric"><span class="metric-label">Open Positions</span><span class="metric-val" id="paperOpen">-</span></div>
+        <div class="metric"><span class="metric-label">Total Logged</span><span class="metric-val" id="paperTotal">-</span></div>
+        <div class="metric"><span class="metric-label">Direction Acc.</span><span class="metric-val good" id="paperAcc">-</span></div>
+        <div class="metric"><span class="metric-label">Checked</span><span class="metric-val" id="paperChecked">-</span></div>
       </div>
     </div>
     <div class="stage stage-4">
@@ -121,7 +121,7 @@
       <div class="stage-title">Live Signals</div>
       <div class="stage-desc">Real-time ML predictions with ICT confluence filters</div>
       <div class="stage-metrics">
-        <div class="metric"><span class="metric-label">Total Predictions</span><span class="metric-val" id="livePreds">—</span></div>
+        <div class="metric"><span class="metric-label">Total Predictions</span><span class="metric-val" id="livePreds">-</span></div>
         <div class="metric"><span class="metric-label">Retraining</span><span class="metric-val good">Weekly</span></div>
         <div class="metric"><span class="metric-label">Execution</span><span class="metric-val">MT5 / Paper</span></div>
         <div class="metric"><span class="metric-label">Backup</span><span class="metric-val">Azure</span></div>
@@ -136,7 +136,7 @@
         <div class="step-icon" style="background:rgba(255,107,53,0.15)">&#128202;</div>
         <h3>ICT Feature Engineering</h3>
       </div>
-      <p>Every bar is annotated with Order Blocks, Fair Value Gaps, Change of Character, OTE zones, PD arrays, kill zones, and IPDA liquidity levels — the same concepts used by institutional traders.</p>
+      <p>Every bar is annotated with Order Blocks, Fair Value Gaps, Change of Character, OTE zones, PD arrays, kill zones, and IPDA liquidity levels, the same concepts used by institutional traders.</p>
       <a class="cta" href="/model-metrics">View Model AUC Scores &rarr;</a>
     </div>
     <div class="step-card">
@@ -182,7 +182,7 @@
     const d = await (await fetch('/api/pipeline/stats')).json();
     if (!d.ok) return;
     // Research stage
-    document.getElementById('nModels').textContent = d.research.n_models || '—';
+    document.getElementById('nModels').textContent = d.research.n_models || '-';
     const auc = d.research.avg_auc;
     const aucEl = document.getElementById('avgAuc');
     if (auc) {
@@ -194,17 +194,17 @@
     const bts = d.backtest.sharpe;
     document.getElementById('btReturn').textContent = btr != null ? (btr >= 0 ? '+' : '') + btr.toFixed(1) + '%' : 'Run backtest';
     document.getElementById('btReturn').className = 'metric-val ' + (btr > 0 ? 'good' : btr < 0 ? '' : 'muted');
-    document.getElementById('btSharpe').textContent = bts != null ? bts.toFixed(2) : '—';
+    document.getElementById('btSharpe').textContent = bts != null ? bts.toFixed(2) : '-';
     // Paper stage
-    document.getElementById('paperOpen').textContent = d.paper.open ?? '—';
-    document.getElementById('paperTotal').textContent = d.paper.total ?? '—';
+    document.getElementById('paperOpen').textContent = d.paper.open ?? '-';
+    document.getElementById('paperTotal').textContent = d.paper.total ?? '-';
     const acc = d.paper.direction_acc;
     const accEl = document.getElementById('paperAcc');
-    accEl.textContent = acc != null ? acc + '%' : d.paper.checked < 3 ? 'Need data' : '—';
+    accEl.textContent = acc != null ? acc + '%' : d.paper.checked < 3 ? 'Need data' : '-';
     accEl.className = 'metric-val ' + (acc >= 60 ? 'good' : acc ? 'warn' : 'muted');
     document.getElementById('paperChecked').textContent = d.paper.checked ?? 0;
     // Live stage
-    document.getElementById('livePreds').textContent = d.live.total_predictions ?? '—';
+    document.getElementById('livePreds').textContent = d.live.total_predictions ?? '-';
   } catch(e) {}
 })();
 

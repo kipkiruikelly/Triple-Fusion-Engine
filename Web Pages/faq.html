@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FAQ, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35}
+    body{font-family:'Inter',sans-serif;font-size:10.5pt;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between}
+    .logo{font-size:14pt;font-weight:700;color:#fff;text-decoration:none}.logo span{color:var(--accent)}
+    .btn{padding:6px 14px;border-radius:6px;font-size:9pt;font-weight:600;text-decoration:none;color:var(--text);border:1px solid var(--border)}
+    .wrap{max-width:760px;margin:0 auto;padding:36px 20px;flex:1}
+    h1{font-size:18pt;margin-bottom:6px}
+    .sub{color:var(--muted);margin-bottom:28px}
+    details{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+    summary{padding:15px 18px;font-weight:600;font-size:10pt;cursor:pointer;list-style:none}
+    summary::before{content:"+";color:var(--accent);font-weight:700;margin-right:10px}
+    details[open] summary::before{content:"\2212"}
+    .a{padding:0 18px 16px 36px;color:var(--muted);font-size:9.5pt;line-height:1.75}
+    .a a{color:var(--accent);text-decoration:none}
+    footer{border-top:1px solid var(--border);padding:16px;text-align:center;font-size:8.5pt;color:var(--muted)}
+    footer a{color:var(--muted);text-decoration:none;margin:0 8px}
+  </style>
+</head>
+<body>
+<div class="topbar"><a href="/" class="logo">Bull<span>Logic</span></a><a href="/" class="btn">Back to app</a></div>
+<div class="wrap">
+  <h1>Frequently Asked Questions</h1>
+  <div class="sub">Everything you need to know about BullLogic, predictions, and payments.</div>
+
+  <details open><summary>How do BullLogic predictions work?</summary><div class="a">
+    We train machine learning models (Linear Regression, Random Forest, and XGBoost ensembles) on years
+    of historical price data and technical indicators for each supported asset. When you request a
+    prediction, the models analyze the latest market data and output a predicted price, a direction
+    (bullish or bearish), and a confidence score. Timeframes range from 1 minute to 1 day.
+  </div></details>
+
+  <details><summary>How accurate are the predictions?</summary><div class="a">
+    It varies by asset and timeframe, and we publish it all. Every prediction on the platform is
+    automatically graded against what the market actually did once its time horizon passes. See the
+    live numbers on our <a href="/track-record">Track Record</a> page. Models with too few graded
+    calls honestly show "insufficient data". No market prediction is ever guaranteed. Expect wrong
+    calls regularly, even from a good model.
+  </div></details>
+
+  <details><summary>Is this financial advice?</summary><div class="a">
+    No. BullLogic is an information and analytics tool. Nothing on the platform is a recommendation
+    to buy or sell any asset. You are solely responsible for your trading decisions and any gains or
+    losses. If you need personal financial advice, talk to a licensed advisor. Never trade money you
+    cannot afford to lose.
+  </div></details>
+
+  <details><summary>What assets can I get predictions for?</summary><div class="a">
+    Over 50 instruments: major US stocks (Apple, Microsoft, Tesla and more), ETFs (SPY, QQQ, GLD),
+    crypto (BTC, ETH, SOL), forex pairs (EURUSD, GBPUSD), commodities (gold, oil, silver) and global
+    indices (S&amp;P 500, Nasdaq 100, FTSE, DAX, Nikkei). The full list appears in the app sidebar.
+  </div></details>
+
+  <details><summary>How many free predictions do I get?</summary><div class="a">
+    Free accounts get 5 predictions per day, reset at midnight UTC. If a prediction fails because of
+    a data problem, it is not counted against your quota. Pro accounts have no daily limit.
+  </div></details>
+
+  <details><summary>How do I pay with M-Pesa?</summary><div class="a">
+    Go to Pricing, choose a plan, and enter your Safaricom number (07XX XXX XXX). You will receive an
+    STK prompt on your phone. Enter your M-Pesa PIN to approve. Your Pro access activates instantly
+    after Safaricom confirms the payment, and we email you a receipt with the M-Pesa reference number.
+  </div></details>
+
+  <details><summary>The M-Pesa prompt did not arrive or the payment failed. What now?</summary><div class="a">
+    Common causes: phone off or unlocked screen timeout, insufficient balance, wrong PIN, or an
+    existing M-Pesa session. Wait a minute and try again. If money left your account but Pro is not
+    active within 10 minutes, our system re-checks pending payments automatically. Still stuck?
+    Contact support with your M-Pesa confirmation SMS and we will resolve it.
+  </div></details>
+
+  <details><summary>What is your refund policy?</summary><div class="a">
+    Subscriptions can be refunded within 48 hours of payment if you have run fewer than 10 Pro
+    predictions in that period. Refunds are processed back to the paying M-Pesa number and may take
+    a few business days. See the <a href="/terms">Terms of Service</a> for full details.
+  </div></details>
+
+  <details><summary>Can I sign in with Google?</summary><div class="a">
+    Yes. Use the "Continue with Google" button on the sign-in page. If you already registered with
+    the same email address and a password, the Google sign-in links to your existing account, so you
+    keep your history and can use either method afterwards.
+  </div></details>
+
+  <details><summary>I forgot my password. How do I recover my account?</summary><div class="a">
+    Use "Forgot password?" on the sign-in page. We email a single-use reset link valid for 1 hour to
+    your registered address. For security, resetting your password signs you out of all other devices.
+    If you signed up with Google, just use the Google button instead.
+  </div></details>
+
+  <details><summary>Why must I verify my email?</summary><div class="a">
+    Verification proves the address belongs to you, protects your account recovery path, and is
+    required before running predictions or making payments. The link in the verification email is
+    valid for 24 hours and you can request a new one from the "check your inbox" screen.
+  </div></details>
+
+  <details><summary>Where does your market data come from?</summary><div class="a">
+    Live and historical prices come from Yahoo Finance, with Alpaca used for high-resolution
+    (1-minute) training data. When a data source is temporarily unavailable we show the most recent
+    cached prices with an honest banner rather than blank screens.
+  </div></details>
+
+  <details><summary>What do you do with my data?</summary><div class="a">
+    We store your account details, prediction history, and payment records to run the service.
+    We do not sell your personal data. Read the full <a href="/privacy-policy">Privacy Policy</a>,
+    which covers your rights under Kenya's Data Protection Act, 2019.
+  </div></details>
+
+  <details><summary>How do I cancel or delete my account?</summary><div class="a">
+    Pro plans purchased via M-Pesa are fixed-term (30 or 365 days) and simply do not renew unless you
+    pay again, so there is nothing to cancel. To delete your account and data, contact support from
+    your registered email and we will process the deletion within 30 days as required by law.
+  </div></details>
+</div>
+<footer>
+  <a href="/track-record">Track Record</a> · <a href="/faq">FAQ</a> ·
+  <a href="/privacy-policy">Privacy</a> · <a href="/terms">Terms</a>
+  <div style="margin-top:6px">BullLogic is not financial advice.</div>
+</footer>
+</body>
+</html>

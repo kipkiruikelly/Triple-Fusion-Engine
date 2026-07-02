@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Backtest — BullLogic</title>
+  <title>Backtest, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
@@ -391,34 +391,34 @@
             <div class="hero-ticker" id="r-ticker">AAPL</div>
             <div class="hero-meta">
               <span id="r-interval">1D</span> &nbsp;·&nbsp;
-              <span id="r-start">—</span> → <span id="r-end">—</span>
-              &nbsp;·&nbsp; <span id="r-bars">—</span> bars
-              &nbsp;·&nbsp; Capital: <span id="r-capital">—</span>
+              <span id="r-start">-</span> → <span id="r-end">-</span>
+              &nbsp;·&nbsp; <span id="r-bars">-</span> bars
+              &nbsp;·&nbsp; Capital: <span id="r-capital">-</span>
             </div>
           </div>
-          <div id="verdict-badge" class="verdict-badge verdict-neutral">—</div>
+          <div id="verdict-badge" class="verdict-badge verdict-neutral">-</div>
         </div>
 
         <!-- 4 billboard numbers -->
         <div class="hero-nums">
           <div class="hero-num">
             <div class="hn-label">Final Equity</div>
-            <div class="hn-value" id="hn-equity" style="color:var(--white);">—</div>
-            <div class="hn-sub">Started <b id="hn-capital">—</b></div>
+            <div class="hn-value" id="hn-equity" style="color:var(--white);">-</div>
+            <div class="hn-sub">Started <b id="hn-capital">-</b></div>
           </div>
           <div class="hero-num">
             <div class="hn-label">Total Return</div>
-            <div class="hn-value" id="hn-return">—</div>
+            <div class="hn-value" id="hn-return">-</div>
             <div class="hn-sub">Net strategy gain</div>
           </div>
           <div class="hero-num">
             <div class="hn-label">Profit Factor</div>
-            <div class="hn-value" id="hn-pf">—</div>
+            <div class="hn-value" id="hn-pf">-</div>
             <div class="hn-sub">Gross wins ÷ gross losses</div>
           </div>
           <div class="hero-num">
             <div class="hn-label">Sharpe Ratio</div>
-            <div class="hn-value" id="hn-sharpe">—</div>
+            <div class="hn-value" id="hn-sharpe">-</div>
             <div class="hn-sub">Risk-adjusted return</div>
           </div>
         </div>
@@ -432,27 +432,27 @@
           <div class="compare-bar-wrap">
             <div class="compare-bar" id="cbar-strat" style="background:var(--blue);width:0%;"></div>
           </div>
-          <div class="compare-pct" id="cpct-strat" style="color:var(--blue);">—</div>
+          <div class="compare-pct" id="cpct-strat" style="color:var(--blue);">-</div>
         </div>
         <div class="compare-row">
           <div class="compare-label" style="color:var(--muted);">Buy &amp; Hold</div>
           <div class="compare-bar-wrap">
             <div class="compare-bar" id="cbar-bh" style="background:var(--muted);width:0%;"></div>
           </div>
-          <div class="compare-pct" id="cpct-bh" style="color:var(--muted);">—</div>
+          <div class="compare-pct" id="cpct-bh" style="color:var(--muted);">-</div>
         </div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:28px;flex-wrap:wrap;">
           <div style="font-size:9.5pt;">
             <span style="color:var(--muted);">Alpha&nbsp;</span>
-            <span id="alpha-val" style="font-weight:800;font-size:11pt;">—</span>
+            <span id="alpha-val" style="font-weight:800;font-size:11pt;">-</span>
           </div>
           <div style="font-size:9.5pt;">
             <span style="color:var(--muted);">Max Drawdown&nbsp;</span>
-            <span id="dd-val" style="font-weight:800;font-size:11pt;color:var(--red);">—</span>
+            <span id="dd-val" style="font-weight:800;font-size:11pt;color:var(--red);">-</span>
           </div>
           <div style="font-size:9.5pt;">
             <span style="color:var(--muted);">Signals fired&nbsp;</span>
-            <span id="sig-val" style="font-weight:800;font-size:11pt;">—</span>
+            <span id="sig-val" style="font-weight:800;font-size:11pt;">-</span>
           </div>
         </div>
       </div>
@@ -462,36 +462,36 @@
 
         <div class="stat-card">
           <div class="sc-label">Win Rate</div>
-          <div class="sc-value" id="sc-winrate">—</div>
+          <div class="sc-value" id="sc-winrate">-</div>
           <div class="wl-bar-wrap">
             <div class="wl-bar-win"  id="wl-win"  style="width:0%;"></div>
             <div class="wl-bar-loss" id="wl-loss" style="width:100%;"></div>
           </div>
-          <div class="sc-sub" id="sc-wl-sub">— wins / — losses</div>
+          <div class="sc-sub" id="sc-wl-sub">, wins /, losses</div>
         </div>
 
         <div class="stat-card">
           <div class="sc-label">Avg Win / Avg Loss</div>
           <div class="sc-value" style="font-size:14pt;line-height:1.15;">
-            <span id="sc-avgwin" style="color:var(--green);">—</span>
+            <span id="sc-avgwin" style="color:var(--green);">-</span>
             <span style="color:var(--border);font-weight:400;font-size:10pt;"> / </span>
-            <span id="sc-avgloss" style="color:var(--red);">—</span>
+            <span id="sc-avgloss" style="color:var(--red);">-</span>
           </div>
-          <div class="sc-sub" id="sc-rr">Reward/Risk: —</div>
+          <div class="sc-sub" id="sc-rr">Reward/Risk:, </div>
         </div>
 
         <div class="stat-card">
           <div class="sc-label">Expectancy</div>
-          <div class="sc-value" id="sc-exp">—</div>
+          <div class="sc-value" id="sc-exp">-</div>
           <div class="sc-sub">Expected profit per trade</div>
         </div>
 
         <div class="stat-card">
           <div class="sc-label">Gross P&amp;L</div>
           <div class="sc-value" style="font-size:14pt;line-height:1.15;">
-            <span id="sc-gp" style="color:var(--green);">—</span>
+            <span id="sc-gp" style="color:var(--green);">-</span>
             <span style="color:var(--border);font-weight:400;font-size:10pt;"> / </span>
-            <span id="sc-gl" style="color:var(--red);">—</span>
+            <span id="sc-gl" style="color:var(--red);">-</span>
           </div>
           <div class="sc-sub">Total won / total lost</div>
         </div>
@@ -606,8 +606,8 @@
                 + (m.alpha > 0 ? 1 : 0);
     if (score >= 5) return ['Excellent Risk-Adjusted Return', 'verdict-excellent'];
     if (score >= 3) return ['Good Strategy Performance',     'verdict-good'];
-    if (score >= 2) return ['Neutral — Review Conditions',   'verdict-neutral'];
-    return             ['Underperforming — Needs Tuning',   'verdict-poor'];
+    if (score >= 2) return ['Neutral, Review Conditions',   'verdict-neutral'];
+    return             ['Underperforming, Needs Tuning',   'verdict-poor'];
   }
 
   /* ── Run ─────────────────────────────────────────────────────── */
@@ -810,7 +810,7 @@
       MONTHS.forEach(mo => {
         const v = years[yr][mo];
         if (v == null) {
-          td += `<td class="mr-zero">—</td>`;
+          td += `<td class="mr-zero">-</td>`;
         } else {
           const cls = v >= 3 ? 'mr-strong-win' : v > 0 ? 'mr-win'
                     : v <= -3 ? 'mr-strong-loss' : 'mr-loss';
@@ -872,7 +872,7 @@
         <td>${t.exit}</td>
         <td style="color:var(--red);font-size:9pt;">${t.sl}</td>
         <td style="color:var(--green);font-size:9pt;">${t.tp}</td>
-        <td style="white-space:nowrap;">${patHtml || '<span style="color:var(--muted);">—</span>'}</td>
+        <td style="white-space:nowrap;">${patHtml || '<span style="color:var(--muted);">-</span>'}</td>
         <td>${res}</td>
         <td class="${pc}">${t.pnl >= 0 ? '+' : ''}${fmt$(t.pnl)}</td>
       </tr>`;

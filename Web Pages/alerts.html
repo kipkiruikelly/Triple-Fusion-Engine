@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Price Alerts — BullLogic</title>
+  <title>Price Alerts, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -119,10 +119,10 @@
             <td style="font-weight:600;color:var(--accent)">{{a.ticker}}</td>
             <td>Price <strong>{{a.direction}}</strong></td>
             <td>${{"%.4f"|format(a.price)}}</td>
-            <td style="color:var(--muted)">{{a.note or '—'}}</td>
+            <td style="color:var(--muted)">{{a.note or '-'}}</td>
             <td><span class="badge {{'badge-triggered' if a.triggered else 'badge-active'}}">{{'Triggered' if a.triggered else 'Active'}}</span></td>
-            <td style="color:var(--muted);font-size:9pt">{{a.created_at.strftime('%b %d, %Y') if a.created_at else '—'}}</td>
-            <td style="color:var(--muted);font-size:9pt">{{a.triggered_at.strftime('%b %d %H:%M') if a.triggered_at else '—'}}</td>
+            <td style="color:var(--muted);font-size:9pt">{{a.created_at.strftime('%b %d, %Y') if a.created_at else '-'}}</td>
+            <td style="color:var(--muted);font-size:9pt">{{a.triggered_at.strftime('%b %d %H:%M') if a.triggered_at else '-'}}</td>
             <td><button class="del-btn" onclick="removeAlert({{a.id}})">Delete</button></td>
           </tr>
           {% endfor %}

@@ -1,10 +1,10 @@
-"""market_data.py — resilient, cached access to market data.
+"""market_data.py, resilient, cached access to market data.
 
 One choke-point for yfinance so the rest of the app gets:
-  • TTL caching (interval-aware) — N callers cost one Yahoo request
-  • stale-while-error — if Yahoo fails, serve the last good copy with
+  • TTL caching (interval-aware), N callers cost one Yahoo request
+  • stale-while-error, if Yahoo fails, serve the last good copy with
     an honest `as_of` timestamp instead of an error
-  • a global rate-limit circuit breaker — after a YFRateLimitError all
+  • a global rate-limit circuit breaker, after a YFRateLimitError all
     fetches back off for BREAKER_COOLDOWN_S instead of digging deeper
 
 Usage:
@@ -58,7 +58,7 @@ def data_status():
 
 
 def get_history(symbol, period="1y", interval="1d"):
-    """Return (DataFrame, meta) — raises ValueError only if there is no
+    """Return (DataFrame, meta), raises ValueError only if there is no
     live data AND nothing cached."""
     import yfinance as yf
     import pandas as pd
@@ -88,7 +88,7 @@ def get_history(symbol, period="1y", interval="1d"):
             if _is_rate_limit_error(e):
                 _trip_breaker()
 
-    if hit:   # stale fallback — old data beats no data, say so honestly
+    if hit:   # stale fallback, old data beats no data, say so honestly
         return hit[1], {"stale": True, "source": "cache",
                         "as_of": datetime.fromtimestamp(hit[0]).isoformat()}
     raise ValueError(f"No market data available for {symbol} "

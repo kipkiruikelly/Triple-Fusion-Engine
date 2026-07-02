@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BullLogic — Trading Platform</title>
+  <title>BullLogic, Trading Platform</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <meta name="theme-color" content="#FF6B35"/>
   <script>if(localStorage.getItem('bl-theme')==='light')document.documentElement.classList.add('light');</script>
@@ -810,7 +810,7 @@
   <!-- Main content -->
   <main class="content">
     <div class="page-title">Price Analysis</div>
-    <div class="page-subtitle">Quantitative price forecasting across 1-minute through daily timeframes — ICT structure, ensemble classifiers, and multi-timeframe confluence</div>
+    <div class="page-subtitle">Quantitative price forecasting across 1-minute through daily timeframes, ICT structure, ensemble classifiers, and multi-timeframe confluence</div>
 
     <!-- Search -->
     <div class="search-section">
@@ -879,7 +879,7 @@
       </div>
       <div class="stat-card">
         <div class="stat-label">Training Data</div>
-        <div class="stat-value">2024–Now</div>
+        <div class="stat-value">2024-Now</div>
         <div class="stat-sub">Alpaca 1m → resampled to all TFs</div>
       </div>
       <div class="stat-card">
@@ -897,7 +897,7 @@
     <!-- Pro ticker live signal grid -->
     <div class="info-section" style="margin-bottom:20px;" id="pro-signal-section">
       <div class="info-header" style="display:flex;align-items:center;justify-content:space-between;">
-        <span>Live Signals — Pro Models</span>
+        <span>Live Signals, Pro Models</span>
         <div style="display:flex;align-items:center;gap:8px;">
           <span id="sig-tf-label" style="font-size:8.5pt;color:var(--muted)">1d</span>
           <button onclick="refreshSignals()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:8.5pt;font-weight:600;padding:4px 10px;border-radius:4px;cursor:pointer;">Refresh</button>
@@ -909,8 +909,8 @@
           {% for sym in ['QQQ','AAPL','NVDA','TSLA','MSFT','GOOGL','META','AMZN','NDX','DIA'] %}
           <div class="pro-ticker-card" id="ptc-{{ sym }}" onclick="setTickerAndPredict('{{ sym }}')">
             <div class="ptc-sym">{{ sym }}</div>
-            <div class="ptc-action hold" id="ptc-action-{{ sym }}">—</div>
-            <div class="ptc-conf" id="ptc-conf-{{ sym }}">—</div>
+            <div class="ptc-action hold" id="ptc-action-{{ sym }}">-</div>
+            <div class="ptc-conf" id="ptc-conf-{{ sym }}">-</div>
           </div>
           {% endfor %}
         </div>
@@ -922,14 +922,14 @@
       <!-- Fear & Greed Gauge -->
       <div id="fg-card" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center">
         <div style="font-size:9pt;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:10px">Fear &amp; Greed</div>
-        <div id="fg-score" style="font-size:36pt;font-weight:700;color:var(--white)">—</div>
+        <div id="fg-score" style="font-size:36pt;font-weight:700;color:var(--white)">-</div>
         <div id="fg-label" style="font-size:11pt;font-weight:600;margin-bottom:10px;color:var(--muted)">Loading…</div>
         <div style="background:var(--surface2);border-radius:6px;overflow:hidden;height:8px;margin-bottom:10px">
           <div id="fg-bar" style="height:100%;width:50%;background:var(--accent);border-radius:6px;transition:width 0.5s,background 0.5s"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:8.5pt;color:var(--muted)">
-          <div>VIX: <span id="fg-vix" style="color:var(--text)">—</span></div>
-          <div>RSI: <span id="fg-rsi" style="color:var(--text)">—</span></div>
+          <div>VIX: <span id="fg-vix" style="color:var(--text)">-</span></div>
+          <div>RSI: <span id="fg-rsi" style="color:var(--text)">-</span></div>
         </div>
       </div>
       <!-- Live SSE Prices -->
@@ -959,18 +959,18 @@
         <div class="model-type">Classifier · ICT 2022</div>
         <div class="model-name">Logistic Regression</div>
         <div class="model-desc">Direction classifier trained on 153 ICT + TA features: Order Blocks, FVGs, CHoCH, OTE zones, IPDA levels, kill zones, and multi-timeframe context. Best AUC ~0.75.</div>
-        <span class="model-badge badge-lr">AUC 0.73–0.75 across all TFs</span>
+        <span class="model-badge badge-lr">AUC 0.73-0.75 across all TFs</span>
       </div>
       <div class="model-card">
         <div class="model-type">Ensemble · Walk-Forward</div>
         <div class="model-name">Random Forest</div>
         <div class="model-desc">200 decision trees trained on fractal 1m→7TF data. Captures non-linear ICT patterns including displacement candles, liquidity sweeps and Power of 3 phases.</div>
-        <span class="model-badge badge-rf">AUC 0.72–0.76 · max_depth=10</span>
+        <span class="model-badge badge-rf">AUC 0.72-0.76 · max_depth=10</span>
       </div>
       <div class="model-card">
         <div class="model-type">Boosted · 5-Fold TSS CV</div>
         <div class="model-name">XGBoost</div>
-        <div class="model-desc">Gradient-boosted classifier with 5-fold TimeSeriesSplit cross-validation. Primary confidence signal. Best on 1m–15m intraday timeframes with fractal MTF context.</div>
+        <div class="model-desc">Gradient-boosted classifier with 5-fold TimeSeriesSplit cross-validation. Primary confidence signal. Best on 1m-15m intraday timeframes with fractal MTF context.</div>
         <span class="model-badge badge-lstm">AUC 0.78 · Acc 70% (AAPL 1m)</span>
       </div>
     </div>
@@ -1207,26 +1207,26 @@
         </tr>
         <tr>
           <td>Lag Features</td>
-          <td>Close price lag 1–5, Return lag 1–3</td>
+          <td>Close price lag 1-5, Return lag 1-3</td>
         </tr>
         <tr>
           <td>ICT Structure</td>
           <td>Order Blocks, Fair Value Gaps, Market Structure, PD Arrays, Liquidity Sweeps</td>
         </tr>
         <tr>
-          <td>ICT 2022 — IPDA</td>
+          <td>ICT 2022, IPDA</td>
           <td>20 / 40 / 60-bar high &amp; low reference levels (6 features)</td>
         </tr>
         <tr>
-          <td>ICT 2022 — Liquidity</td>
+          <td>ICT 2022, Liquidity</td>
           <td>Equal Highs, Equal Lows (0.1% tolerance pools)</td>
         </tr>
         <tr>
-          <td>ICT 2022 — OTE / CE</td>
-          <td>Optimal Trade Entry zone (0.62–0.79 Fib), Consequent Encroachment of last FVG</td>
+          <td>ICT 2022, OTE / CE</td>
+          <td>Optimal Trade Entry zone (0.62-0.79 Fib), Consequent Encroachment of last FVG</td>
         </tr>
         <tr>
-          <td>ICT 2022 — Intraday</td>
+          <td>ICT 2022, Intraday</td>
           <td>Silver Bullet AM/PM, Asia session range, New Week Opening Gap</td>
         </tr>
         <tr>
@@ -1278,7 +1278,7 @@
     },
     analysis: {
       title: 'Model Performance Analysis',
-      body: '<p style="color:var(--muted);margin-bottom:16px;">AAPL test-set results with 57-feature ICT 2022 models (Jun 2026 retrain).</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><th style="padding:10px;text-align:left;color:var(--muted);font-size:9.5pt;">Model</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">MAE (daily)</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">MAE (1h)</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">R² (daily)</th></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">Linear Regression</td><td style="padding:10px;text-align:right;color:var(--green);">$3.44</td><td style="padding:10px;text-align:right;color:var(--green);">$1.09</td><td style="padding:10px;text-align:right;color:var(--text);">0.9438</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">Random Forest</td><td style="padding:10px;text-align:right;color:var(--green);">$3.23</td><td style="padding:10px;text-align:right;color:var(--green);">$1.07</td><td style="padding:10px;text-align:right;color:var(--text);">0.9438</td></tr><tr><td style="padding:10px;font-weight:600;color:var(--text);">LSTM Network</td><td style="padding:10px;text-align:right;color:var(--muted);">N/A (local)</td><td style="padding:10px;text-align:right;color:var(--muted);">N/A</td><td style="padding:10px;text-align:right;color:var(--muted);">—</td></tr></table><p style="color:var(--muted);font-size:9.5pt;margin-top:12px;">Features: 57 daily (TA + ICT 2022 IPDA/OTE/CE/EqualHL) · 76 intraday (+ Silver Bullet, Asia range, NWOG). Trained on 1,193 bars (AAPL 5yr).</p>'
+      body: '<p style="color:var(--muted);margin-bottom:16px;">AAPL test-set results with 57-feature ICT 2022 models (Jun 2026 retrain).</p><table style="width:100%;border-collapse:collapse;"><tr style="border-bottom:1px solid var(--border);"><th style="padding:10px;text-align:left;color:var(--muted);font-size:9.5pt;">Model</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">MAE (daily)</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">MAE (1h)</th><th style="padding:10px;text-align:right;color:var(--muted);font-size:9.5pt;">R² (daily)</th></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">Linear Regression</td><td style="padding:10px;text-align:right;color:var(--green);">$3.44</td><td style="padding:10px;text-align:right;color:var(--green);">$1.09</td><td style="padding:10px;text-align:right;color:var(--text);">0.9438</td></tr><tr style="border-bottom:1px solid var(--border);"><td style="padding:10px;font-weight:600;color:var(--text);">Random Forest</td><td style="padding:10px;text-align:right;color:var(--green);">$3.23</td><td style="padding:10px;text-align:right;color:var(--green);">$1.07</td><td style="padding:10px;text-align:right;color:var(--text);">0.9438</td></tr><tr><td style="padding:10px;font-weight:600;color:var(--text);">LSTM Network</td><td style="padding:10px;text-align:right;color:var(--muted);">N/A (local)</td><td style="padding:10px;text-align:right;color:var(--muted);">N/A</td><td style="padding:10px;text-align:right;color:var(--muted);">-</td></tr></table><p style="color:var(--muted);font-size:9.5pt;margin-top:12px;">Features: 57 daily (TA + ICT 2022 IPDA/OTE/CE/EqualHL) · 76 intraday (+ Silver Bullet, Asia range, NWOG). Trained on 1,193 bars (AAPL 5yr).</p>'
     },
     lr: {
       title: 'Linear Regression',
@@ -1483,7 +1483,7 @@ const _SIDEBAR_TICKERS = [
 ];
 
 function _fmtPrice(p) {
-  if (!p && p !== 0) return '—';
+  if (!p && p !== 0) return '-';
   if (p >= 1000) return p.toLocaleString('en-US', {maximumFractionDigits: 2});
   if (p >= 1)    return p.toFixed(2);
   return p.toFixed(4);
@@ -1539,9 +1539,17 @@ function toggleTheme() {
 }
 </script>
 
+<footer style="border-top:1px solid var(--border);margin-top:40px;padding:16px;text-align:center;font-size:8.5pt;color:var(--muted)">
+  <a href="/track-record" style="color:inherit;text-decoration:none;margin:0 8px">Track Record</a> ·
+  <a href="/faq" style="color:inherit;text-decoration:none;margin:0 8px">FAQ</a> ·
+  <a href="/privacy-policy" style="color:inherit;text-decoration:none;margin:0 8px">Privacy</a> ·
+  <a href="/terms" style="color:inherit;text-decoration:none;margin:0 8px">Terms</a>
+  <div style="margin-top:6px">BullLogic provides information, not financial advice.</div>
+</footer>
+
 <!-- Degraded market-data banner -->
 <div id="dataBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:900;background:#3a2f10;color:#EAB308;border-bottom:1px solid #EAB308;padding:7px 14px;font-size:9pt;text-align:center">
-  ⚠ Market data source is throttled — showing last known prices. Predictions still work but may use slightly delayed data.
+  ⚠ Market data source is throttled, showing last known prices. Predictions still work but may use slightly delayed data.
 </div>
 <script>
 (async () => {
@@ -1590,9 +1598,9 @@ async function fbSend() {
                             comment: document.getElementById('fbComment').value,
                             page: location.pathname})});
     const d = await r.json();
-    msg.textContent = d.ok ? d.message : (d.error || 'Failed — try again');
+    msg.textContent = d.ok ? d.message : (d.error || 'Failed, try again');
     if (d.ok) setTimeout(fbClose, 1500);
-  } catch (e) { msg.textContent = 'Network error — try again'; }
+  } catch (e) { msg.textContent = 'Network error, try again'; }
 }
 </script>
 </body>

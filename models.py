@@ -1,4 +1,4 @@
-"""models.py — all SQLAlchemy ORM models."""
+"""models.py, all SQLAlchemy ORM models."""
 
 from datetime import date, datetime
 from flask_login import UserMixin
@@ -21,6 +21,15 @@ class User(UserMixin, db.Model):
     status                  = db.Column(db.String(12), default='active')  # active|deactivated|banned
     created_at              = db.Column(db.DateTime, default=datetime.utcnow)
     last_seen               = db.Column(db.DateTime, nullable=True)
+    email_verified          = db.Column(db.Boolean, default=False)
+    auth_provider           = db.Column(db.String(10), default='local')   # local|google
+    google_sub              = db.Column(db.String(64), unique=True, nullable=True)
+    session_token           = db.Column(db.String(32), nullable=True)    # rotates to kill sessions
+
+    def get_id(self):
+        # flask-login session id carries the session_token; rotating the
+        # token after a password reset invalidates every other session.
+        return f"{self.id}:{self.session_token or ''}"
     predictions_today       = db.Column(db.Integer, default=0)
     last_prediction_date    = db.Column(db.Date, nullable=True)
     stripe_customer_id      = db.Column(db.String(64), nullable=True)
@@ -234,7 +243,7 @@ class TwoFactorAuth(db.Model):
 
 
 class AdminAuditLog(db.Model):
-    """Immutable log of every admin action — no delete/update path in the app."""
+    """Immutable log of every admin action, no delete/update path in the app."""
     id          = db.Column(db.Integer, primary_key=True)
     admin_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     action      = db.Column(db.String(50), nullable=False)    # e.g. 'login', 'user.ban', 'payment.refund'

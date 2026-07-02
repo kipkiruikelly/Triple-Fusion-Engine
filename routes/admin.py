@@ -1,4 +1,4 @@
-"""routes/admin.py — admin dashboard: auth, RBAC, pages, and JSON APIs.
+"""routes/admin.py, admin dashboard: auth, RBAC, pages, and JSON APIs.
 
 Roles (User.role): viewer (read-only) < support (user/payment/broadcast
 actions) < admin (settings, roles, tickers, models, deletes).
@@ -108,7 +108,7 @@ def admin_required(min_role="viewer"):
             auth_at = session.get("admin_auth_at", 0)
             if time.time() - auth_at > ADMIN_SESSION_MINUTES * 60:
                 session.pop("admin_auth_at", None)
-                return deny("Admin session expired — log in again", 401)
+                return deny("Admin session expired, log in again", 401)
             session["admin_auth_at"] = time.time()   # sliding refresh
 
             if request.method in ("POST", "PUT", "PATCH", "DELETE") and not _csrf_ok():
@@ -316,7 +316,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
         try:
             from market_data import data_status
             if data_status()["rate_limited"]:
-                alerts.append("Market data source is rate-limited — serving cached data")
+                alerts.append("Market data source is rate-limited, serving cached data")
         except Exception:
             pass
 

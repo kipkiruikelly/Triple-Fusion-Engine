@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Advanced Scanner — BullLogic</title>
+  <title>Advanced Scanner, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -116,7 +116,7 @@
 
 <div class="main">
   <div class="page-title">Advanced Scanner</div>
-  <div class="page-sub">Volume anomalies, short squeeze candidates, and sector rotation — updated on demand</div>
+  <div class="page-sub">Volume anomalies, short squeeze candidates, and sector rotation, updated on demand</div>
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('volume', this)">Volume Anomaly</button>
@@ -164,7 +164,7 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div>
           <div class="card-title">Sector Rotation Heatmap</div>
-          <div class="card-sub">SPDR sector ETF performance — 1-day and 5-day</div>
+          <div class="card-sub">SPDR sector ETF performance, 1-day and 5-day</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <span style="font-size:9pt;color:var(--muted)">Sort by:</span>
@@ -194,7 +194,7 @@ function switchTab(name, btn) {
 }
 
 function fmtNum(n, dec=2) {
-  if (n == null) return '—';
+  if (n == null) return '-';
   return Number(n).toLocaleString(undefined, {minimumFractionDigits: dec, maximumFractionDigits: dec});
 }
 
@@ -261,7 +261,7 @@ async function loadSqueeze() {
         <td>$${fmtNum(row.price)}</td>
         <td><strong>${fmtNum(row.short_float_pct, 1)}%</strong></td>
         <td>${fmtNum(row.days_to_cover, 1)} days</td>
-        <td style="color:${rsiColor}">${row.rsi ?? '—'}</td>
+        <td style="color:${rsiColor}">${row.rsi ?? '-'}</td>
         <td class="${momCC}">${momSign}${fmtNum(row.momentum_5d)}%</td>
         <td><strong style="color:${scoreColor}">${fmtNum(row.squeeze_score, 1)}</strong></td>
       </tr>`;

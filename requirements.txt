@@ -21,3 +21,5 @@ mt5linux
 metaapi-cloud-sdk
 pyotp>=2.9.0
 pytest>=8.0  # dev/test only
+authlib>=1.7
+email-validator>=2.2

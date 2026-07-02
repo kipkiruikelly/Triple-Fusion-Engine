@@ -1,13 +1,13 @@
 """
-mpesa.py — Safaricom Daraja API wrapper (STK Push / Lipa na M-Pesa Online)
+mpesa.py, Safaricom Daraja API wrapper (STK Push / Lipa na M-Pesa Online)
 
 Environment variables required:
-    MPESA_CONSUMER_KEY      — from developer.safaricom.co.ke app
-    MPESA_CONSUMER_SECRET   — from developer.safaricom.co.ke app
-    MPESA_SHORTCODE         — your Paybill or Till number
-    MPESA_PASSKEY           — from Safaricom portal (sandbox or live)
-    MPESA_CALLBACK_URL      — public HTTPS URL, e.g. https://kali.tail3ceaef.ts.net/mpesa/callback
-    MPESA_ENV               — "sandbox" (default) or "production"
+    MPESA_CONSUMER_KEY     , from developer.safaricom.co.ke app
+    MPESA_CONSUMER_SECRET  , from developer.safaricom.co.ke app
+    MPESA_SHORTCODE        , your Paybill or Till number
+    MPESA_PASSKEY          , from Safaricom portal (sandbox or live)
+    MPESA_CALLBACK_URL     , public HTTPS URL, e.g. https://kali.tail3ceaef.ts.net/mpesa/callback
+    MPESA_ENV              , "sandbox" (default) or "production"
 """
 
 import os
@@ -57,17 +57,17 @@ def stk_push(phone: str, amount: int, account_ref: str, description: str) -> dic
     """
     Initiate Lipa na M-Pesa Online (STK Push).
 
-    phone       — customer phone, format 254XXXXXXXXX
-    amount      — integer KES amount
-    account_ref — shown on customer's phone (e.g. "BullLogic Pro")
-    description — shown on customer's phone (e.g. "30-day Pro access")
+    phone      , customer phone, format 254XXXXXXXXX
+    amount     , integer KES amount
+    account_ref, shown on customer's phone (e.g. "BullLogic Pro")
+    description, shown on customer's phone (e.g. "30-day Pro access")
 
     Returns Safaricom's response dict. Key fields:
-        CheckoutRequestID — store this to match the callback
+        CheckoutRequestID, store this to match the callback
         ResponseCode == "0" means request accepted (not yet paid)
     """
     if not MPESA_OK:
-        raise RuntimeError("M-Pesa not configured — set MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, MPESA_CALLBACK_URL")
+        raise RuntimeError("M-Pesa not configured, set MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, MPESA_CALLBACK_URL")
 
     token       = _get_token()
     password, ts = _password_and_timestamp()

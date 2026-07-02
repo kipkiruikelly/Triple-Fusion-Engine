@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Market Screener — BullLogic</title>
+  <title>Market Screener, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -83,13 +83,13 @@
 
 <div class="container">
   <h1>Market Screener</h1>
-  <p class="subtitle">Real-time ML signals across all covered tickers — sorted by confidence.</p>
+  <p class="subtitle">Real-time ML signals across all covered tickers, sorted by confidence.</p>
 
   <div class="stat-row" id="summaryCards">
-    <div class="stat-card"><div class="stat-label">Buy Signals</div><div class="stat-val green" id="sumBuy">—</div></div>
-    <div class="stat-card"><div class="stat-label">Sell Signals</div><div class="stat-val red" id="sumSell">—</div></div>
-    <div class="stat-card"><div class="stat-label">Hold</div><div class="stat-val muted" id="sumHold">—</div></div>
-    <div class="stat-card"><div class="stat-label">Avg Confidence</div><div class="stat-val" id="sumConf">—</div></div>
+    <div class="stat-card"><div class="stat-label">Buy Signals</div><div class="stat-val green" id="sumBuy">-</div></div>
+    <div class="stat-card"><div class="stat-label">Sell Signals</div><div class="stat-val red" id="sumSell">-</div></div>
+    <div class="stat-card"><div class="stat-label">Hold</div><div class="stat-val muted" id="sumHold">-</div></div>
+    <div class="stat-card"><div class="stat-label">Avg Confidence</div><div class="stat-val" id="sumConf">-</div></div>
   </div>
 
   <div class="controls">
@@ -161,7 +161,7 @@ function updateSummary() {
   const buy  = _rows.filter(r => r.action === 'BUY').length;
   const sell = _rows.filter(r => r.action === 'SELL').length;
   const hold = _rows.filter(r => r.action === 'HOLD').length;
-  const avgConf = _rows.length ? (_rows.reduce((a,r) => a + r.confidence, 0) / _rows.length).toFixed(1) : '—';
+  const avgConf = _rows.length ? (_rows.reduce((a,r) => a + r.confidence, 0) / _rows.length).toFixed(1) : '-';
   document.getElementById('sumBuy').textContent  = buy;
   document.getElementById('sumSell').textContent = sell;
   document.getElementById('sumHold').textContent = hold;

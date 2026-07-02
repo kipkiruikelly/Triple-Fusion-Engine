@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MT5 Algo Trading — BullLogic</title>
+  <title>MT5 Algo Trading, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -166,7 +166,7 @@
         <!-- MetaApi fields -->
         <div id="fieldsMetaapi">
           <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:6px;padding:10px;margin-bottom:12px;font-size:8.5pt;line-height:1.6;color:var(--blue);">
-            <strong>MetaApi Cloud</strong> — works on Mac, Linux &amp; Windows.<br>
+            <strong>MetaApi Cloud</strong>, works on Mac, Linux &amp; Windows.<br>
             1. Sign up at <strong>metaapi.cloud</strong> (free tier available)<br>
             2. Add your broker MT5 account in the dashboard<br>
             3. Paste your Token + Account ID below
@@ -184,7 +184,7 @@
         <!-- Paper fields -->
         <div id="fieldsPaper" style="display:none;">
           <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:6px;padding:10px;margin-bottom:12px;font-size:8.5pt;line-height:1.6;color:var(--yellow);">
-            <strong>Paper Trading</strong> — $10,000 virtual balance,<br>
+            <strong>Paper Trading</strong>, $10,000 virtual balance,<br>
             real market data via yfinance. No broker needed.
           </div>
         </div>
@@ -239,10 +239,10 @@
         <div class="form-group">
           <label class="form-label">Timeframe</label>
           <select class="form-select" id="timeframe">
-            <option value="M1">M1 — 1 minute</option>
-            <option value="M5" selected>M5 — 5 minutes</option>
-            <option value="M15">M15 — 15 minutes</option>
-            <option value="H1">H1 — 1 hour</option>
+            <option value="M1">M1, 1 minute</option>
+            <option value="M5" selected>M5, 5 minutes</option>
+            <option value="M15">M15, 15 minutes</option>
+            <option value="H1">H1, 1 hour</option>
           </select>
         </div>
         <div class="form-group">
@@ -282,22 +282,22 @@
           <div class="sig-card">
             <div class="sig-label">Signal</div>
             <div class="sig-value"><span class="action-badge badge-hold" id="sigAction">HOLD</span></div>
-            <div class="sig-sub" id="sigScore">Score: —</div>
+            <div class="sig-sub" id="sigScore">Score:, </div>
           </div>
           <div class="sig-card">
             <div class="sig-label">RSI (14)</div>
-            <div class="sig-value" id="sigRsi">—</div>
-            <div class="sig-sub" id="sigRsiLabel">—</div>
+            <div class="sig-value" id="sigRsi">-</div>
+            <div class="sig-sub" id="sigRsiLabel">-</div>
           </div>
           <div class="sig-card">
             <div class="sig-label">MACD Histogram</div>
-            <div class="sig-value" id="sigMacd" style="font-size:13pt;">—</div>
-            <div class="sig-sub" id="sigMacdLabel">—</div>
+            <div class="sig-value" id="sigMacd" style="font-size:13pt;">-</div>
+            <div class="sig-sub" id="sigMacdLabel">-</div>
           </div>
           <div class="sig-card">
             <div class="sig-label">ATR (14)</div>
-            <div class="sig-value" id="sigAtr" style="font-size:13pt;">—</div>
-            <div class="sig-sub" id="sigPrice">Price: —</div>
+            <div class="sig-value" id="sigAtr" style="font-size:13pt;">-</div>
+            <div class="sig-sub" id="sigPrice">Price:, </div>
           </div>
         </div>
 
@@ -307,23 +307,23 @@
           <div class="signal-grid">
             <div class="sig-card">
               <div class="sig-label">ML Direction</div>
-              <div class="sig-value"><span class="action-badge badge-hold" id="mlAction">—</span></div>
-              <div class="sig-sub" id="mlConf">Confidence: —</div>
+              <div class="sig-value"><span class="action-badge badge-hold" id="mlAction">-</span></div>
+              <div class="sig-sub" id="mlConf">Confidence:, </div>
             </div>
             <div class="sig-card">
               <div class="sig-label">LR Next Close</div>
-              <div class="sig-value" id="mlLr" style="font-size:14pt;">—</div>
-              <div class="sig-sub" id="mlLrDelta">vs current: —</div>
+              <div class="sig-value" id="mlLr" style="font-size:14pt;">-</div>
+              <div class="sig-sub" id="mlLrDelta">vs current:, </div>
             </div>
             <div class="sig-card">
               <div class="sig-label">RF Predicted Return</div>
-              <div class="sig-value" id="mlRf" style="font-size:14pt;">—</div>
-              <div class="sig-sub" id="mlRfClose">Next close: —</div>
+              <div class="sig-value" id="mlRf" style="font-size:14pt;">-</div>
+              <div class="sig-sub" id="mlRfClose">Next close:, </div>
             </div>
             <div class="sig-card">
               <div class="sig-label">Current Price</div>
-              <div class="sig-value" id="mlPrice" style="font-size:14pt;">—</div>
-              <div class="sig-sub" id="mlReason" style="font-size:7.5pt;line-height:1.4;word-break:break-word;">—</div>
+              <div class="sig-value" id="mlPrice" style="font-size:14pt;">-</div>
+              <div class="sig-sub" id="mlReason" style="font-size:7.5pt;line-height:1.4;word-break:break-word;">-</div>
             </div>
           </div>
         </div>
@@ -524,32 +524,32 @@
     const rsi = sig.rsi ?? 50;
     document.getElementById('sigRsi').textContent        = rsi;
     document.getElementById('sigRsiLabel').textContent   = rsi < 30 ? 'Oversold' : rsi > 70 ? 'Overbought' : 'Neutral';
-    document.getElementById('sigMacd').textContent       = sig.macd ?? '—';
+    document.getElementById('sigMacd').textContent       = sig.macd ?? '-';
     document.getElementById('sigMacdLabel').textContent  = (sig.macd ?? 0) > 0 ? 'Bullish' : 'Bearish';
-    document.getElementById('sigAtr').textContent        = sig.atr ?? '—';
-    document.getElementById('sigPrice').textContent      = 'Price: ' + (sig.price ?? '—');
+    document.getElementById('sigAtr').textContent        = sig.atr ?? '-';
+    document.getElementById('sigPrice').textContent      = 'Price: ' + (sig.price ?? '-');
 
-    // ML panel — show if ML data present
+    // ML panel, show if ML data present
     if (ml && ml.action) {
       document.getElementById('mlRow').style.display  = '';
       document.getElementById('mlBadge').style.display = '';
       const mla = document.getElementById('mlAction');
       mla.textContent = ml.action;
       mla.className   = badge(ml.action);
-      document.getElementById('mlConf').textContent    = 'Confidence: ' + (ml.confidence ?? '—') + '%';
+      document.getElementById('mlConf').textContent    = 'Confidence: ' + (ml.confidence ?? '-') + '%';
 
       const price = sig.price || ml.current_price || 0;
       const lr    = ml.lr_pred ?? 0;
       const rfp   = ml.rf_pred ?? 0;
       const rfr   = (ml.rf_ret ?? ((rfp - price) / price * 100));
-      document.getElementById('mlLr').textContent     = lr ? '$' + lr.toFixed(2) : '—';
+      document.getElementById('mlLr').textContent     = lr ? '$' + lr.toFixed(2) : '-';
       document.getElementById('mlLrDelta').textContent = price
         ? (lr - price >= 0 ? '+' : '') + (lr - price).toFixed(2) + ' (' + ((lr/price-1)*100).toFixed(2) + '%)'
-        : '—';
-      document.getElementById('mlRf').textContent     = rfr ? (rfr >= 0 ? '+' : '') + rfr.toFixed(3) + '%' : '—';
-      document.getElementById('mlRfClose').textContent = rfp ? 'Next close: $' + rfp.toFixed(2) : '—';
-      document.getElementById('mlPrice').textContent  = price ? '$' + price.toFixed(2) : '—';
-      document.getElementById('mlReason').textContent = sig.reason || '—';
+        : '-';
+      document.getElementById('mlRf').textContent     = rfr ? (rfr >= 0 ? '+' : '') + rfr.toFixed(3) + '%' : '-';
+      document.getElementById('mlRfClose').textContent = rfp ? 'Next close: $' + rfp.toFixed(2) : '-';
+      document.getElementById('mlPrice').textContent  = price ? '$' + price.toFixed(2) : '-';
+      document.getElementById('mlReason').textContent = sig.reason || '-';
     }
   }
 

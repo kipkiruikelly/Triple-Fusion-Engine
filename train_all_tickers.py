@@ -7,9 +7,9 @@ Train LR + RF models for all supported tickers in parallel.
 - Supports daily (1d) and intraday (1h, 15m) intervals
 
 Intervals and yfinance history limits:
-  1d  — unlimited history   (use period="max" for NDX/QQQ)
-  1h  — 730 days            (ICT kill zones + FVG/OB work properly)
-  15m — 60 days             (very short; mainly for backtesting)
+  1d , unlimited history   (use period="max" for NDX/QQQ)
+  1h , 730 days            (ICT kill zones + FVG/OB work properly)
+  15m, 60 days             (very short; mainly for backtesting)
 
 Usage:
     python train_all_tickers.py
@@ -193,7 +193,7 @@ DAILY_FEATURE_COLS = [
     "Volume_SMA_10", "Daily_Return",
     "Close_lag_1", "Close_lag_2", "Close_lag_3", "Close_lag_4", "Close_lag_5",
     "Return_lag_1", "Return_lag_2", "Return_lag_3",
-    # ICT — daily-timeframe signals
+    # ICT, daily-timeframe signals
     "Above_200SMA", "Dist_200SMA",
     "Body_Ratio", "Displacement",
     "Dist_to_SH", "Dist_to_SL", "Structure_Bullish",
@@ -203,7 +203,7 @@ DAILY_FEATURE_COLS = [
     "Dist_PWH", "Dist_PWL",
     "Swept_High", "Swept_Low",
     "Quarter_Sin", "Quarter_Cos", "Month_Sin", "Month_Cos",
-    # ICT 2022 — IPDA, Equal H/L, OTE, CE
+    # ICT 2022, IPDA, Equal H/L, OTE, CE
     "IPDA_20_High_Dist", "IPDA_20_Low_Dist",
     "IPDA_40_High_Dist", "IPDA_40_Low_Dist",
     "IPDA_60_High_Dist", "IPDA_60_Low_Dist",
@@ -382,24 +382,24 @@ def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
-    # ICT 2022 — IPDA lookback levels (20 / 40 / 60 bars)
+    # ICT 2022, IPDA lookback levels (20 / 40 / 60 bars)
     for n in [20, 40, 60]:
         df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
         df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
 
-    # ICT 2022 — Equal Highs / Equal Lows (liquidity pools)
+    # ICT 2022, Equal Highs / Equal Lows (liquidity pools)
     tol   = close * 0.001
     r10h  = high.rolling(10).max().shift(1)
     r10l  = low.rolling(10).min().shift(1)
     df["Equal_Highs"] = ((high - r10h).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
     df["Equal_Lows"]  = ((low  - r10l).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
 
-    # ICT 2022 — OTE zone (Optimal Trade Entry: 0.62–0.79 Fibonacci of 20-bar swing)
+    # ICT 2022, OTE zone (Optimal Trade Entry: 0.62-0.79 Fibonacci of 20-bar swing)
     rng20 = (sh20 - sl20).replace(0, np.nan)
     df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
     df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
 
-    # ICT 2022 — Consequent Encroachment (CE) of most recent FVG midpoint
+    # ICT 2022, Consequent Encroachment (CE) of most recent FVG midpoint
     bull_ce_level = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
     bear_ce_level = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
     df["CE_Bull_FVG_Dist"] = ((close - bull_ce_level) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
@@ -412,7 +412,7 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     """
     Intraday-only ICT features.
 
-    Kill zones are based on New York (ET) session times — converted from
+    Kill zones are based on New York (ET) session times, converted from
     whatever tz yfinance returns (usually UTC for intraday).
     """
     idx = df.index
@@ -431,7 +431,7 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     df["In_NY_Open_KZ"] = ((hour >= 9)  & (hour < 11)).astype(int)  # 09:30-11:00 ET
     df["In_NY_PM_KZ"]   = ((hour >= 13) & (hour < 15)).astype(int)  # 13:00-15:00 ET (London close)
 
-    # Midnight open — first price of each calendar day (ET)
+    # Midnight open, first price of each calendar day (ET)
     date_str = pd.Series(et_idx.date, index=df.index)
     midnight_open = (
         df.groupby(date_str)["Open"]
@@ -454,11 +454,11 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     df["Day_Sin"] = np.sin(2 * np.pi * dow / 5)
     df["Day_Cos"] = np.cos(2 * np.pi * dow / 5)
 
-    # ICT 2022 — Silver Bullet windows (ET)
-    df["In_SilverBullet_AM"] = ((hour >= 10) & (hour < 11)).astype(int)  # 10–11 AM
-    df["In_SilverBullet_PM"] = ((hour >= 14) & (hour < 15)).astype(int)  # 2–3 PM
+    # ICT 2022, Silver Bullet windows (ET)
+    df["In_SilverBullet_AM"] = ((hour >= 10) & (hour < 11)).astype(int)  # 10-11 AM
+    df["In_SilverBullet_PM"] = ((hour >= 14) & (hour < 15)).astype(int)  # 2-3 PM
 
-    # ICT 2022 — Asia session range (8 PM – 2 AM ET)
+    # ICT 2022, Asia session range (8 PM - 2 AM ET)
     is_asia = (hour >= 20) | (hour < 2)
     atr_h2 = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"], window=14) \
                .average_true_range().fillna(df["Close"] * 0.01)
@@ -470,7 +470,7 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     df["Price_vs_AsiaHigh"] = (df["Close"] > asia_high_ref).astype(int)
     df["Price_vs_AsiaLow"]  = (df["Close"] < asia_low_ref).astype(int)
 
-    # ICT 2022 — New Week Opening Gap (Monday open vs previous Friday close)
+    # ICT 2022, New Week Opening Gap (Monday open vs previous Friday close)
     is_monday  = (et_idx.dayofweek == 0)
     prev_close = df["Close"].shift(1)
     nwog_open  = df["Open"].where(is_monday).ffill()
@@ -657,7 +657,7 @@ def train_ticker(ticker: str, interval: str = "1d",
     # ── XGBoost direction classifier ───────────────────────────────────────────
     xgb_cv_acc = xgb_test_acc = xgb_auc = None
     if _XGB_AVAILABLE:
-        X_raw = df[feat].values          # unscaled — rescaled per CV fold
+        X_raw = df[feat].values          # unscaled, rescaled per CV fold
         y_dir = (df["Next_Return"].values > 0).astype(int)
 
         # 5-fold walk-forward CV on training portion (no data leakage)
@@ -725,7 +725,7 @@ def main():
     parser.add_argument("--upload",   action="store_true",
                         help="Upload models to Azure after training")
     parser.add_argument("--fast",     action="store_true",
-                        help="RF-50/depth-6 — faster, slightly lower accuracy")
+                        help="RF-50/depth-6, faster, slightly lower accuracy")
     parser.add_argument("--workers",      type=int, default=None,
                         help="Max parallel workers (default: one per ticker)")
     parser.add_argument("--skip-existing", action="store_true",

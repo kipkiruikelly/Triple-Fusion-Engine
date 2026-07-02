@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="csrf" content="{{ session.get('csrf_token','') }}"/>
-  <title>{% block title %}Admin{% endblock %} — BullLogic Admin</title>
+  <title>{% block title %}Admin{% endblock %}, BullLogic Admin</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
@@ -212,8 +212,8 @@ function closeModal() { document.getElementById('modal-bg').classList.remove('op
 document.getElementById('modal-ok').onclick = () => { const cb = _modalCb; closeModal(); if (cb) cb(); };
 document.getElementById('modal-bg').onclick = e => { if (e.target.id === 'modal-bg') closeModal(); };
 
-function fmtDate(iso) { if (!iso) return '—'; const d = new Date(iso); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-function fmtDay(iso) { return iso ? new Date(iso).toLocaleDateString() : '—'; }
+function fmtDate(iso) { if (!iso) return '-'; const d = new Date(iso); return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+function fmtDay(iso) { return iso ? new Date(iso).toLocaleDateString() : '-'; }
 function fmtNum(n) { return (n ?? 0).toLocaleString(); }
 function skelRows(tbody, cols, n = 5) {
   tbody.innerHTML = Array.from({length: n}, () =>

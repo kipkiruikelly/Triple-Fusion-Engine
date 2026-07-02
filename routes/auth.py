@@ -1,4 +1,4 @@
-"""routes/auth.py — authentication, account, 2FA, API keys, webhooks."""
+"""routes/auth.py, authentication, account, 2FA, API keys, webhooks."""
 
 import json as _json
 import os
@@ -24,8 +24,134 @@ except ImportError:
 
 _API_DAILY_LIMIT = 100
 
+GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_OK            = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
+VERIFY_TOKEN_MAX_AGE_S = 24 * 3600      # verification links live 24h
+
+
+def _clean_email(raw):
+    """Validate, normalize and return an email address, or (None, error)."""
+    from email_validator import validate_email, EmailNotValidError
+    try:
+        result = validate_email((raw or "").strip(), check_deliverability=False)
+        return result.normalized.lower(), None
+    except EmailNotValidError as e:
+        return None, str(e)
+
+
+def _unique_username(base):
+    from models import User
+    base = "".join(c for c in (base or "trader") if c.isalnum() or c in "._-")[:30] or "trader"
+    name = base
+    n = 1
+    while User.query.filter_by(username=name).first():
+        n += 1
+        name = f"{base}{n}"
+    return name
+
 
 def register_auth_routes(app):
+
+    from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+
+    def _verify_serializer():
+        return URLSafeTimedSerializer(app.secret_key, salt="email-verify")
+
+    def _make_verify_token(user):
+        return _verify_serializer().dumps({"uid": user.id, "email": user.email})
+
+    def _load_verify_token(token, max_age=VERIFY_TOKEN_MAX_AGE_S):
+        """Returns (payload, error) where error is 'expired' or 'invalid'."""
+        try:
+            return _verify_serializer().loads(token, max_age=max_age), None
+        except SignatureExpired:
+            return None, "expired"
+        except BadSignature:
+            return None, "invalid"
+
+    def _send_verification_email(user):
+        import emails
+        url = request.host_url.rstrip("/") + url_for(
+            "verify_email", token=_make_verify_token(user))
+        return emails.send_verification(app, user, url)
+
+    app.jinja_env.globals["google_enabled"] = GOOGLE_OK
+
+    # expose token helpers for tests
+    app.extensions.setdefault("bulllogic", {})["load_verify_token"] = _load_verify_token
+    app.extensions["bulllogic"]["make_verify_token"] = _make_verify_token
+
+    # ── Google OAuth 2.0 (authorization-code flow via Authlib) ────────────────
+
+    if GOOGLE_OK:
+        from authlib.integrations.flask_client import OAuth
+        _oauth = OAuth(app)
+        _oauth.register(
+            "google",
+            client_id=GOOGLE_CLIENT_ID,
+            client_secret=GOOGLE_CLIENT_SECRET,
+            server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+            client_kwargs={"scope": "openid email profile"},
+        )
+        app.extensions["bulllogic"]["oauth"] = _oauth
+
+    @app.route("/auth/google")
+    def google_login():
+        if not GOOGLE_OK:
+            return redirect(url_for("login"))
+        oauth = app.extensions["bulllogic"]["oauth"]
+        redirect_uri = request.host_url.rstrip("/") + url_for("google_callback")
+        return oauth.google.authorize_redirect(redirect_uri)
+
+    @app.route("/auth/google/callback")
+    def google_callback():
+        if not GOOGLE_OK:
+            return redirect(url_for("login"))
+        oauth = app.extensions["bulllogic"]["oauth"]
+        try:
+            token = oauth.google.authorize_access_token()
+            info  = token.get("userinfo") or {}
+        except Exception:
+            return render_template("login.html",
+                                   error="Google sign-in failed. Try again or use your password."), 400
+        return _finish_google_login(info)
+
+    def _finish_google_login(info):
+        """Shared by the real callback and tests. `info` is the verified
+        OpenID payload (sub, email, name, email_verified)."""
+        sub   = str(info.get("sub") or "")
+        email = (info.get("email") or "").strip().lower()
+        if not sub or not email:
+            return render_template("login.html",
+                                   error="Google did not return a usable account."), 400
+
+        user = User.query.filter_by(google_sub=sub).first()
+        if not user:
+            # Same email registered with a password: link the accounts
+            # rather than creating a duplicate.
+            user = User.query.filter_by(email=email).first()
+            if user:
+                user.google_sub = sub
+                user.email_verified = True
+            else:
+                user = User(username=_unique_username(
+                                (info.get("name") or email.split("@")[0]).replace(" ", "").lower()),
+                            email=email, auth_provider="google",
+                            google_sub=sub, email_verified=True)
+                user.set_password(secrets.token_urlsafe(24))  # unusable, OAuth-only
+                db.session.add(user)
+            db.session.commit()
+
+        if (user.status or "active") != "active":
+            return render_template("login.html",
+                                   error="This account has been suspended."), 403
+        login_user(user, remember=True)
+        _log_activity(user.id, "login.google")
+        return redirect(url_for("home"))
+
+    app.extensions["bulllogic"]["finish_google_login"] = _finish_google_login
 
     # ── Login / Register / Logout ──────────────────────────────────────────────
 
@@ -75,13 +201,19 @@ def register_auth_routes(app):
                 return render_template("register.html",
                                        error="Too many signups from this network. Try later."), 429
             username = request.form.get("username", "").strip()
-            email    = request.form.get("email", "").strip().lower()
+            raw_email = request.form.get("email", "")
             password = request.form.get("password", "")
             confirm  = request.form.get("confirm", "")
-            if not username or not email or not password:
+            agreed   = request.form.get("agree_terms")
+            email, email_err = _clean_email(raw_email)
+            if not username or not raw_email or not password:
                 error = "All fields are required."
+            elif not agreed:
+                error = "You must agree to the Terms of Service and Privacy Policy."
             elif len(username) < 3:
                 error = "Username must be at least 3 characters."
+            elif email_err:
+                error = "Enter a valid email address."
             elif len(password) < 8:
                 error = "Password must be at least 8 characters."
             elif password != confirm:
@@ -91,13 +223,59 @@ def register_auth_routes(app):
             elif User.query.filter_by(email=email).first():
                 error = "An account with that email already exists."
             else:
-                user = User(username=username, email=email)
+                user = User(username=username, email=email, email_verified=False)
                 user.set_password(password)
                 db.session.add(user)
                 db.session.commit()
                 login_user(user, remember=True)
-                return redirect(url_for('home'))
+                _send_verification_email(user)
+                return redirect(url_for("verify_notice"))
         return render_template("register.html", error=error)
+
+    # ── Email verification ─────────────────────────────────────────────────────
+
+    @app.route("/verify-notice")
+    @login_required
+    def verify_notice():
+        if current_user.email_verified:
+            return redirect(url_for("home"))
+        return render_template("verify_notice.html", email=current_user.email)
+
+    @app.route("/verify-email/<token>")
+    def verify_email(token):
+        payload, err = _load_verify_token(token)
+        if err:
+            return render_template("verify_notice.html",
+                                   email=current_user.email if current_user.is_authenticated else "",
+                                   token_error=("This link has expired. Request a new one below."
+                                                if err == "expired" else
+                                                "This verification link is not valid.")), 400
+        user = db.session.get(User, payload.get("uid", 0))
+        if not user or user.email != payload.get("email"):
+            return render_template("verify_notice.html", email="",
+                                   token_error="This verification link is not valid."), 400
+        if not user.email_verified:
+            user.email_verified = True
+            db.session.commit()
+            _log_activity(user.id, "email.verified")
+        if not current_user.is_authenticated:
+            login_user(user, remember=True)
+        return redirect(url_for("home"))
+
+    @app.route("/verify/resend", methods=["POST"])
+    @login_required
+    def verify_resend():
+        from utils import rate_limited
+        if current_user.email_verified:
+            return redirect(url_for("home"))
+        if rate_limited(f"resend:{current_user.id}", 3, 3600):
+            return render_template("verify_notice.html", email=current_user.email,
+                                   token_error="Resend limit reached. Try again in an hour."), 429
+        sent = _send_verification_email(current_user)
+        return render_template("verify_notice.html", email=current_user.email,
+                               resent=sent,
+                               token_error=None if sent else
+                               "Email is not configured on the server. Contact support.")
 
     @app.route("/logout")
     @login_required
@@ -113,31 +291,23 @@ def register_auth_routes(app):
             return redirect(url_for("home"))
         sent = False
         if request.method == "POST":
-            email = request.form.get("email", "").strip().lower()
-            user  = User.query.filter_by(email=email).first()
+            from utils import rate_limited
+            if rate_limited(f"forgot:{request.remote_addr}", 5, 3600):
+                return render_template("forgot_password.html", sent=False,
+                                       error="Too many requests. Try again later."), 429
+            email, _ = _clean_email(request.form.get("email", ""))
+            user = User.query.filter_by(email=email).first() if email else None
             if user:
                 token   = secrets.token_urlsafe(32)
-                expires = datetime.utcnow() + timedelta(hours=2)
-                rt      = PasswordResetToken(user_id=user.id, token=token, expires_at=expires)
-                db.session.add(rt)
+                expires = datetime.utcnow() + timedelta(hours=1)
+                db.session.add(PasswordResetToken(user_id=user.id, token=token,
+                                                  expires_at=expires))
                 db.session.commit()
-                reset_url = request.host_url.rstrip("/") + url_for("reset_password", token=token)
-                from extensions import mail
-                if mail and app.config.get("MAIL_USERNAME"):
-                    try:
-                        from flask_mail import Message as MailMessage
-                        msg = MailMessage(
-                            subject="BullLogic — Password Reset",
-                            recipients=[user.email],
-                            body=(
-                                f"Hi {user.username},\n\n"
-                                f"Click the link below to reset your password (valid 2 hours):\n"
-                                f"{reset_url}\n\n— BullLogic"
-                            ),
-                        )
-                        mail.send(msg)
-                    except Exception:
-                        pass
+                import emails
+                reset_url = request.host_url.rstrip("/") + url_for(
+                    "reset_password", token=token)
+                emails.send_password_reset(app, user, reset_url)
+            # Same response whether or not the address exists.
             sent = True
         return render_template("forgot_password.html", sent=sent, error=None)
 
@@ -150,14 +320,19 @@ def register_auth_routes(app):
         if request.method == "POST":
             pw      = request.form.get("password", "")
             confirm = request.form.get("confirm", "")
-            if len(pw) < 6:
-                error = "Password must be at least 6 characters."
+            if len(pw) < 8:
+                error = "Password must be at least 8 characters."
             elif pw != confirm:
                 error = "Passwords do not match."
             else:
                 user = db.session.get(User, rt.user_id)
                 if user:
                     user.set_password(pw)
+                    # Rotate the session token: every existing session for
+                    # this user is invalidated immediately.
+                    user.session_token = secrets.token_hex(16)
+                    PasswordResetToken.query.filter_by(user_id=user.id,
+                                                       used=False).update({"used": True})
                 rt.used = True
                 db.session.commit()
                 return redirect(url_for("login"))
@@ -176,9 +351,9 @@ def register_auth_routes(app):
         if not current_user.check_password(current_pw):
             return render_template("profile.html", total_predictions=total,
                                    pw_error="Current password is incorrect.")
-        if len(new_pw) < 6:
+        if len(new_pw) < 8:
             return render_template("profile.html", total_predictions=total,
-                                   pw_error="New password must be at least 6 characters.")
+                                   pw_error="New password must be at least 8 characters.")
         if new_pw != confirm_pw:
             return render_template("profile.html", total_predictions=total,
                                    pw_error="Passwords do not match.")

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Risk Calculator — BullLogic</title>
+  <title>Risk Calculator, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -175,9 +175,9 @@ function calculate() {
         target <strong>$${target}</strong> (+$${d.potential_pnl.toLocaleString()}).<br/>
         R:R of <strong>${rr.toFixed(2)}:1</strong> means you make $${rr.toFixed(2)} for every $1 risked.
         Kelly Criterion suggests <strong>${d.kelly_shares} shares</strong> (${d.kelly_pct}% of account) for optimal growth.<br/>
-        ${rr < 1.5 ? '⚠️ R:R below 1.5 — consider widening your target or tightening the stop.' :
-          rr >= 3 ? '✅ Excellent R:R — this meets professional trading standards.' :
-          '✓ Acceptable R:R — viable trade setup.'}
+        ${rr < 1.5 ? '⚠️ R:R below 1.5, consider widening your target or tightening the stop.' :
+          rr >= 3 ? '✅ Excellent R:R, this meets professional trading standards.' :
+          '✓ Acceptable R:R, viable trade setup.'}
       </div>`;
   });
 }

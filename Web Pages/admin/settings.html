@@ -31,7 +31,7 @@
     </div>
 
     <div class="card">
-      <h2>External API keys <span class="muted" style="text-transform:none;letter-spacing:0">— set via environment / .env, masked here</span></h2>
+      <h2>External API keys <span class="muted" style="text-transform:none;letter-spacing:0">, set via environment / .env, masked here</span></h2>
       <table><thead><tr><th>Key</th><th>Status</th><th>Value</th></tr></thead><tbody id="envBody"></tbody></table>
       <div class="muted" style="font-size:8pt;margin-top:10px">
         To rotate a key: update the value in the service environment (.env / NSSM service env) and restart the
@@ -74,7 +74,7 @@ async function load() {
   document.getElementById('envBody').innerHTML = d.env_keys.map(k => `<tr>
     <td style="font-size:8pt">${esc(k.key)}</td>
     <td>${k.configured ? '<span class="badge b-green">set</span>' : '<span class="badge b-muted">missing</span>'}</td>
-    <td class="muted" style="font-family:monospace;font-size:8pt">${esc(k.masked || '—')}</td></tr>`).join('');
+    <td class="muted" style="font-family:monospace;font-size:8pt">${esc(k.masked || '-')}</td></tr>`).join('');
 
   document.getElementById('staffBody').innerHTML = d.admins.length ? d.admins.map(a => `<tr>
     <td><a href="/admin/users/${a.id}"><b>${esc(a.username)}</b></a></td>

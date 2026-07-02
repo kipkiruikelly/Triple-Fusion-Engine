@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Profile — BullLogic</title>
+  <title>Profile, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -230,7 +230,7 @@
         </div>
         <div class="field">
           <label>Subscription Plan</label>
-          <input type="text" value="{{ 'Pro — Unlimited access' if current_user.is_pro else 'Free — 5 predictions/day' }}" readonly />
+          <input type="text" value="{{ 'Pro, Unlimited access' if current_user.is_pro else 'Free, 5 predictions/day' }}" readonly />
         </div>
       </div>
 
@@ -448,7 +448,7 @@ function createKey() {
       if(d.ok){
         const alert=document.getElementById('keyAlert');
         alert.style.display='block';
-        alert.innerHTML='<strong style="color:var(--green)">Key created — copy it now, it will not be shown again:</strong><br><code style="font-size:10pt">'+d.key+'</code>';
+        alert.innerHTML='<strong style="color:var(--green)">Key created, copy it now, it will not be shown again:</strong><br><code style="font-size:10pt">'+d.key+'</code>';
         loadKeys();
       } else alert(d.error);
     });
@@ -496,7 +496,7 @@ function loadTelegram() {
     const status = document.getElementById('tgStatus');
     const removeBtn = document.getElementById('tgRemoveBtn');
     if (d.configured) {
-      status.textContent = '✓ Connected — Chat ID: ' + d.chat_id;
+      status.textContent = '✓ Connected, Chat ID: ' + d.chat_id;
       status.style.color = 'var(--green)';
       document.getElementById('tgChatId').value = d.chat_id;
       removeBtn.style.display = 'inline-block';
@@ -641,7 +641,7 @@ function loadActivityLog() {
     const el=document.getElementById('activity-log-body');
     if(!el)return;
     if(!d.entries.length){el.innerHTML='<div style="color:var(--muted);font-size:9.5pt">No activity recorded yet</div>';return;}
-    el.innerHTML=d.entries.slice(0,8).map(e=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:9.5pt"><div><strong style="color:var(--white)">${e.action}</strong>${e.detail?' — '+e.detail:''}<span style="color:var(--muted);font-size:8.5pt;margin-left:8px">${e.ip||''}</span></div><div style="color:var(--muted);font-size:8.5pt;flex-shrink:0;margin-left:12px">${e.created_at}</div></div>`).join('');
+    el.innerHTML=d.entries.slice(0,8).map(e=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:9.5pt"><div><strong style="color:var(--white)">${e.action}</strong>${e.detail?', '+e.detail:''}<span style="color:var(--muted);font-size:8.5pt;margin-left:8px">${e.ip||''}</span></div><div style="color:var(--muted);font-size:8.5pt;flex-shrink:0;margin-left:12px">${e.created_at}</div></div>`).join('');
   });
 }
 

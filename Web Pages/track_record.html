@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Track Record — BullLogic</title>
+  <title>Track Record, BullLogic</title>
   <meta name="description" content="Every BullLogic prediction is graded against what the market actually did. See the live, unedited accuracy numbers."/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
@@ -41,8 +41,7 @@
 <div class="wrap">
   <h1>Track Record</h1>
   <p class="sub">Every prediction made on BullLogic is automatically graded against what the
-  market actually did once its time horizon passes. Nothing is filtered, nothing is cherry-picked —
-  models with fewer than <b id="minN">10</b> graded calls honestly say "insufficient data".</p>
+  market actually did once its time horizon passes. Nothing is filtered, nothing is cherry-picked, models with fewer than <b id="minN">10</b> graded calls honestly say "insufficient data".</p>
 
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <div class="toggle">
@@ -53,9 +52,9 @@
   </div>
 
   <div class="hero">
-    <div class="card"><div class="lbl">Overall direction accuracy</div><div class="val" id="overall">—</div></div>
-    <div class="card"><div class="lbl">Predictions graded</div><div class="val" id="graded">—</div></div>
-    <div class="card"><div class="lbl">Models with sufficient data</div><div class="val" id="suff">—</div></div>
+    <div class="card"><div class="lbl">Overall direction accuracy</div><div class="val" id="overall">-</div></div>
+    <div class="card"><div class="lbl">Predictions graded</div><div class="val" id="graded">-</div></div>
+    <div class="card"><div class="lbl">Models with sufficient data</div><div class="val" id="suff">-</div></div>
   </div>
 
   <div class="card">
@@ -69,7 +68,7 @@
     <b style="color:var(--text)">Methodology.</b> When a prediction's horizon elapses (e.g. one trading day
     for daily predictions), the platform fetches the actual market price and records whether the predicted
     direction was correct and how far the price target missed, in percent. Grading runs automatically in the
-    background for every user's predictions — including the ones that were wrong. Accuracy shown is directional
+    background for every user's predictions, including the ones that were wrong. Accuracy shown is directional
     (did the market move the way the model said), not a promise of profit. Past performance does not guarantee
     future results. This is not financial advice.
   </div>
@@ -90,7 +89,7 @@ async function load(days){
   document.getElementById('asof').textContent = 'live data · updated continuously';
   const tb = document.getElementById('tbody');
   if (!d.per_model.length){
-    tb.innerHTML = '<tr><td colspan="5" class="empty">No graded predictions yet — accuracy appears here automatically as prediction horizons pass.</td></tr>';
+    tb.innerHTML = '<tr><td colspan="5" class="empty">No graded predictions yet, accuracy appears here automatically as prediction horizons pass.</td></tr>';
     return;
   }
   tb.innerHTML = d.per_model.map(m=>{
@@ -100,7 +99,7 @@ async function load(days){
       accCell = '<span class="'+cls+'">'+m.direction_accuracy+'%</span>';
     }
     return '<tr><td><b>'+esc(m.ticker)+'</b></td><td>'+esc(m.interval)+'</td><td>'+m.n+'</td>'+
-      '<td>'+accCell+'</td><td>'+(m.sufficient && m.avg_pct_error!=null ? m.avg_pct_error+'%' : '<span class="muted">—</span>')+'</td></tr>';
+      '<td>'+accCell+'</td><td>'+(m.sufficient && m.avg_pct_error!=null ? m.avg_pct_error+'%' : '<span class="muted">-</span>')+'</td></tr>';
   }).join('');
 }
 load(90);

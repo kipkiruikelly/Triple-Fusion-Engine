@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Model Quality — BullLogic</title>
+  <title>Model Quality, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -129,9 +129,9 @@
   </div>
 
   <div class="legend">
-    <div class="legend-item"><div class="dot good"></div> AUC ≥ 0.65 — strong</div>
-    <div class="legend-item"><div class="dot ok"></div>   0.55 – 0.65 — usable</div>
-    <div class="legend-item"><div class="dot weak"></div> &lt; 0.55 — near-random</div>
+    <div class="legend-item"><div class="dot good"></div> AUC ≥ 0.65, strong</div>
+    <div class="legend-item"><div class="dot ok"></div>   0.55 - 0.65, usable</div>
+    <div class="legend-item"><div class="dot weak"></div> &lt; 0.55, near-random</div>
   </div>
 
   <div id="loading">Loading model metrics…</div>
@@ -171,7 +171,7 @@ function aucClass(v) {
   return 'weak';
 }
 function fmt(v, decimals=3) {
-  return v != null ? v.toFixed(decimals) : '—';
+  return v != null ? v.toFixed(decimals) : '-';
 }
 function fmtRows(n) {
   return n >= 1000 ? (n/1000).toFixed(0)+'k' : n;
@@ -222,7 +222,7 @@ async function load() {
 
     allResults = data.results || [];
     const ts   = data.trained_at ? new Date(data.trained_at).toLocaleString() : 'unknown';
-    document.getElementById('trained-at').innerHTML = `Last trained: <strong>${ts}</strong> — ${allResults.length} models`;
+    document.getElementById('trained-at').innerHTML = `Last trained: <strong>${ts}</strong>, ${allResults.length} models`;
 
     renderSummary();
     renderTable();

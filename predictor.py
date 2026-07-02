@@ -7,8 +7,8 @@ Public functions:
   ml_signal(ticker, interval="1d")      → compact trading signal dict
 
 Supported intervals:
-  "1d"  — daily models (45 features, TA + ICT daily)
-  "1h"  — hourly models (55 features, + kill zones + session)
+  "1d" , daily models (45 features, TA + ICT daily)
+  "1h" , hourly models (55 features, + kill zones + session)
 """
 
 import os
@@ -142,7 +142,7 @@ def _infer_model(model, X: np.ndarray, current_price: float):
 
 
 def _load_models(ticker: str, interval: str = "1d"):
-    """Return (lr, rf, scaler, feature_cols, xgb) — cached after first load. xgb may be None."""
+    """Return (lr, rf, scaler, feature_cols, xgb), cached after first load. xgb may be None."""
     key = (ticker.upper(), interval)
     if key in _model_cache:
         return _model_cache[key]
@@ -262,7 +262,7 @@ def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
     atr14 = atr14.fillna(close * 0.01)
     df["ATR_14"] = atr14
 
-    # ICT — base features (work on all timeframes)
+    # ICT, base features (work on all timeframes)
     sma200 = close.rolling(200, min_periods=1).mean()
     df["Above_200SMA"] = (close > sma200).astype(int)
     df["Dist_200SMA"]  = ((close - sma200) / sma200 * 100).fillna(0)
@@ -309,24 +309,24 @@ def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
     df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
     df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
 
-    # ICT 2022 — IPDA lookback levels (20 / 40 / 60 bars)
+    # ICT 2022, IPDA lookback levels (20 / 40 / 60 bars)
     for n in [20, 40, 60]:
         df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
         df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
 
-    # ICT 2022 — Equal Highs / Equal Lows (liquidity pools)
+    # ICT 2022, Equal Highs / Equal Lows (liquidity pools)
     tol   = close * 0.001
     r10h  = high.rolling(10).max().shift(1)
     r10l  = low.rolling(10).min().shift(1)
     df["Equal_Highs"] = ((high - r10h).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
     df["Equal_Lows"]  = ((low  - r10l).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
 
-    # ICT 2022 — OTE zone (Optimal Trade Entry: 0.62–0.79 Fibonacci of 20-bar swing)
+    # ICT 2022, OTE zone (Optimal Trade Entry: 0.62-0.79 Fibonacci of 20-bar swing)
     rng20 = (sh20 - sl20).replace(0, np.nan)
     df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
     df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
 
-    # ICT 2022 — Consequent Encroachment (CE) of most recent FVG midpoint
+    # ICT 2022, Consequent Encroachment (CE) of most recent FVG midpoint
     bull_ce_level = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
     bear_ce_level = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
     df["CE_Bull_FVG_Dist"] = ((close - bull_ce_level) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
@@ -336,7 +336,7 @@ def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
-    """Kill-zone and session features — only meaningful on sub-daily bars."""
+    """Kill-zone and session features, only meaningful on sub-daily bars."""
     idx = df.index
     if idx.tz is not None:
         et_idx = idx.tz_convert("America/New_York")
@@ -369,11 +369,11 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     df["Day_Sin"] = np.sin(2 * np.pi * dow / 5)
     df["Day_Cos"] = np.cos(2 * np.pi * dow / 5)
 
-    # ICT 2022 — Silver Bullet windows (ET)
+    # ICT 2022, Silver Bullet windows (ET)
     df["In_SilverBullet_AM"] = ((hour >= 10) & (hour < 11)).astype(int)
     df["In_SilverBullet_PM"] = ((hour >= 14) & (hour < 15)).astype(int)
 
-    # ICT 2022 — Asia session range (8 PM – 2 AM ET)
+    # ICT 2022, Asia session range (8 PM - 2 AM ET)
     is_asia = (hour >= 20) | (hour < 2)
     atr_h2 = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"], window=14) \
                .average_true_range().fillna(df["Close"] * 0.01)
@@ -385,7 +385,7 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
     df["Price_vs_AsiaHigh"] = (df["Close"] > asia_high_ref).astype(int)
     df["Price_vs_AsiaLow"]  = (df["Close"] < asia_low_ref).astype(int)
 
-    # ICT 2022 — New Week Opening Gap (Monday open vs previous Friday close)
+    # ICT 2022, New Week Opening Gap (Monday open vs previous Friday close)
     is_monday  = (et_idx.dayofweek == 0)
     prev_close = df["Close"].shift(1)
     nwog_open  = df["Open"].where(is_monday).ffill()
@@ -826,7 +826,7 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         df  = build_features(df, interval, ticker, aux)
 
     if df.empty:
-        raise ValueError("Feature engineering failed — insufficient data history.")
+        raise ValueError("Feature engineering failed, insufficient data history.")
 
     current_price = float(df["Close"].iloc[-1])
     X             = scaler.transform(df[feature_cols].iloc[-1:].values)
@@ -933,7 +933,7 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         if pd.notna(v)
     ]
 
-    # OTE zones (0.62–0.79 Fibonacci of last 20-bar swing)
+    # OTE zones (0.62-0.79 Fibonacci of last 20-bar swing)
     atr_val = float(last["ATR_14"])
     sh20    = float(df["High"].rolling(20).max().iloc[-1])
     sl20_v  = float(df["Low"].rolling(20).min().iloc[-1])
@@ -1061,9 +1061,9 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
     """
     Trading signal for the MT5 auto-trade loop.
 
-    BUY  — LR and RF both predict up
-    SELL — both predict down
-    HOLD — models disagree
+    BUY , LR and RF both predict up
+    SELL, both predict down
+    HOLD, models disagree
     """
     try:
         ticker   = ticker.upper()

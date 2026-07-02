@@ -1,14 +1,14 @@
 """
-backtester.py  —  BullLogic historical backtesting engine
+backtester.py ,  BullLogic historical backtesting engine
 
 Strict ICT + ML signal logic:
-  BUY  — ML bullish AND above 200SMA AND bullish structure
+  BUY , ML bullish AND above 200SMA AND bullish structure
           AND price in Discount (PD < 0.45) AND ≥2 ICT confluences
-  SELL — ML bearish AND below 200SMA AND bearish structure
+  SELL, ML bearish AND below 200SMA AND bearish structure
           AND price in Premium (PD > 0.55) AND ≥2 ICT confluences
 
 ICT confluences counted (any 2 of 6 required):
-  1. In OTE zone (0.62–0.79 Fibonacci retracement)
+  1. In OTE zone (0.62-0.79 Fibonacci retracement)
   2. Unfilled FVG present within last 10 bars
   3. Order Block present within last 10 bars
   4. Liquidity sweep (stop hunt) just occurred
@@ -16,12 +16,12 @@ ICT confluences counted (any 2 of 6 required):
   6. Price near 20-bar IPDA level (within 1.5 ATR)
 
 Trade management (strict ICT):
-  SL  — 1.0× ATR (at OB boundary — tighter than default 1.5×)
-  TP  — 3.0× ATR → 3:1 R:R
-  Cooldown — 3 bars after a loss in same direction (no revenge entries)
+  SL , 1.0× ATR (at OB boundary, tighter than default 1.5×)
+  TP , 3.0× ATR → 3:1 R:R
+  Cooldown, 3 bars after a loss in same direction (no revenge entries)
 
-Entry  — next bar open (no look-ahead bias)
-Exit   — SL or TP hit, checked via bar High/Low
+Entry , next bar open (no look-ahead bias)
+Exit  , SL or TP hit, checked via bar High/Low
 """
 
 import warnings
@@ -42,8 +42,8 @@ def _ict_score(row: pd.Series, direction: str) -> tuple:
     Returns (score: int, patterns: list[str]).
 
     Scored conditions (any 1 required for entry):
-      BUY  — OTE zone, Bullish FVG, Bullish OB, Swept Low, CE Bull FVG, IPDA low
-      SELL — OTE zone, Bearish FVG, Bearish OB, Swept High, CE Bear FVG, IPDA high
+      BUY , OTE zone, Bullish FVG, Bullish OB, Swept Low, CE Bull FVG, IPDA low
+      SELL, OTE zone, Bearish FVG, Bearish OB, Swept High, CE Bear FVG, IPDA high
 
     Note: the PD position (discount/premium) is intentionally NOT a hard gate
     here because FVG/OB/OTE patterns are already at structurally discounted
@@ -91,11 +91,11 @@ def _generate_signals(df: pd.DataFrame, lr, rf, scaler,
     Replay the live prediction + strict ICT filter at every bar.
 
     Entry gates (ALL required):
-      BUY  — ML bullish + above 200SMA + bullish structure + ≥1 ICT pattern
-      SELL — ML bearish + below 200SMA + bearish structure + ≥1 ICT pattern
+      BUY , ML bullish + above 200SMA + bullish structure + ≥1 ICT pattern
+      SELL, ML bearish + below 200SMA + bearish structure + ≥1 ICT pattern
 
     The PD position is included as one of the scoreable ICT patterns but
-    is NOT a hard gate — using the 60-bar range as a mandatory filter
+    is NOT a hard gate, using the 60-bar range as a mandatory filter
     blocks nearly every signal in trending markets because price spends
     most of a trend run in "premium" relative to the wider range.
 
@@ -220,7 +220,7 @@ def _simulate(df: pd.DataFrame, signals: np.ndarray, meta: list,
         if position is None:
             sig = signals[i - 1]
             if sig in ("BUY", "SELL"):
-                # Enforce cooldown — skip if within 3 bars of same-direction loss
+                # Enforce cooldown, skip if within 3 bars of same-direction loss
                 if i - last_loss[sig] <= _COOLDOWN:
                     equity.append({"date": dates[i], "equity": round(capital, 2)})
                     continue
@@ -349,7 +349,7 @@ def run_backtest(ticker: str, interval: str = "1d",
 
     if raw.empty or len(raw) < 60:
         raise ValueError(
-            f"Not enough data for '{ticker}' — try a longer period or different ticker."
+            f"Not enough data for '{ticker}', try a longer period or different ticker."
         )
 
     df = build_features(raw.copy(), interval)

@@ -1,4 +1,4 @@
-"""Shared pytest fixtures — the app runs against a throwaway SQLite file,
+"""Shared pytest fixtures, the app runs against a throwaway SQLite file,
 never the production instance/users.db."""
 
 import os

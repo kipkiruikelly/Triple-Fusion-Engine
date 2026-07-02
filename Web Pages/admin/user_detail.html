@@ -6,10 +6,10 @@
 <div class="subtitle" id="uemail"></div>
 
 <div class="grid g4" style="margin-bottom:16px">
-  <div class="card" style="margin:0"><div class="stat-label">Plan</div><div class="stat-val" id="s-plan">—</div><div class="stat-sub" id="s-expiry"></div></div>
-  <div class="card" style="margin:0"><div class="stat-label">Status</div><div class="stat-val" id="s-status">—</div><div class="stat-sub" id="s-role"></div></div>
-  <div class="card" style="margin:0"><div class="stat-label">Predictions</div><div class="stat-val blue" id="s-preds">—</div><div class="stat-sub" id="s-signed"></div></div>
-  <div class="card" style="margin:0"><div class="stat-label">Last active</div><div class="stat-val" id="s-seen" style="font-size:12pt">—</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Plan</div><div class="stat-val" id="s-plan">-</div><div class="stat-sub" id="s-expiry"></div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Status</div><div class="stat-val" id="s-status">-</div><div class="stat-sub" id="s-role"></div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Predictions</div><div class="stat-val blue" id="s-preds">-</div><div class="stat-sub" id="s-signed"></div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Last active</div><div class="stat-val" id="s-seen" style="font-size:12pt">-</div></div>
 </div>
 
 {% if current_user.role in ('support','admin') %}
@@ -76,7 +76,7 @@ async function load() {
   const payBadge = s => ({paid: 'b-green', pending: 'b-yellow', refunded: 'b-blue'}[s] || 'b-red');
   const pb = document.getElementById('payBody');
   pb.innerHTML = d.payments.length ? d.payments.map(p => `<tr>
-    <td>${esc(p.provider)}</td><td>${p.amount ?? '—'} ${esc(p.currency || '')}</td>
+    <td>${esc(p.provider)}</td><td>${p.amount ?? '-'} ${esc(p.currency || '')}</td>
     <td><span class="badge ${payBadge(p.status)}">${p.status}</span></td>
     <td class="muted">${fmtDate(p.created_at)}</td></tr>`).join('')
     : ''; if (!d.payments.length) emptyRow(pb, 4, 'No payments');

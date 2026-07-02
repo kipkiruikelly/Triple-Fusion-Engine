@@ -67,7 +67,7 @@ async function loadTickers() {
   if (rsel) rsel.length = 0;
   if (!d.tickers.length) { emptyRow(tb, 6, 'No tickers configured'); return; }
   tb.innerHTML = d.tickers.map(t => `<tr>
-    <td><b>${esc(t.symbol)}</b></td><td class="muted">${esc(t.name || '—')}</td>
+    <td><b>${esc(t.symbol)}</b></td><td class="muted">${esc(t.name || '-')}</td>
     <td>${fmtNum(t.predictions)}</td>
     <td>${t.has_model ? '<span class="badge b-green">trained</span>' : '<span class="badge b-muted">none</span>'}</td>
     <td><label style="cursor:pointer"><input type="checkbox" class="tEnable" data-id="${t.id}" ${t.enabled ? 'checked' : ''} ${ROLE_LVL < 3 ? 'disabled' : ''}></label></td>
