@@ -37,6 +37,14 @@ _endpoint_lock  = threading.Lock()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Load .env (gitignored) so credentials live in one file instead of the
+# service configuration. Existing environment variables take precedence.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(BASE_DIR, ".env"), override=False)
+except ImportError:
+    pass
+
 
 # ── App factory ───────────────────────────────────────────────────────────────
 
