@@ -286,6 +286,18 @@ class ErrorLog(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class Feedback(db.Model):
+    """User feedback from the in-app widget, scored for sentiment."""
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    page       = db.Column(db.String(50), nullable=True)
+    rating     = db.Column(db.Integer, nullable=False)     # 1..5
+    comment    = db.Column(db.String(500), nullable=True)
+    sentiment  = db.Column(db.Float, nullable=True)        # -1..1 word-list score
+    resolved   = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class UserPreferences(db.Model):
     id             = db.Column(db.Integer, primary_key=True)
     user_id        = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)

@@ -13,33 +13,9 @@ from flask_login import login_required, current_user
 
 from utils import SCREENER_TICKERS, CALENDAR_TICKERS, _POSITIVE_WORDS, _NEGATIVE_WORDS, _SECTOR_ETFS
 
-# Shared quote cache so N clients / SSE loops don't multiply identical Yahoo
-# requests (which gets the whole host rate-limited). Failures are cached too,
-# briefly, to avoid hammering while throttled.
-_quote_cache = {}          # ticker -> (fetched_at, payload_or_None)
-_QUOTE_TTL_OK   = 20.0
-_QUOTE_TTL_FAIL = 60.0
-
-
-def _cached_quote(ticker):
-    import yfinance as yf
-    now = time.time()
-    hit = _quote_cache.get(ticker)
-    if hit and now - hit[0] < (_QUOTE_TTL_OK if hit[1] else _QUOTE_TTL_FAIL):
-        return hit[1]
-    payload = None
-    try:
-        fi = yf.Ticker(ticker).fast_info
-        lp = float(fi.last_price or 0)
-        pc = float(fi.previous_close or 0)
-        if lp:
-            payload = {"price": round(lp, 4), "prev": round(pc, 4),
-                       "chg": round(lp - pc, 4),
-                       "pct": round((lp - pc) / pc * 100 if pc else 0, 2)}
-    except Exception:
-        payload = None
-    _quote_cache[ticker] = (now, payload)
-    return payload
+# Quotes go through market_data — one shared cache and rate-limit circuit
+# breaker for the whole app.
+from market_data import get_quote as _cached_quote
 
 
 def register_analytics_routes(app):

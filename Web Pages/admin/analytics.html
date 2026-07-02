@@ -41,6 +41,16 @@
   <table><thead><tr><th>Cohort</th><th>Signups</th><th>Still active</th><th>Retention</th></tr></thead>
   <tbody id="retBody"></tbody></table>
 </div>
+
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h2 style="margin:0">User feedback <span class="muted" id="fbStats" style="text-transform:none;letter-spacing:0"></span></h2>
+    <label style="font-size:8.5pt;color:var(--muted)"><input type="checkbox" id="fbUnresolved"> unresolved only</label>
+  </div>
+  <table><thead><tr><th>User</th><th>Rating</th><th>Comment</th><th>Sentiment</th><th>Page</th><th>When</th><th></th></tr></thead>
+  <tbody id="fbBody"></tbody></table>
+  <div class="pager" id="fbPager"></div>
+</div>
 {% endblock %}
 
 {% block script %}
@@ -88,5 +98,38 @@ document.querySelectorAll('.range-btn').forEach(b => b.onclick = () => {
   b.classList.add('primary'); load(+b.dataset.d);
 });
 load(30);
+
+// ── user feedback ─────────────────────────────────────────────
+let fbPage = 1;
+async function loadFeedback() {
+  const tb = document.getElementById('fbBody');
+  skelRows(tb, 7, 3);
+  const p = new URLSearchParams({page: fbPage, per: 20});
+  if (document.getElementById('fbUnresolved').checked) p.set('unresolved', '1');
+  const d = await api('/admin/api/feedback?' + p);
+  document.getElementById('fbStats').textContent = d.avg_rating != null
+    ? `— avg ${d.avg_rating}★ · sentiment ${d.avg_sentiment ?? 'n/a'}` : '';
+  if (!d.items.length) { emptyRow(tb, 7, 'No feedback yet'); return; }
+  const sentBadge = s => s == null ? '<span class="muted">—</span>'
+    : (s > 0.2 ? '<span class="badge b-green">positive</span>'
+       : s < -0.2 ? '<span class="badge b-red">negative</span>'
+       : '<span class="badge b-muted">neutral</span>');
+  tb.innerHTML = d.items.map(f => `<tr style="${f.resolved ? 'opacity:.55' : ''}">
+    <td><a href="/admin/users/${f.user_id}">${esc(f.user)}</a></td>
+    <td>${'★'.repeat(f.rating)}<span class="muted">${'★'.repeat(5 - f.rating)}</span></td>
+    <td style="max-width:320px">${esc(f.comment || '—')}</td>
+    <td>${sentBadge(f.sentiment)}</td>
+    <td class="muted">${esc(f.page || '—')}</td>
+    <td class="muted" style="white-space:nowrap">${fmtDate(f.at)}</td>
+    <td>${ROLE_LVL >= 2 ? `<button class="btn small fb-res" data-id="${f.id}">${f.resolved ? 'Reopen' : 'Resolve'}</button>` : ''}</td>
+  </tr>`).join('');
+  tb.querySelectorAll('.fb-res').forEach(b => b.onclick = async () => {
+    await api(`/admin/api/feedback/${b.dataset.id}/resolve`, {method: 'POST', body: {}});
+    loadFeedback();
+  });
+  pager(document.getElementById('fbPager'), d.page, d.per, d.total, p2 => { fbPage = p2; loadFeedback(); });
+}
+document.getElementById('fbUnresolved').onchange = () => { fbPage = 1; loadFeedback(); };
+loadFeedback();
 </script>
 {% endblock %}

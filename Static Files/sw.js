@@ -1,5 +1,5 @@
-const CACHE = 'bulllogic-v1';
-const STATIC = ['/static/manifest.json'];
+const CACHE = 'bulllogic-v2';
+const STATIC = ['/static/manifest.json', '/offline'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
@@ -16,9 +16,21 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network-first for API and dynamic routes; cache-first for static assets
   const url = new URL(e.request.url);
-  if (url.pathname.startsWith('/api/') || e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET') return;
+
+  // Page navigations: network first, offline fallback page when unreachable.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).catch(() =>
+        caches.match('/offline').then(r => r || Response.error()))
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/')) return;
+
+  // Static assets: cache-first.
   if (url.pathname.match(/\.(js|css|png|ico|woff2?)$/)) {
     e.respondWith(
       caches.match(e.request).then(cached => cached || fetch(e.request).then(resp => {

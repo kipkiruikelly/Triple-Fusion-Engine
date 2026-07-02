@@ -10,6 +10,11 @@
     <input type="search" id="q" placeholder="Search username or email…" style="min-width:220px">
     <select id="plan"><option value="">All plans</option><option>free</option><option>pro</option></select>
     <select id="status"><option value="">All statuses</option><option>active</option><option>deactivated</option><option>banned</option></select>
+    <select id="churn"><option value="">All engagement</option>
+      <option value="active">Engaged (&lt;7d)</option>
+      <option value="at_risk">At churn risk (7–30d)</option>
+      <option value="churned">Churned (&gt;30d)</option>
+      <option value="new">Never active</option></select>
     <span style="flex:1"></span>
     <span id="selInfo" class="muted" style="font-size:8.5pt"></span>
     <button class="btn small" id="bulkDeact" disabled>Deactivate selected</button>
@@ -43,6 +48,7 @@
 let page = 1, sort = 'id', dir = 'desc', sel = new Set();
 const qs = new URLSearchParams(location.search);
 if (qs.get('q')) document.getElementById('q').value = qs.get('q');
+if (qs.get('churn')) document.getElementById('churn').value = qs.get('churn');
 
 const statusBadge = s => ({active:'b-green', deactivated:'b-muted', banned:'b-red'}[s] || 'b-muted');
 const roleBadge   = r => r === 'user' ? '' : `<span class="badge b-blue">${r}</span>`;
@@ -53,6 +59,7 @@ function params() {
   if (q) p.set('q', q);
   if (plan.value) p.set('plan', plan.value);
   if (status.value) p.set('status', status.value);
+  if (churn.value) p.set('churn', churn.value);
   return p;
 }
 
@@ -71,7 +78,7 @@ async function load() {
     <td>${roleBadge(u.role)}</td>
     <td><span class="badge ${statusBadge(u.status)}">${u.status}</span></td>
     <td class="muted">${fmtDay(u.created_at)}</td>
-    <td class="muted">${fmtDate(u.last_seen)}</td>
+    <td class="muted">${fmtDate(u.last_seen)}${u.churn === 'at_risk' ? ' <span class="badge b-yellow">at risk</span>' : (u.churn === 'churned' ? ' <span class="badge b-red">churned</span>' : '')}</td>
     <td>${fmtNum(u.predictions)}</td>
     <td><a class="btn small" href="/admin/users/${u.id}">View</a></td>
   </tr>`).join('');
@@ -114,7 +121,7 @@ document.querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
 });
 let deb;
 document.getElementById('q').oninput = () => { clearTimeout(deb); deb = setTimeout(() => { page = 1; load(); }, 350); };
-plan.onchange = status.onchange = () => { page = 1; load(); };
+plan.onchange = status.onchange = churn.onchange = () => { page = 1; load(); };
 load();
 </script>
 {% endblock %}

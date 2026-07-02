@@ -14,7 +14,8 @@ from extensions import db
 from models import (
     User, PredictionHistory, WatchlistItem, PredictionAccuracy, FREE_DAILY_LIMIT,
 )
-from utils import consume_quota, _try_azure_download, VALID_INTERVALS, PRO_TICKERS
+from utils import (consume_quota, refund_quota, _try_azure_download,
+                   VALID_INTERVALS, PRO_TICKERS)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
@@ -63,18 +64,28 @@ def register_prediction_routes(app, metrics):
                 db.session.commit()
             except Exception:
                 db.session.rollback()
+            # Honest track record for this exact model, shown on the result.
+            try:
+                from ops import ticker_stats
+                result["track_record"] = ticker_stats(db, ticker, interval)
+            except Exception:
+                result["track_record"] = None
             return render_template("result.html", **result)
         except ValueError as e:
+            refund_quota(current_user)
             return render_template("index.html", error=str(e), interval=interval)
         except FileNotFoundError:
+            refund_quota(current_user)
             return render_template("index.html",
                                    error=f'No trained model for "{ticker}". '
                                          'Supported: AAPL, MSFT, TSLA, NVDA, GOOGL, AMZN, META, QQQ, DIA, NDX.',
                                    interval=interval)
         except Exception:
+            refund_quota(current_user)
             return render_template("index.html",
                                    error=f'Could not fetch data for "{ticker}". '
-                                         'Please check the symbol and try again.',
+                                         'Please check the symbol and try again — this attempt '
+                                         'was not deducted from your quota.',
                                    interval=interval)
 
     @app.route("/market")
@@ -307,6 +318,56 @@ def register_prediction_routes(app, metrics):
         return jsonify({"ok": True, "count": total,
                         "direction_accuracy": round(dir_ok / total * 100, 1),
                         "avg_pct_error": round(avg_err, 2), "recent": recent})
+
+    # ── Track record (public — the trust page) ─────────────────────────────────
+
+    @app.route("/track-record")
+    def track_record_page():
+        return render_template("track_record.html")
+
+    @app.route("/api/track-record")
+    def api_track_record():
+        from ops import platform_stats
+        days = int(request.args.get("days", 90))
+        days = 30 if days <= 30 else 90
+        return jsonify({"ok": True, **platform_stats(db, days=days)})
+
+    # ── Data health (degraded-mode banner) ─────────────────────────────────────
+
+    @app.route("/api/health/data")
+    def api_health_data():
+        from market_data import data_status
+        return jsonify({"ok": True, **data_status()})
+
+    # ── Feedback widget ────────────────────────────────────────────────────────
+
+    @app.route("/api/feedback", methods=["POST"])
+    @login_required
+    def api_feedback():
+        from utils import rate_limited, _POSITIVE_WORDS, _NEGATIVE_WORDS
+        from models import Feedback
+        if rate_limited(f"feedback:{current_user.id}", 5, 86400):
+            return jsonify({"ok": False, "error": "Feedback limit reached for today"}), 429
+        data    = request.get_json() or {}
+        try:
+            rating = int(data.get("rating", 0))
+        except (TypeError, ValueError):
+            rating = 0
+        if rating < 1 or rating > 5:
+            return jsonify({"ok": False, "error": "Rating must be 1–5"}), 400
+        comment = (data.get("comment") or "").strip()[:500] or None
+        sentiment = None
+        if comment:
+            words = {w.strip(".,!?").lower() for w in comment.split()}
+            pos = len(words & _POSITIVE_WORDS)
+            neg = len(words & _NEGATIVE_WORDS)
+            sentiment = round((pos - neg) / max(pos + neg, 1), 2)
+        db.session.add(Feedback(user_id=current_user.id,
+                                page=(data.get("page") or "")[:50] or None,
+                                rating=rating, comment=comment,
+                                sentiment=sentiment))
+        db.session.commit()
+        return jsonify({"ok": True, "message": "Asante! Feedback received."})
 
     # ── News & AI analyst ──────────────────────────────────────────────────────
 

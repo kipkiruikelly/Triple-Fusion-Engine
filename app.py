@@ -53,10 +53,20 @@ def create_app():
     app.secret_key = secret_key
 
     # ── SQLAlchemy ────────────────────────────────────────────────────────────
-    app.config["SQLALCHEMY_DATABASE_URI"] = (
-        "sqlite:///" + os.path.join(BASE_DIR, "instance", "users.db")
-    )
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
+        "DATABASE_URL",
+        "sqlite:///" + os.path.join(BASE_DIR, "instance", "users.db"))
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    # ── Session / cookie hardening ────────────────────────────────────────────
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+    app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+    if os.environ.get("SECURE_COOKIES", "").lower() == "true":
+        # Enable when all traffic is HTTPS (Caddy) — breaks plain-HTTP logins.
+        app.config["SESSION_COOKIE_SECURE"] = True
+        app.config["REMEMBER_COOKIE_SECURE"] = True
 
     # ── Flask-Mail ────────────────────────────────────────────────────────────
     app.config["MAIL_SERVER"]         = os.environ.get("MAIL_SERVER",   "smtp.gmail.com")
@@ -104,6 +114,11 @@ def create_app():
     @app.route("/sw.js")
     def service_worker():
         return app.send_static_file("sw.js"), 200, {"Content-Type": "application/javascript"}
+
+    @app.route("/offline")
+    def offline_page():
+        from flask import render_template
+        return render_template("offline.html")
 
     @app.route("/health")
     def health():
@@ -227,6 +242,11 @@ def create_app():
     # ── Background alert checker ──────────────────────────────────────────────
     _start_alert_thread(app, db)
 
+    # ── Ops thread: accuracy engine, drift monitor, daily digest ─────────────
+    if os.environ.get("DISABLE_OPS_THREAD", "").lower() != "true":
+        from ops import start_ops_thread
+        start_ops_thread(app, db)
+
     return app
 
 
@@ -240,7 +260,8 @@ def _maintenance_enabled():
     if now - _settings_cache["checked_at"] > 15:
         try:
             from models import AppSetting
-            row = AppSetting.query.get("maintenance_mode")
+            from extensions import db as _db
+            row = _db.session.get(AppSetting, "maintenance_mode")
             _settings_cache["maintenance"] = bool(row and row.value == "1")
         except Exception:
             _settings_cache["maintenance"] = False
@@ -313,6 +334,29 @@ def _run_migrations(db):
                     conn.execute(text(
                         f"ALTER TABLE {table} ADD COLUMN {column} {coltype}"
                     ))
+                    conn.commit()
+            except Exception:
+                pass
+
+        # Indexes for the hot query paths (idempotent).
+        indexes = [
+            ("ix_ph_user",      "prediction_history", "user_id"),
+            ("ix_ph_ticker",    "prediction_history", "ticker, interval, predicted_at"),
+            ("ix_pa_pred",      "prediction_accuracy", "prediction_id"),
+            ("ix_notif_user",   "notification",       "user_id, read"),
+            ("ix_act_user",     "activity_log",       "user_id, created_at"),
+            ("ix_pay_user",     "payment",            "user_id"),
+            ("ix_pay_status",   "payment",            "status"),
+            ("ix_alert_user",   "price_alert",        "user_id, triggered"),
+            ("ix_pos_user",     "portfolio_position", "user_id, status"),
+            ("ix_journal_user", "trade_journal",      "user_id"),
+            ("ix_user_seen",    "user",               "last_seen"),
+        ]
+        for name, table, cols in indexes:
+            try:
+                if inspector.has_table(table):
+                    conn.execute(text(
+                        f'CREATE INDEX IF NOT EXISTS {name} ON "{table}" ({cols})'))
                     conn.commit()
             except Exception:
                 pass

@@ -35,6 +35,10 @@ def register_auth_routes(app):
             return redirect(url_for('home'))
         error = None
         if request.method == "POST":
+            from utils import rate_limited
+            if rate_limited(f"login:{request.remote_addr}", 10, 900):
+                return render_template("login.html",
+                                       error="Too many attempts. Try again in 15 minutes."), 429
             identifier = request.form.get("identifier", "").strip()
             password   = request.form.get("password", "")
             user = User.query.filter(
@@ -66,6 +70,10 @@ def register_auth_routes(app):
             return render_template("register.html",
                                    error="Registration is temporarily closed."), 403
         if request.method == "POST":
+            from utils import rate_limited
+            if rate_limited(f"register:{request.remote_addr}", 5, 3600):
+                return render_template("register.html",
+                                       error="Too many signups from this network. Try later."), 429
             username = request.form.get("username", "").strip()
             email    = request.form.get("email", "").strip().lower()
             password = request.form.get("password", "")
@@ -74,8 +82,8 @@ def register_auth_routes(app):
                 error = "All fields are required."
             elif len(username) < 3:
                 error = "Username must be at least 3 characters."
-            elif len(password) < 6:
-                error = "Password must be at least 6 characters."
+            elif len(password) < 8:
+                error = "Password must be at least 8 characters."
             elif password != confirm:
                 error = "Passwords do not match."
             elif User.query.filter_by(username=username).first():

@@ -9,7 +9,7 @@
 
 <div class="grid g4" id="kpis" style="margin-bottom:16px">
   <div class="card" style="margin:0"><div class="stat-label">Total users</div><div class="stat-val" id="k-users"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub" id="k-pro"></div></div>
-  <div class="card" style="margin:0"><div class="stat-label">Active today</div><div class="stat-val green" id="k-active"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub">seen in last 24h</div></div>
+  <div class="card" style="margin:0"><div class="stat-label">Active today</div><div class="stat-val green" id="k-active"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub" id="k-churn">seen in last 24h</div></div>
   <div class="card" style="margin:0"><div class="stat-label">Predictions run</div><div class="stat-val blue" id="k-preds"><div class="skel" style="width:60px;height:26px"></div></div><div class="stat-sub">all time</div></div>
   <div class="card" style="margin:0"><div class="stat-label">Revenue (M-Pesa)</div><div class="stat-val orange" id="k-rev"><div class="skel" style="width:80px;height:26px"></div></div><div class="stat-sub" id="k-err"></div></div>
 </div>
@@ -56,6 +56,10 @@ async function load(days) {
   document.getElementById('k-users').textContent  = fmtNum(k.total_users);
   document.getElementById('k-pro').textContent    = fmtNum(k.pro_users) + ' pro subscribers';
   document.getElementById('k-active').textContent = fmtNum(k.active_today);
+  const churnEl = document.getElementById('k-churn');
+  if (k.churn_at_risk > 0) {
+    churnEl.innerHTML = `<a href="/admin/users?churn=at_risk" class="yellow">${fmtNum(k.churn_at_risk)} at churn risk →</a>`;
+  } else churnEl.textContent = 'seen in last 24h';
   document.getElementById('k-preds').textContent  = fmtNum(k.total_predictions);
   document.getElementById('k-rev').textContent    = 'KES ' + fmtNum(k.revenue_kes);
   const errEl = document.getElementById('k-err');

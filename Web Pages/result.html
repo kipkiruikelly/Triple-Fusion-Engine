@@ -863,6 +863,17 @@
           <div class="confidence-fill"></div>
         </div>
         <div class="pred-sub" style="margin-top: 6px;">{{ confidence }}% confidence</div>
+        {% if track_record %}
+        <div class="pred-sub" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          {% if track_record.sufficient %}
+          Track record: <b style="color:{% if track_record.direction_accuracy >= 55 %}var(--green){% elif track_record.direction_accuracy >= 45 %}var(--text){% else %}var(--red){% endif %}">{{ track_record.direction_accuracy }}%</b>
+          directional over {{ track_record.n }} graded calls ({{ track_record.days }}d)
+          {% else %}
+          Track record: insufficient data ({{ track_record.n }}/{{ 10 }} graded calls)
+          {% endif %}
+          · <a href="/track-record" style="color:var(--accent)">methodology</a>
+        </div>
+        {% endif %}
       </div>
       <div class="pred-card">
         <div class="pred-label">Expected Move</div>

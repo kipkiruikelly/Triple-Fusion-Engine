@@ -307,6 +307,18 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
             alerts.append(f"{errors_24h} application errors in the last 24h")
         if _retrain["running"]:
             alerts.append(f"Model retrain running for {_retrain['ticker']}")
+        try:
+            from ops import active_drift_alerts, churn_counts
+            alerts.extend(active_drift_alerts(db))
+            churn = churn_counts(db)
+        except Exception:
+            churn = {}
+        try:
+            from market_data import data_status
+            if data_status()["rate_limited"]:
+                alerts.append("Market data source is rate-limited — serving cached data")
+        except Exception:
+            pass
 
         return jsonify({"ok": True, "kpis": {
                             "total_users": total_users, "active_today": active_today,
@@ -314,6 +326,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                             "revenue_kes": float(revenue_kes or 0),
                             "error_rate_pct": round(errs / reqs * 100, 2),
                             "pro_users": User.query.filter_by(plan="pro").count(),
+                            "churn_at_risk": churn.get("at_risk", 0),
                         },
                         "signups": signups, "predictions": preds,
                         "revenue": revenue_series, "feed": feed[:12],
@@ -345,15 +358,29 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
         status = request.args.get("status", "")
         if status in ("active", "deactivated", "banned"):
             q = q.filter(User.status == status)
+        churn = request.args.get("churn", "")
+        if churn in ("active", "at_risk", "churned", "new"):
+            now = datetime.utcnow()
+            if churn == "active":
+                q = q.filter(User.last_seen >= now - timedelta(days=7))
+            elif churn == "at_risk":
+                q = q.filter(User.last_seen < now - timedelta(days=7),
+                             User.last_seen >= now - timedelta(days=30))
+            elif churn == "churned":
+                q = q.filter(User.last_seen < now - timedelta(days=30))
+            else:
+                q = q.filter(User.last_seen.is_(None))
         col = _USER_SORTS.get(request.args.get("sort", "id"), User.id)
         q = q.order_by(col.desc() if request.args.get("dir", "desc") == "desc"
                        else col.asc())
         return q
 
     def _user_row(u):
+        from ops import churn_bucket
         return {"id": u.id, "username": u.username, "email": u.email,
                 "plan": u.plan, "role": u.role or "user",
                 "status": u.status or "active",
+                "churn": churn_bucket(u),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "last_seen": u.last_seen.isoformat() if u.last_seen else None,
                 "predictions": PredictionHistory.query.filter_by(user_id=u.id).count()}
@@ -987,6 +1014,46 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
             pass
         _audit("settings.update", "setting", None, "; ".join(changed))
         return jsonify({"ok": True, "changed": len(changed)})
+
+    # ══ API: user feedback ════════════════════════════════════════════════════
+
+    @app.route("/admin/api/feedback")
+    @admin_required("viewer")
+    def admin_api_feedback():
+        from models import Feedback
+        page = max(int(request.args.get("page", 1)), 1)
+        per  = min(int(request.args.get("per", 20)), 100)
+        q = Feedback.query
+        if request.args.get("unresolved") == "1":
+            q = q.filter(Feedback.resolved.is_(False))
+        total = q.count()
+        rows = q.order_by(Feedback.id.desc()).offset((page - 1) * per).limit(per).all()
+        users = {u.id: u.username for u in
+                 User.query.filter(User.id.in_({r.user_id for r in rows})).all()} if rows else {}
+        avg = db.session.query(db.func.avg(Feedback.rating)).scalar()
+        sent = db.session.query(db.func.avg(Feedback.sentiment)).filter(
+            Feedback.sentiment.isnot(None)).scalar()
+        return jsonify({"ok": True, "total": total, "page": page, "per": per,
+                        "avg_rating": round(float(avg), 2) if avg is not None else None,
+                        "avg_sentiment": round(float(sent), 2) if sent is not None else None,
+                        "items": [{"id": f.id, "user": users.get(f.user_id, "?"),
+                                   "user_id": f.user_id, "page": f.page,
+                                   "rating": f.rating, "comment": f.comment,
+                                   "sentiment": f.sentiment, "resolved": f.resolved,
+                                   "at": f.created_at.isoformat()} for f in rows]})
+
+    @app.route("/admin/api/feedback/<int:fid>/resolve", methods=["POST"])
+    @admin_required("support")
+    def admin_api_feedback_resolve(fid):
+        from models import Feedback
+        f = db.session.get(Feedback, fid)
+        if not f:
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        f.resolved = not bool(f.resolved)
+        db.session.commit()
+        _audit("feedback.resolve" if f.resolved else "feedback.reopen",
+               "feedback", f.id)
+        return jsonify({"ok": True, "resolved": f.resolved})
 
     # ══ API: audit log ════════════════════════════════════════════════════════
 

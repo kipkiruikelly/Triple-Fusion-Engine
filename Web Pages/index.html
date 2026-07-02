@@ -624,6 +624,7 @@
       <a href="/scanner">Scanner</a>
       <a href="/journal">Journal</a>
       <a href="/history">History</a>
+      <a href="/track-record">Track Record</a>
       <a href="/pricing">Pricing</a>
     </nav>
   </div>
@@ -1353,18 +1354,34 @@ if ('serviceWorker' in navigator) {
 (function startStream() {
   const tickers = ['AAPL','MSFT','NVDA','TSLA','SPY','QQQ','AMZN','META'];
   const qs = tickers.map(t => 't=' + t).join('&');
-  const es = new EventSource('/api/stream/prices?' + qs);
   const container = document.getElementById('live-prices');
   const status    = document.getElementById('stream-status');
 
+  // Data-saver mode: skip the always-on stream, poll a light snapshot instead.
+  const saveData = navigator.connection && navigator.connection.saveData;
+  if (saveData) {
+    status.textContent = '◌ low-data mode';
+    const poll = async () => {
+      try {
+        const r = await fetch('/api/prices/batch?' + qs);
+        renderPrices(await r.json());
+      } catch (e) {}
+    };
+    poll(); setInterval(poll, 60000);
+    return;
+  }
+
+  const es = new EventSource('/api/stream/prices?' + qs);
   es.onopen = () => { status.textContent = '● live'; status.style.color = 'var(--green)'; };
   es.onerror = () => { status.textContent = '○ reconnecting'; status.style.color = 'var(--muted)'; };
 
-  es.onmessage = (ev) => {
-    const data = JSON.parse(ev.data);
+  es.onmessage = (ev) => renderPrices(JSON.parse(ev.data));
+
+  function renderPrices(data) {
     let html = '';
     for (const [sym, info] of Object.entries(data)) {
-      const pct = info.pct;
+      if (!info) continue;
+      const pct = info.pct ?? info.change_pct ?? 0;
       const col = pct >= 0 ? 'var(--green)' : 'var(--red)';
       const sign = pct >= 0 ? '+' : '';
       html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 12px;text-align:center">
@@ -1373,8 +1390,9 @@ if ('serviceWorker' in navigator) {
         <div style="font-size:9pt;color:${col};font-weight:600">${sign}${pct.toFixed(2)}%</div>
       </div>`;
     }
-    container.innerHTML = html;
-  };
+    if (html) container.innerHTML = html;
+  }
+  window.__renderPrices = renderPrices;
 })();
 
 // ── Notification bell ──────────────────────────────────────────────────────
@@ -1518,6 +1536,63 @@ function toggleTheme() {
   localStorage.setItem('bl-theme', isLight ? 'light' : 'dark');
   const btn = document.getElementById('themeToggle');
   if (btn) btn.textContent = isLight ? '☾ Dark' : '☀ Light';
+}
+</script>
+
+<!-- Degraded market-data banner -->
+<div id="dataBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:900;background:#3a2f10;color:#EAB308;border-bottom:1px solid #EAB308;padding:7px 14px;font-size:9pt;text-align:center">
+  ⚠ Market data source is throttled — showing last known prices. Predictions still work but may use slightly delayed data.
+</div>
+<script>
+(async () => {
+  try {
+    const r = await fetch('/api/health/data');
+    const d = await r.json();
+    if (d.rate_limited) document.getElementById('dataBanner').style.display = '';
+  } catch (e) {}
+})();
+</script>
+
+<!-- Feedback widget -->
+<button id="fbBtn" onclick="document.getElementById('fbPanel').style.display='block';this.style.display='none'"
+  style="position:fixed;bottom:18px;right:18px;z-index:800;background:var(--accent);color:#fff;border:none;border-radius:24px;padding:10px 16px;font-family:inherit;font-size:9.5pt;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.4)">💬 Feedback</button>
+<div id="fbPanel" style="display:none;position:fixed;bottom:18px;right:18px;z-index:801;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;width:min(300px,90vw);box-shadow:0 10px 30px rgba(0,0,0,.5)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <b style="font-size:10pt">How is BullLogic?</b>
+    <button onclick="fbClose()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11pt">✕</button>
+  </div>
+  <div id="fbStars" style="font-size:16pt;cursor:pointer;letter-spacing:3px;margin-bottom:10px">
+    <span data-v="1">☆</span><span data-v="2">☆</span><span data-v="3">☆</span><span data-v="4">☆</span><span data-v="5">☆</span>
+  </div>
+  <textarea id="fbComment" rows="3" maxlength="500" placeholder="Anything we should fix or build? (optional)"
+    style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:8px;font-family:inherit;font-size:9pt;resize:vertical"></textarea>
+  <button onclick="fbSend()" style="width:100%;margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:7px;padding:9px;font-family:inherit;font-weight:700;font-size:9.5pt;cursor:pointer">Send</button>
+  <div id="fbMsg" style="font-size:8.5pt;color:var(--muted);margin-top:8px;text-align:center"></div>
+</div>
+<script>
+let fbRating = 0;
+document.querySelectorAll('#fbStars span').forEach(s => s.onclick = () => {
+  fbRating = +s.dataset.v;
+  document.querySelectorAll('#fbStars span').forEach(x =>
+    x.textContent = +x.dataset.v <= fbRating ? '★' : '☆');
+});
+function fbClose() {
+  document.getElementById('fbPanel').style.display = 'none';
+  document.getElementById('fbBtn').style.display = '';
+}
+async function fbSend() {
+  const msg = document.getElementById('fbMsg');
+  if (!fbRating) { msg.textContent = 'Tap a star rating first'; return; }
+  try {
+    const r = await fetch('/api/feedback', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({rating: fbRating,
+                            comment: document.getElementById('fbComment').value,
+                            page: location.pathname})});
+    const d = await r.json();
+    msg.textContent = d.ok ? d.message : (d.error || 'Failed — try again');
+    if (d.ok) setTimeout(fbClose, 1500);
+  } catch (e) { msg.textContent = 'Network error — try again'; }
 }
 </script>
 </body>

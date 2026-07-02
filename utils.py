@@ -58,6 +58,22 @@ _SECTOR_ETFS = {
 }
 
 
+# ── Rate limiting (in-memory, per key) ────────────────────────────────────────
+
+_rl_buckets = {}
+
+
+def rate_limited(key, max_hits, window_s):
+    """Sliding-window limiter. Records the hit and returns True if the
+    caller has now exceeded max_hits within window_s."""
+    import time as _time
+    now = _time.time()
+    hits = [t for t in _rl_buckets.get(key, []) if now - t < window_s]
+    hits.append(now)
+    _rl_buckets[key] = hits
+    return len(hits) > max_hits
+
+
 # ── Auth helpers ──────────────────────────────────────────────────────────────
 
 def consume_quota(user):
@@ -71,6 +87,17 @@ def consume_quota(user):
     user.predictions_today += 1
     db.session.commit()
     return True
+
+
+def refund_quota(user):
+    """Give back one prediction — used when a prediction fails after the
+    quota was already consumed, so errors never cost free users a slot."""
+    try:
+        if not user.is_pro and (user.predictions_today or 0) > 0:
+            user.predictions_today -= 1
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def pro_required(f):

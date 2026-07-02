@@ -4,7 +4,7 @@ gunicorn==22.0.0
 flask-login==0.6.3
 flask-sqlalchemy==3.1.1
 flask-mail==0.10.0
-yfinance==0.2.54
+yfinance>=1.5.1
 pandas==2.1.4
 ta==0.11.0
 numpy==1.26.4
@@ -20,3 +20,4 @@ requests>=2.31.0
 mt5linux
 metaapi-cloud-sdk
 pyotp>=2.9.0
+pytest>=8.0  # dev/test only
