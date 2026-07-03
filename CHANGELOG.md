@@ -1,5 +1,68 @@
 # Changelog
 
+## 2026-07-03, Paper trading engine and WorldQuant-style alpha framework
+
+All simulated, virtual money only. No real order execution anywhere; a
+test asserts no broker/order code is reachable from the paper system.
+
+### Paper trading engine (paper_engine.py, routes/paper.py)
+- Virtual portfolio (default 1,000,000 KES, labeled VIRTUAL/simulated
+  everywhere) consuming two signal streams head to head: ml_ensemble
+  (the platform's LR + RF vote) and alpha_rules (quant composite).
+- Entries record the real market price, source (yfinance/pyth) and
+  timestamp; fills pay configurable spread/slippage (5 bps) and
+  commission (10 bps) per side so results are not fantasy fills.
+- Exits on stop, target, signal reversal, or max holding period.
+- Risk management: volatility-based sizing (1% of equity risked per
+  trade over an ATR stop), max concurrent positions, per-asset-class
+  exposure cap, and a daily loss circuit breaker that pauses entries.
+- Append-only honesty: trades are never edited; every open/close/reject/
+  breaker/toggle/config action appends to an audit trail. Nothing is
+  seeded; day one starts at zero trades.
+- Public results page /paper (equity curve, Sharpe, Sortino, max
+  drawdown, win rate, profit factor, avg win/loss, exposure, turnover,
+  per-model and per-asset-class breakdowns) with "insufficient data"
+  below 10 closed trades. Public /paper/rules page renders every live
+  config value so nothing is a black box.
+- Admin console page (start/pause, per-strategy toggles, bounded config
+  editor, open positions, audit events) plus a dashboard health badge.
+- Engine cycles run in the existing ops thread every ~15 minutes,
+  respecting market hours per asset class (crypto 24/7, US equities
+  regular session, forex/commodities Sun 22:00 to Fri 21:00 UTC).
+- Daily staff digest now includes a simulated P&L summary line.
+
+### Alpha framework (alphas.py)
+- 11 alphas as clean, testable functions with hypothesis docstrings:
+  momentum (5/10/20d, MACD), mean reversion (20d z-score, RSI extremes,
+  Bollinger position), volatility (realized vol ratio, vol-adjusted
+  momentum), volume (signed volume z-score, OBV trend).
+- Cross-sectional ranking across the tracked universe (favor top-ranked
+  longs / bottom-ranked shorts rather than absolute values).
+- Pyth oracle confidence filter downweights signals when the confidence
+  interval is unusually wide.
+- Composite scoring with IC-derived weights (negative-IC alphas floored
+  to zero, never sign-flipped).
+- Validation discipline: walk-forward out-of-sample IC per alpha,
+  purged train/test splits for ML retraining (XGB CV folds now purge
+  label overlap), and an explicit no-lookahead test that recomputes
+  every alpha on truncated history.
+- Alpha features (Alpha_*) added to the training feature list and the
+  inference feature builder; existing models are unaffected (they select
+  their saved feature columns) and the next retrain picks them up.
+
+### Tests (51 new, 93 total)
+- Position sizing math, friction application, stop/target/reversal/
+  timeout execution, Sharpe/drawdown/profit-factor against hand-computed
+  fixtures, daily loss breaker, append-only audit, honest empty states,
+  no-lookahead assertion for every alpha, purged split leakage checks,
+  and a broker-code scan asserting the paper system contains no real
+  order path.
+
+### Fixed along the way
+- SSE price stream endpoint set a hop-by-hop Connection header that
+  waitress rejects per PEP 3333; every stream connect was crashing (28
+  occurrences in the service log). Header removed.
+
 ## 2026-07-02, Oracle data layer, resources hub, ethical engagement
 
 ### Phase 1: Pyth Network oracle integration

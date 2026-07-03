@@ -183,6 +183,15 @@ EARNINGS_FEATURE_COLS = [
     "Pre_Earnings_Window", "Post_Earnings_Window",
 ]
 
+# Quant alpha features from alphas.py (momentum, mean reversion, volatility,
+# volume) plus the equal-weight composite. Causal by contract, tested in
+# tests/test_alphas.py.
+try:
+    from alphas import ALPHA_REGISTRY as _ALPHA_REGISTRY
+    ALPHA_FEATURE_COLS = [f"Alpha_{name}" for name in _ALPHA_REGISTRY] + ["Alpha_composite"]
+except ImportError:
+    ALPHA_FEATURE_COLS = []
+
 # ── Feature lists ──────────────────────────────────────────────────────────────
 
 DAILY_FEATURE_COLS = [
@@ -216,6 +225,8 @@ DAILY_FEATURE_COLS = [
     *SECTOR_FEATURE_COLS,
     # Earnings proximity
     *EARNINGS_FEATURE_COLS,
+    # Quant alphas
+    *ALPHA_FEATURE_COLS,
 ]
 
 # Intraday adds kill-zone, session, and 2022 Silver Bullet / Asia range features
@@ -592,6 +603,10 @@ def engineer_features(df: pd.DataFrame, interval: str = "1d",
         for c in VIX_FEATURE_COLS + SECTOR_FEATURE_COLS + EARNINGS_FEATURE_COLS:
             df[c] = 0.0
 
+    if ALPHA_FEATURE_COLS:
+        from alphas import add_alpha_features
+        df = add_alpha_features(df)
+
     df["Next_Close"]  = df["Close"].shift(-1)
     df["Next_Return"] = (df["Next_Close"] / df["Close"] - 1) * 100
     df.dropna(inplace=True)
@@ -660,12 +675,17 @@ def train_ticker(ticker: str, interval: str = "1d",
         X_raw = df[feat].values          # unscaled, rescaled per CV fold
         y_dir = (df["Next_Return"].values > 0).astype(int)
 
-        # 5-fold walk-forward CV on training portion (no data leakage)
+        # 5-fold walk-forward CV on training portion (no data leakage).
+        # Purge: drop the last bars of each training fold whose forward
+        # looking labels overlap the validation window.
+        _PURGE = 5
         X_cv  = X_raw[:split1]
         y_cv  = y_dir[:split1]
         tscv  = TimeSeriesSplit(n_splits=5)
         fold_accs = []
         for tr_idx, val_idx in tscv.split(X_cv):
+            if len(tr_idx) > _PURGE:
+                tr_idx = tr_idx[:-_PURGE]
             sc_tmp = MinMaxScaler().fit(X_cv[tr_idx])
             Xtr = sc_tmp.transform(X_cv[tr_idx])
             Xvl = sc_tmp.transform(X_cv[val_idx])

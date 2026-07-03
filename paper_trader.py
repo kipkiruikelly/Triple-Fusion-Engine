@@ -24,6 +24,14 @@ import smtplib
 import warnings
 warnings.filterwarnings("ignore")
 
+# Windows consoles default to cp1252, which can't print the report's
+# box-drawing characters.
+if sys.stdout and getattr(sys.stdout, "encoding", "") and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -111,90 +119,23 @@ def _open_positions(conn):
 
 def _fetch_ohlcv(ticker: str) -> pd.DataFrame:
     yf_sym = YF_SYMBOL_MAP.get(ticker, ticker)
-    df = yf.download(yf_sym, period="1y", interval="1d",
+    # 18mo so the VIX 252-day percentile and 200SMA have real history
+    df = yf.download(yf_sym, period="18mo", interval="1d",
                      auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
 
 
-def _features(df: pd.DataFrame) -> pd.DataFrame:
-    """Minimal feature set for signal generation (mirrors backtest._build_features)."""
-    import ta
-    df = df.copy()
-    close, high, low, open_ = df["Close"], df["High"], df["Low"], df["Open"]
+def _features(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """Full production feature set — same pipeline the models were trained on.
 
-    df["SMA_7"]  = ta.trend.sma_indicator(close, window=7)
-    df["SMA_21"] = ta.trend.sma_indicator(close, window=21)
-    df["EMA_12"] = ta.trend.ema_indicator(close, window=12)
-    df["EMA_26"] = ta.trend.ema_indicator(close, window=26)
-    df["RSI_14"] = ta.momentum.rsi(close, window=14)
-    macd_obj = ta.trend.MACD(close)
-    df["MACD"]      = macd_obj.macd()
-    df["MACD_Hist"] = macd_obj.macd_diff()
-    bb = ta.volatility.BollingerBands(close, window=20, window_dev=2)
-    df["BB_Upper"] = bb.bollinger_hband()
-    df["BB_Lower"] = bb.bollinger_lband()
-    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / bb.bollinger_mavg()
-    df["Volume_SMA_10"] = ta.trend.sma_indicator(df["Volume"], window=10)
-    df["Daily_Return"]  = close.pct_change() * 100
-    for lag in range(1, 6):
-        df[f"Close_lag_{lag}"]  = close.shift(lag)
-        df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
-
-    atr14 = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
-    atr14 = atr14.fillna(close * 0.01)
-    df["ATR_14"] = atr14
-
-    sma200 = close.rolling(200, min_periods=1).mean()
-    df["Above_200SMA"]   = (close > sma200).astype(int)
-    df["Dist_200SMA"]    = ((close - sma200) / sma200 * 100).fillna(0)
-    rng  = (high - low).replace(0, np.nan)
-    body = (close - open_).abs()
-    df["Body_Ratio"]   = (body / rng).fillna(0).clip(0, 1)
-    df["Displacement"] = ((rng.fillna(0) > atr14 * 1.5) & (df["Body_Ratio"] > 0.6)).astype(int)
-    sh20 = high.rolling(20).max()
-    sl20 = low.rolling(20).min()
-    df["Dist_to_SH"]       = ((sh20 - close) / (atr14 + 1e-8)).clip(-10, 10)
-    df["Dist_to_SL"]       = ((close - sl20)  / (atr14 + 1e-8)).clip(-10, 10)
-    df["Structure_Bullish"] = (sh20 > high.rolling(60).max().shift(20)).astype(int)
-    rh = high.rolling(60).max()
-    rl = low.rolling(60).min()
-    df["PD_Position"] = ((close - rl) / (rh - rl).replace(0, np.nan)).fillna(0.5).clip(0, 1)
-    bull_fvg = (low > high.shift(2)).astype(int)
-    bear_fvg = (high < low.shift(2)).astype(int)
-    df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
-    df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
-    bearish = (close < open_)
-    bullish = (close > open_)
-    bull_ob = (bearish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bullish
-    bear_ob = (bullish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bearish
-    df["Bull_OB_Count"] = bull_ob.astype(int).rolling(10, min_periods=1).sum()
-    df["Bear_OB_Count"] = bear_ob.astype(int).rolling(10, min_periods=1).sum()
-    df["Swept_High"] = ((high > sh20.shift(1)) & (close < sh20.shift(1))).astype(int)
-    df["Swept_Low"]  = ((low  < sl20.shift(1)) & (close > sl20.shift(1))).astype(int)
-
-    for n in [20, 40, 60]:
-        df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
-        df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
-    tol = close * 0.001
-    df["Equal_Highs"] = ((high - high.rolling(10).max().shift(1)).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
-    df["Equal_Lows"]  = ((low  - low.rolling(10).min().shift(1)).abs()  < tol).astype(int).rolling(10, min_periods=1).sum()
-    rng20 = (sh20 - sl20).replace(0, np.nan)
-    df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
-    df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
-    q, m_idx = df.index.quarter, df.index.month
-    df["Quarter_Sin"] = np.sin(2 * np.pi * q / 4)
-    df["Quarter_Cos"] = np.cos(2 * np.pi * q / 4)
-    df["Month_Sin"]   = np.sin(2 * np.pi * m_idx / 12)
-    df["Month_Cos"]   = np.cos(2 * np.pi * m_idx / 12)
-    bull_ce = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
-    bear_ce = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
-    df["CE_Bull_FVG_Dist"] = ((close - bull_ce) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
-    df["CE_Bear_FVG_Dist"] = ((bear_ce - close)  / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
-
-    df.dropna(inplace=True)
-    return df
+    Delegates to predictor.build_features (TA + ICT + VIX/sector/earnings aux)
+    so live paper trades never diverge from the trained feature space.
+    """
+    from predictor import build_features, _fetch_aux
+    aux = _fetch_aux(ticker, "1d")
+    return build_features(df.copy(), "1d", ticker, aux)
 
 
 def _ict_bias_score(row: pd.Series, closes: np.ndarray) -> dict:
@@ -261,7 +202,11 @@ def _ml_vote(ticker: str, df: pd.DataFrame) -> str:
         rf   = joblib.load(paths["rf"])
         sc   = joblib.load(paths["sc"])
         feat = joblib.load(paths["feat"])
-        feat = [f for f in feat if f in df.columns]
+        missing = [f for f in feat if f not in df.columns]
+        if missing:
+            print(f"  [ml] {ticker}: {len(missing)} trained features not built "
+                  f"({', '.join(missing[:4])}…) — ML vote disabled")
+            return "HOLD"
         X    = sc.transform(df[feat].iloc[-1:].values)
         cur  = float(df["Close"].iloc[-1])
         lr_up = float(lr.predict(X)[0]) > cur
@@ -277,7 +222,8 @@ def _ml_vote(ticker: str, df: pd.DataFrame) -> str:
         if votes_up >= 2:   return "BUY"
         if votes_dn >= 2:   return "SELL"
         return "HOLD"
-    except Exception:
+    except Exception as e:
+        print(f"  [ml] {ticker}: model inference failed ({type(e).__name__}: {e}) — ML vote disabled")
         return "HOLD"
 
 
@@ -406,9 +352,11 @@ def scan(conn, tickers):
         try:
             df = _fetch_ohlcv(ticker)
             if df.empty or len(df) < 120:
+                print(f"  [scan] {ticker}: insufficient data ({len(df)} rows), skipped")
                 continue
-            df = _features(df)
+            df = _features(df, ticker)
             if df.empty:
+                print(f"  [scan] {ticker}: feature build produced no rows, skipped")
                 continue
             row    = df.iloc[-1]
             closes = df["Close"].values

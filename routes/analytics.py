@@ -586,6 +586,5 @@ def register_analytics_routes(app):
             stream_with_context(generate()),
             mimetype="text/event-stream",
             headers={"Cache-Control": "no-cache",
-                     "X-Accel-Buffering": "no",
-                     "Connection": "keep-alive"},
+                     "X-Accel-Buffering": "no"},
         )

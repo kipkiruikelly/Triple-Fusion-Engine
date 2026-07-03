@@ -521,6 +521,14 @@ def build_features(df: pd.DataFrame, interval: str = "1d",
     else:
         for c in _AUX_COLS:
             df[c] = 0.0
+    # Quant alpha features (Alpha_*). Causal by contract; existing models
+    # ignore them (they select by saved feature_cols) and the next retrain
+    # picks them up automatically.
+    try:
+        from alphas import add_alpha_features
+        df = add_alpha_features(df)
+    except Exception:
+        pass
     df.dropna(inplace=True)
     return df
 

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Paper Trading, BullLogic</title>
+  <meta name="description" content="Live simulated trading track record. Virtual money only, honest metrics, documented friction assumptions."/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{--bg:#0F1217;--surface:#1A1F2E;--surface2:#222840;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--green:#00C076;--red:#FF4D4D;--yellow:#FFB020}
+    body{font-family:'Inter',sans-serif;font-size:10.5pt;background:var(--bg);color:var(--text);min-height:100vh}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .logo{font-size:14pt;font-weight:700;color:#fff;text-decoration:none}.logo span{color:var(--accent)}
+    .btn{padding:6px 14px;border-radius:6px;font-size:9pt;font-weight:600;text-decoration:none;color:var(--text);border:1px solid var(--border)}
+    .wrap{max-width:980px;margin:0 auto;padding:36px 20px}
+    h1{font-size:19pt;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    h2{font-size:12pt;margin-bottom:10px}
+    .sub{color:var(--muted);font-size:10pt;line-height:1.6;margin-bottom:26px;max-width:720px}
+    .simbadge{background:rgba(255,176,32,.12);color:var(--yellow);border:1px solid rgba(255,176,32,.4);font-size:8pt;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px}
+    .runbadge{font-size:8pt;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.5px}
+    .running{background:rgba(0,192,118,.12);color:var(--green);border:1px solid rgba(0,192,118,.4)}
+    .paused{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+    .hero{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}
+    .lbl{color:var(--muted);font-size:8pt;font-weight:600;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+    .val{font-size:17pt;font-weight:700}
+    .val small{font-size:9pt;color:var(--muted);font-weight:500}
+    table{width:100%;border-collapse:collapse}
+    th{padding:9px 10px;text-align:left;font-size:7.5pt;font-weight:600;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--border)}
+    td{padding:9px 10px;font-size:9pt;border-bottom:1px solid var(--border)}
+    tr:last-child td{border-bottom:none}
+    .good{color:var(--green);font-weight:700}.bad{color:var(--red);font-weight:700}
+    .muted{color:var(--muted)}
+    .note{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-top:22px;font-size:9pt;color:var(--muted);line-height:1.7}
+    .empty{text-align:center;padding:40px;color:var(--muted)}
+    .tabs button{padding:5px 12px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:inherit;font-size:8.5pt;font-weight:600;margin-right:6px}
+    .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+    svg text{font-family:'Inter',sans-serif}
+    @media(max-width:760px){.hero{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/" class="logo">Bull<span>Logic</span></a>
+  <div style="display:flex;gap:10px">
+    <a href="/paper/rules" class="btn">Strategy Rules</a>
+    <a href="/track-record" class="btn">Prediction Accuracy</a>
+    <a href="/" class="btn">← App</a>
+  </div>
+</div>
+<div class="wrap">
+  <h1>Paper Trading Track Record
+    <span class="simbadge">SIMULATED, VIRTUAL MONEY</span>
+    <span class="runbadge paused" id="runState">...</span>
+  </h1>
+  <p class="sub">Two strategies trade a virtual account against real market prices: the ML ensemble
+  (the same models behind our predictions) and a quantitative alpha-rules strategy, head to head.
+  Every simulated fill pays spread, slippage and commission (<a href="/paper/rules" style="color:var(--accent)">assumptions here</a>).
+  Trades are append-only and never edited. Below <b id="minTrades">10</b> closed trades a strategy honestly reports "insufficient data".</p>
+
+  <div id="emptyState" class="card" style="display:none">
+    <div class="empty" id="emptyMsg"></div>
+  </div>
+
+  <div id="content" style="display:none">
+    <div class="tabs" style="margin-bottom:14px">
+      <button id="tab-ml_ensemble" class="on" onclick="show('ml_ensemble')">ML Ensemble</button>
+      <button id="tab-alpha_rules" onclick="show('alpha_rules')">Alpha Rules</button>
+    </div>
+
+    <div class="hero" id="heroCards"></div>
+
+    <div class="card">
+      <h2>Virtual equity curve <span class="muted" style="font-size:8pt">(simulated, KES)</span></h2>
+      <div id="chart"></div>
+    </div>
+
+    <div class="card">
+      <h2>Performance metrics <span class="muted" style="font-size:8pt">(simulated)</span></h2>
+      <table><tbody id="metrics"></tbody></table>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" id="breakGrid">
+      <div class="card" style="margin:0">
+        <h2>By asset class</h2>
+        <table><thead><tr><th>Class</th><th>Trades</th><th>Win rate</th><th>Net P&amp;L (sim)</th></tr></thead>
+        <tbody id="byClass"></tbody></table>
+      </div>
+      <div class="card" style="margin:0">
+        <h2>By model</h2>
+        <table><thead><tr><th>Model</th><th>Trades</th><th>Win rate</th><th>Net P&amp;L (sim)</th></tr></thead>
+        <tbody id="byModel"></tbody></table>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <h2>Closed trades <span class="muted" style="font-size:8pt">(most recent, simulated)</span></h2>
+      <div style="overflow-x:auto">
+      <table><thead><tr><th>Closed</th><th>Ticker</th><th>Side</th><th>Entry</th><th>Exit</th><th>Reason</th><th>P&amp;L (sim)</th></tr></thead>
+      <tbody id="trades"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b style="color:var(--text)">This is a simulation.</b> All balances, positions and P&amp;L figures on this
+    page are virtual and clearly labeled simulated. No real orders are placed anywhere in this system.
+    Fills include a documented spread/slippage and commission estimate, but real execution would differ.
+    Simulated performance does not guarantee real results. Past performance does not guarantee future
+    results. This is not financial advice.
+  </div>
+</div>
+<script>
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+let DATA=null,CUR='ml_ensemble';
+
+function fmt(n,d=2){return n==null?'-':Number(n).toLocaleString(undefined,{maximumFractionDigits:d})}
+
+function drawChart(curve,start){
+  const el=document.getElementById('chart');
+  if(!curve.length){el.innerHTML='<div class="empty">No equity snapshots yet. The curve appears once the engine runs.</div>';return}
+  const pts=[{date:'start',equity:start},...curve];
+  const W=900,H=240,P=42;
+  const vals=pts.map(p=>p.equity);
+  let lo=Math.min(...vals),hi=Math.max(...vals);
+  if(hi-lo<1e-9){lo-=1;hi+=1}
+  const x=i=>P+(W-2*P)*(pts.length===1?0:i/(pts.length-1));
+  const y=v=>H-P-(H-2*P)*((v-lo)/(hi-lo));
+  let path='M'+x(0)+' '+y(pts[0].equity);
+  for(let i=1;i<pts.length;i++)path+=' L'+x(i)+' '+y(pts[i].equity);
+  const last=pts[pts.length-1].equity,up=last>=start;
+  let grid='';
+  for(let g=0;g<4;g++){const gy=P+(H-2*P)*g/3;const gv=hi-(hi-lo)*g/3;
+    grid+='<line x1="'+P+'" y1="'+gy+'" x2="'+(W-P)+'" y2="'+gy+'" stroke="#2A3150" stroke-width="1"/>'
+        +'<text x="'+(P-6)+'" y="'+(gy+3)+'" text-anchor="end" font-size="8" fill="#7A8499">'+fmt(gv,0)+'</text>'}
+  el.innerHTML='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto">'+grid
+    +'<line x1="'+P+'" y1="'+y(start)+'" x2="'+(W-P)+'" y2="'+y(start)+'" stroke="#7A8499" stroke-dasharray="4 4" stroke-width="1"/>'
+    +'<path d="'+path+'" fill="none" stroke="'+(up?'#00C076':'#FF4D4D')+'" stroke-width="2"/>'
+    +'<text x="'+(W-P)+'" y="'+(y(last)-8)+'" text-anchor="end" font-size="9" fill="'+(up?'#00C076':'#FF4D4D')+'">'+fmt(last,0)+' (sim)</text>'
+    +'</svg>';
+}
+
+function show(name){
+  CUR=name;
+  document.getElementById('tab-ml_ensemble').classList.toggle('on',name==='ml_ensemble');
+  document.getElementById('tab-alpha_rules').classList.toggle('on',name==='alpha_rules');
+  const s=DATA.strategies.find(x=>x.strategy===name);
+  const m=s.metrics;
+  const ret=((s.equity/s.starting_balance-1)*100);
+  document.getElementById('heroCards').innerHTML=
+    '<div class="card" style="margin:0"><div class="lbl">Virtual equity (sim)</div><div class="val">'+fmt(s.equity,0)+' <small>KES</small></div></div>'
+   +'<div class="card" style="margin:0"><div class="lbl">Total return (sim)</div><div class="val '+(ret>=0?'good':'bad')+'">'+(ret>=0?'+':'')+ret.toFixed(2)+'%</div></div>'
+   +'<div class="card" style="margin:0"><div class="lbl">Closed trades</div><div class="val">'+m.trades+'</div></div>'
+   +'<div class="card" style="margin:0"><div class="lbl">Open positions</div><div class="val">'+s.open_positions+' <small>exposure '+fmt(s.exposure_pct,1)+'%</small></div></div>';
+  drawChart(s.equity_curve,s.starting_balance);
+
+  const mt=document.getElementById('metrics');
+  if(!m.sufficient){
+    mt.innerHTML='<tr><td colspan="2" class="empty">Insufficient data: '+m.trades+' of '+m.min_trades
+      +' closed trades needed before metrics are shown. Nothing is estimated or extrapolated.</td></tr>';
+  }else{
+    const rows=[['Total return (sim)',m.total_return_pct!=null?m.total_return_pct+'%':'-'],
+      ['Sharpe ratio',m.sharpe],['Sortino ratio',m.sortino],
+      ['Max drawdown',m.max_drawdown_pct!=null?m.max_drawdown_pct+'%':'-'],
+      ['Win rate',m.win_rate_pct+'%'],['Profit factor',m.profit_factor],
+      ['Average win (sim KES)',fmt(m.avg_win)],['Average loss (sim KES)',fmt(m.avg_loss)],
+      ['Net P&L (sim KES)',fmt(m.net_pnl)],['Turnover (sim KES)',fmt(s.turnover,0)]];
+    mt.innerHTML=rows.map(r=>'<tr><td>'+r[0]+'</td><td style="text-align:right"><b>'+(r[1]??'-')+'</b></td></tr>').join('');
+  }
+
+  const bc=document.getElementById('byClass'),bm=document.getElementById('byModel');
+  const fill=(el,obj)=>{
+    const keys=Object.keys(obj);
+    el.innerHTML=keys.length?keys.map(k=>{const b=obj[k];
+      return '<tr><td>'+esc(k)+'</td><td>'+b.trades+'</td><td>'+(b.win_rate_pct!=null?b.win_rate_pct+'%':'<span class="muted">insufficient</span>')
+        +'</td><td class="'+(b.net_pnl>=0?'good':'bad')+'">'+(b.net_pnl>=0?'+':'')+fmt(b.net_pnl)+'</td></tr>'}).join('')
+      :'<tr><td colspan="4" class="empty">No closed trades yet</td></tr>'};
+  fill(bc,s.by_asset_class);fill(bm,s.by_model);
+  loadTrades(name);
+}
+
+async function loadTrades(name){
+  const r=await fetch('/api/paper/trades?strategy='+name);
+  const d=await r.json();
+  document.getElementById('trades').innerHTML=d.trades.length?d.trades.map(t=>
+    '<tr><td>'+esc((t.exit_time||'').slice(0,16).replace('T',' '))+'</td><td><b>'+esc(t.ticker)+'</b></td>'
+    +'<td>'+(t.side==='LONG'?'<span class="good">LONG</span>':'<span class="bad">SHORT</span>')+'</td>'
+    +'<td>'+fmt(t.entry_price,4)+'</td><td>'+fmt(t.exit_price,4)+'</td><td>'+esc(t.exit_reason)+'</td>'
+    +'<td class="'+(t.pnl>=0?'good':'bad')+'">'+(t.pnl>=0?'+':'')+fmt(t.pnl)+'</td></tr>').join('')
+    :'<tr><td colspan="7" class="empty">No closed trades yet. Results accumulate live; nothing is backfilled.</td></tr>';
+}
+
+async function load(){
+  const r=await fetch('/api/paper/summary');
+  DATA=await r.json();
+  document.getElementById('minTrades').textContent=DATA.min_trades;
+  const rs=document.getElementById('runState');
+  rs.textContent=DATA.enabled?'RUNNING':'PAUSED';
+  rs.className='runbadge '+(DATA.enabled?'running':'paused');
+  if(!DATA.started_at){
+    document.getElementById('emptyState').style.display='block';
+    document.getElementById('emptyMsg').innerHTML='Paper trading has not started yet.<br>'
+      +'When it starts, day one begins with zero trades and results accumulate live. Nothing is seeded or backfilled.';
+    return;
+  }
+  document.getElementById('emptyState').style.display='block';
+  document.getElementById('emptyMsg').innerHTML='Paper trading started <b>'
+    +esc(DATA.started_at.slice(0,10))+'</b>. Results accumulate live.';
+  document.getElementById('content').style.display='block';
+  show(CUR);
+}
+load();
+</script>
+</body>
+</html>

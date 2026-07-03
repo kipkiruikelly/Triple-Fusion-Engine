@@ -116,6 +116,7 @@ def create_app():
     from routes.analytics     import register_analytics_routes
     from routes.admin         import register_admin_routes
     from routes.notifications import register_notification_routes
+    from routes.paper         import register_paper_routes
 
     register_auth_routes(app)
     register_payment_routes(app)
@@ -125,6 +126,7 @@ def create_app():
     register_analytics_routes(app)
     register_admin_routes(app, _endpoint_stats, _APP_START)
     register_notification_routes(app)
+    register_paper_routes(app)
 
     # ── Infrastructure routes (health, metrics, sw.js, model-metrics) ─────────
 

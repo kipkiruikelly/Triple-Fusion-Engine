@@ -320,6 +320,14 @@ def send_daily_digest(app, db):
             f"{acc['overall_direction_accuracy'] if acc['overall_direction_accuracy'] is not None else 'insufficient data'}"
             f"{'%' if acc['overall_direction_accuracy'] is not None else ''}.")
 
+    try:
+        import paper_engine
+        paper_line = paper_engine.digest_summary(db)
+        if paper_line:
+            body += " " + paper_line
+    except Exception:
+        log.exception("paper digest line failed")
+
     staff = User.query.filter(User.role.in_(["viewer", "support", "admin"])).all()
     for s in staff:
         db.session.add(Notification(user_id=s.id, type="digest",
@@ -378,6 +386,14 @@ def start_ops_thread(app, db):
                     except Exception:
                         db.session.rollback()
                         log.warning("pyth auto-sync failed, will retry next tick")
+                try:
+                    # Paper trading engine (VIRTUAL money only). No-op when
+                    # paused; respects per-asset-class market hours inside.
+                    import paper_engine
+                    paper_engine.run_cycle(app, db)
+                except Exception:
+                    db.session.rollback()
+                    log.exception("paper trading cycle failed")
                 if time.time() - state["last_accuracy"] > 6 * 3600:
                     try:
                         r, u = resolve_pending(db)

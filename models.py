@@ -334,6 +334,55 @@ class Feedback(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 
+class PaperTrade(db.Model):
+    """One simulated (VIRTUAL money) trade in the platform paper trading
+    engine. Append-only: rows are inserted at open, and the exit fields are
+    written exactly once at close. Nothing here is ever a real order.
+    """
+    id             = db.Column(db.Integer, primary_key=True)
+    strategy       = db.Column(db.String(20), nullable=False, index=True)   # 'ml_ensemble' | 'alpha_rules'
+    model          = db.Column(db.String(40), nullable=True)                # e.g. 'lr+rf', 'alpha_composite'
+    ticker         = db.Column(db.String(12), nullable=False, index=True)
+    asset_class    = db.Column(db.String(12), nullable=False)               # equity|etf|index|crypto|forex|commodity
+    side           = db.Column(db.String(5), nullable=False)                # LONG | SHORT
+    qty            = db.Column(db.Float, nullable=False)
+    entry_time     = db.Column(db.DateTime, nullable=False)
+    entry_price    = db.Column(db.Float, nullable=False)                    # fill after simulated friction
+    entry_mkt      = db.Column(db.Float, nullable=False)                    # raw market price at signal time
+    price_source   = db.Column(db.String(20), nullable=True)                # yfinance | yfinance+pyth | pyth
+    stop_price     = db.Column(db.Float, nullable=False)
+    target_price   = db.Column(db.Float, nullable=False)
+    max_hold_hours = db.Column(db.Integer, nullable=False)
+    confidence     = db.Column(db.Float, nullable=True)
+    rationale      = db.Column(db.String(300), nullable=True)
+    commission     = db.Column(db.Float, nullable=False, default=0.0)       # total paid, entry+exit
+    status         = db.Column(db.String(8), nullable=False, default='open', index=True)
+    exit_time      = db.Column(db.DateTime, nullable=True)
+    exit_price     = db.Column(db.Float, nullable=True)
+    exit_mkt       = db.Column(db.Float, nullable=True)
+    exit_reason    = db.Column(db.String(12), nullable=True)                # target|stop|reversal|timeout|manual
+    pnl            = db.Column(db.Float, nullable=True)                     # VIRTUAL, net of friction
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class PaperTradeEvent(db.Model):
+    """Append-only audit trail for the paper trading engine."""
+    id         = db.Column(db.Integer, primary_key=True)
+    trade_id   = db.Column(db.Integer, db.ForeignKey('paper_trade.id'), nullable=True, index=True)
+    event      = db.Column(db.String(20), nullable=False)   # open|close|reject|breaker|toggle|config
+    detail     = db.Column(db.String(400), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class PaperEquitySnapshot(db.Model):
+    """Mark-to-market VIRTUAL equity per strategy, taken every engine cycle."""
+    id         = db.Column(db.Integer, primary_key=True)
+    strategy   = db.Column(db.String(20), nullable=False, index=True)
+    equity     = db.Column(db.Float, nullable=False)
+    open_count = db.Column(db.Integer, nullable=False, default=0)
+    taken_at   = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class UserPreferences(db.Model):
     id             = db.Column(db.Integer, primary_key=True)
     user_id        = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True)

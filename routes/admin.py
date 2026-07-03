@@ -337,6 +337,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                             "azure": azure_ok,
                             "uptime_s": round(time.time() - app_start, 1),
                             "maintenance": _get_setting("maintenance_mode") == "1",
+                            "paper_trading": _get_setting("paper_trading_enabled") == "1",
                         },
                         "alerts": alerts})
 
