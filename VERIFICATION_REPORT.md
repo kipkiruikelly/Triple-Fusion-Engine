@@ -1,6 +1,8 @@
 # BullLogic Verification Report
 
-Date: 2026-07-04 (updated same day, afternoon follow-up session)
+Date: 2026-07-04 (updated twice same day: afternoon follow-up, then a live
+integration session that took SMTP, Google OAuth and M-Pesa Daraja sandbox
+from BLOCKED-EXTERNAL to PASS with real end-to-end traffic)
 Method: every item below was exercised, not just read. Flows ran against a
 throwaway audit instance (fresh SQLite DB, real app factory, real network for
 market data) with a local SMTP sink on 127.0.0.1:8025 that speaks actual SMTP,
@@ -61,7 +63,9 @@ Full test suite: 105 passed, 0 failed (pytest, after audit fixes).
 | Login rate limit | PASS | attempt 10 = 200, attempt 11 = 429 (10/15min/IP) |
 | Logout | PASS | /profile redirects to /login afterwards |
 | Google OAuth start | PASS | /auth/google 302 to accounts.google.com with correct params (creds present in .env) |
-| Google OAuth full flow | BLOCKED-EXTERNAL | needs interactive Google consent |
+| Google OAuth full flow | PASS (live) | real sign-in completed from the public HTTPS tunnel after the ProxyFix/waitress fix; login.google activity recorded, session established |
+| Google OAuth account linking | PASS (live) | signing in with an email that already had a password account linked it (google_sub set on the existing row, email stays verified); no duplicate account created. Confirmed for two existing accounts |
+| OAuth scheme behind proxy | PASS (fixed) | pre-fix probe through the HTTPS tunnel produced redirect_uri=http://... (captured live); after adding ProxyFix (app.py) AND waitress trusted_proxy (wsgi.py, waitress strips X-Forwarded-* from untrusted peers by default) the same probe returns https://... |
 | Password reset anti-enumeration | PASS | identical 200 + identical body for existing vs unknown email |
 | Reset email sent | PASS | captured via SMTP sink, link extracted |
 | Reset link sets new password | PASS | login with new password works |
@@ -70,7 +74,8 @@ Full test suite: 105 passed, 0 failed (pytest, after audit fixes).
 | Theme saves to DB, survives logout/login | PASS | data-theme="light" server-rendered after fresh login |
 | Theme on every page, no white flash | PASS | verified in Chrome earlier today: ~40 pages in both modes, blocking boot script in head, account-beats-localStorage proven live |
 | Data export | PASS | /account/export returns JSON (fresh account, 235 bytes; grows with data) |
-| Account deletion | PASS | login impossible afterwards |
+| Account deletion | PASS (re-proven live) | both audit test accounts deleted through POST /account/delete on the live service: 400 without confirm, deleted with confirm, login rejected after. Payment records correctly retained as financial history |
+| SMTP on the LIVE service | PASS (live) | Gmail app password configured in .env (never committed). Raw Flask-Mail send accepted by smtp.gmail.com and received. Full registration on live /register: verification email received, link clicked, email_verified flipped, prediction then ran and recorded. Password reset end to end on a real account: emailed token set a new password, sessions rotated, replayed token rejected. Resend limit live: [200,200,200,429] |
 
 ### Predictions and data
 
@@ -103,7 +108,7 @@ Full test suite: 105 passed, 0 failed (pytest, after audit fixes).
 
 | Item | Status | Evidence |
 |---|---|---|
-| Production engine status | DEGRADED | paper_trading_enabled has never been set in the live DB: the engine ships paused and has NOT been started from the admin console. 0 trades, 0 events, 0 snapshots. This is the designed initial state, not a crash; to start it: Admin > Paper Trading > Start paper trading (plus service restart to pick up current code, see Engineering) |
+| Production engine status | PASS (started live) | started from Admin > Paper Trading during the integration session: paper_trading_enabled=1, started_at recorded, "engine started" toggle event written. Zero trades is honest: enabled on a Saturday, first cycles run during Monday market hours. NOTE: the first two start attempts silently went nowhere because the user-facing /mt5 page has its own differently-scoped "paper trading" button (mt5_trading.py, separate $10k simulator); see flags below |
 | Engine cycle executes | PASS | run_cycle on audit instance: {ran: True, opened: 2, closed: 0, rejected: 3} in 57s; open events recorded with real prices |
 | Sizing, stops, breaker, slippage | PASS | enforced by tests/test_paper_engine.py (part of the 105 passing); rejected=3 above shows gating working live |
 | /paper honesty rules | PASS | page shows honest empty state, Simulated/virtual labels present, min-trade rule wired |
@@ -114,7 +119,15 @@ Full test suite: 105 passed, 0 failed (pytest, after audit fixes).
 | Item | Status | Evidence |
 |---|---|---|
 | STK initiation payload | PASS | password + 14-digit timestamp build correctly |
-| Live STK push | BLOCKED-EXTERNAL | MPESA_CONSUMER_KEY/SECRET/PASSKEY are empty in .env (callback URL and shortcode are set). Fill Daraja sandbox creds and run one sandbox push |
+| Daraja OAuth token | PASS (live) | mpesa._get_token() returned a real sandbox access token with the configured consumer key/secret |
+| Callback URL internet-reachable | PASS (live) | POST from the public internet through the ngrok tunnel answered {"ResultCode":0} |
+| Live STK push | PASS (live) | sandbox creds configured; real push ws_CO_04072026163410644710000898 delivered to the owner's handset via POST /mpesa/pay as a logged-in user |
+| Live settlement | PASS (live) | PIN entered on phone; Daraja callback landed through the tunnel; payment flipped to paid with real receipt UG4D8A21O0; Pro activated for exactly 30 days |
+| Receipt email (live) | PASS | receipt delivered to the payer inbox (original arrived delayed; a synchronous re-send confirmed the SMTP path clean) |
+| Idempotency (live) | PASS | forged duplicate callback with same CheckoutRequestID and a different receipt number: 200 ack, receipt and expiry unchanged |
+| Cancelled prompt (live) | PASS | second push cancelled on the handset: callback mapped 1032 to status=cancelled; admin transactions shows it |
+| Status polling fallback (live) | PASS | /mpesa/status queried Daraja directly and mapped 1032 ("You cancelled...") and updated the row |
+| Timeout (live) | PASS | fourth push with handset unreachable: result 1037 mapped to "No response from your phone", payment status=failed |
 | Callback: malformed payload | PASS | 200 accepted, no state change |
 | Callback: unknown CheckoutRequestID | PASS | ignored, payment stays pending |
 | Callback: success settles + activates Pro | PASS | status=paid, user.plan=pro, receipt QK12AUDIT77 stored |
@@ -175,59 +188,70 @@ Full test suite: 105 passed, 0 failed (pytest, after audit fixes).
 5. `.gitignore` and `tools/install-service.ps1`: removed one em dash each,
    found by widening the dash scan to every tracked and untracked file.
    Project-wide dash count is now genuinely zero.
+6. `app.py`: added ProxyFix (one trusted hop) so X-Forwarded-Proto/Host from
+   the local reverse proxy produce correct https URLs.
+7. `wsgi.py`: waitress now trusts X-Forwarded-* from 127.0.0.1; by default
+   waitress strips these headers from untrusted peers, which starved ProxyFix
+   entirely (proven live: redirect_uri stayed http until this second fix).
+   Together 6+7 fixed the OAuth redirect scheme and payment callback URLs
+   behind Caddy/ngrok.
 
 Found earlier today during the theme walkthrough (already committed in 8db7515):
 broken logo markup on 3 pages, stretched theme toggle on auth pages.
 
 ## 4. Needs your decision (prioritized)
 
-1. ~~FAIL, service drift~~ RESOLVED: service restarted 14:13 today; live
-   /login re-probed and the theme system is present.
-2. **Uncommitted work**: the audit fixes (5 files) plus .env.example and this
-   report sit only in the working tree. The live service already serves them
-   from disk, but they are one crash-and-checkout away from loss. Say the
-   word and they get committed.
-3. **DEGRADED, paper trading never started**: re-checked live DB this
-   afternoon, still no paper_trading_enabled row and 0 trades/events/
-   snapshots. If the demo should show live paper trading, start it from
-   Admin > Paper Trading. Day one will honestly show zero trades until
-   cycles run during market hours.
-4. **DEGRADED, production grading at 0**: re-checked this afternoon: still
-   8 predictions, 0 graded, error log unchanged (single divergence-guard
-   warning from Jul 2). Consistent with the market holiday + weekend
-   explanation. Re-check after Monday's US close; if still zero on Tuesday,
-   escalate to FAIL and investigate resolve_pending against the live DB.
+1. **FLAG, "paper trading" naming collision**: the user-facing /mt5 page has
+   Connect Paper Account / Start buttons (mt5_trading.py, its own $10k
+   simulator) that are easy to mistake for the admin paper engine; even the
+   owner started the wrong one twice during this session. Renaming one of
+   them is a product decision, deliberately not touched.
+2. **FLAG, tunnel-dependent public URL**: Google's registered redirect URI
+   and MPESA_CALLBACK_URL both point at the ngrok domain
+   (outclass-umbilical-outfield.ngrok-free.dev). If the tunnel restarts on a
+   different domain, the public OAuth flow and M-Pesa callbacks break until
+   the Console and .env are updated. Production wants a stable domain (and
+   Brevo with domain verification for mail, see checklist).
+3. **ROTATE two passwords**: the account 'kip' was password-reset during the
+   3c test and that password appeared in the session transcript; change it
+   from the profile page. The Gmail app password also transited the chat;
+   revoke and re-issue at myaccount.google.com/apppasswords if that bothers
+   you (one-line .env update afterwards).
+4. **DEGRADED, production grading at 0**: unchanged all day (8 predictions,
+   0 graded), consistent with the July 4 holiday weekend. Re-check after
+   Monday's US close; if still zero on Tuesday, escalate to FAIL and
+   investigate resolve_pending against the live DB.
 5. **DEGRADED, retrain trigger unverified**: decide when a safe isolated
    retrain run can happen; the audit deliberately did not fire it.
 
 ## 5. BLOCKED-EXTERNAL checklist (exact items you must provide)
 
-- Daraja sandbox credentials (MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET,
-  MPESA_PASSKEY) to fire one sandbox STK push end to end. Everything after
-  the push (callback, settlement, receipt, idempotency) is already PASS.
-- One interactive Google login to close the OAuth loop (redirect boundary
-  verified; button correctly wired).
-- SMTP production creds (MAIL_USERNAME/MAIL_PASSWORD are empty in .env), so
-  real outbound email is currently OFF on the live service. All email
-  content and send paths verified against a real SMTP conversation.
+- ~~Daraja sandbox~~ DONE: live sandbox STK pushes verified end to end
+  today (paid, cancelled, timeout).
+- ~~Google OAuth~~ DONE: live sign-in and account linking verified from the
+  public HTTPS URL.
+- ~~SMTP~~ DONE: Gmail app password live; verification, reset, receipt and
+  rate-limit flows all proven with real email. Production upgrade path:
+  Brevo with domain verification (swap MAIL_SERVER/USERNAME/PASSWORD).
 - Stripe keys if card payments should be demoed (otherwise the UI degrades
-  gracefully).
+  gracefully). Still the only untested payment provider.
 - ALPACA keys only if you want to re-verify the training data pipeline.
+- Daraja PRODUCTION credentials (Go-Live approval) remain external for real
+  money; everything up to that boundary is now proven in sandbox.
 
 ## 6. Honest overall assessment
 
-The system is demo-ready now. The one FAIL from the morning audit (service
-drift) is resolved: the service was restarted at 14:13 and the live site
-serves the theme system and all audit fixes. Registration through prediction
-through track record works end to end with honest labeling, all 105 tests
-pass (re-run this afternoon), admin is fully access-controlled, the data
-layer failed over correctly under forced outage, and the only production
-error all week was the divergence guard correctly refusing a bad price.
-What remains is housekeeping and choices, not code: commit the working-tree
-fixes so they are not disk-only; decide whether paper trading runs for the
-demo (it will honestly show zero trades until market-hours cycles); and know
-that outbound email stays off until SMTP credentials are set, so demo the
-verification/reset flows on the audit instance or add creds first. The
-grading backlog should clear after Monday's US close, and everything else
-blocked is external credentials, not code. You can put this in front of a
-panel today.
+The system is demo-ready, and as of tonight the demo can be entirely real:
+registration sends real verification email, password reset works with real
+mail, Google sign-in works from the public HTTPS URL including the
+account-linking edge case, and M-Pesa sandbox payments run the full arc on a
+real handset: STK push, PIN, callback, settlement with a real receipt
+number, Pro activation, receipt email, idempotent against replays, with
+cancelled and timeout paths mapped to honest user messages. The paper
+trading engine is enabled and will honestly accumulate its first trades
+during Monday market hours. All 105 tests pass after the proxy fixes. Three
+knowable caveats for a panel day: the public URL is an ngrok tunnel, so keep
+that window open (or invest in a stable domain); the grading backlog clears
+after Monday's US close; and Stripe remains the one unproven payment path,
+hidden gracefully without keys. Rotate the two passwords noted above and
+this is presentable with live integrations, not mocks.

@@ -23,4 +23,11 @@ if __name__ == "__main__":
     # indefinitely, so waitress's default 4 threads starve under a couple
     # of open tabs. Keep the pool comfortably larger.
     threads = int(os.environ.get("WEB_THREADS", "24"))
-    serve(app, host=host, port=port, threads=threads, channel_timeout=300)
+    # Waitress strips X-Forwarded-* from untrusted peers by default, which
+    # starves ProxyFix (app.py) and breaks https URL generation behind the
+    # local reverse proxy (Caddy/ngrok). Everything reaching this loopback
+    # bind IS the local proxy, so trust exactly that one hop.
+    serve(app, host=host, port=port, threads=threads, channel_timeout=300,
+          trusted_proxy="127.0.0.1", trusted_proxy_count=1,
+          trusted_proxy_headers={"x-forwarded-for", "x-forwarded-proto",
+                                 "x-forwarded-host", "x-forwarded-port"})

@@ -60,6 +60,14 @@ def create_app():
             )
     app.secret_key = secret_key
 
+    # ── Reverse proxy awareness ───────────────────────────────────────────────
+    # Waitress binds 127.0.0.1 only; every external request arrives through a
+    # trusted local proxy (Caddy or an ngrok tunnel) that sets X-Forwarded-*.
+    # Without this, url_for/host_url generate http:// URLs behind HTTPS, which
+    # breaks OAuth redirect URIs and payment callback URLs.
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
     # ── SQLAlchemy ────────────────────────────────────────────────────────────
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
         "DATABASE_URL",
