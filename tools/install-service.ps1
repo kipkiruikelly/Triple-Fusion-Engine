@@ -24,7 +24,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # Generate the app SECRET_KEY once and persist only to a gitignored,
-# admin/owner-only file — never embedded in this script or in any log.
+# admin/owner-only file, never embedded in this script or in any log.
 New-Item -ItemType Directory -Force -Path (Split-Path $SecretFile) | Out-Null
 if (-not (Test-Path $SecretFile)) {
     $bytes = New-Object byte[] 32

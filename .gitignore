@@ -15,12 +15,13 @@ venv/
 .venv/
 .env
 .env.*
+!.env.example
 *.egg-info/
 .eggs/
 dist/
 build/
 
-# Models and data (large binaries — generated locally)
+# Models and data (large binaries, generated locally)
 Saved/
 Saved Models/
 Data/

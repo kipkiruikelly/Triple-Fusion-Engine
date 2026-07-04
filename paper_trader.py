@@ -128,7 +128,7 @@ def _fetch_ohlcv(ticker: str) -> pd.DataFrame:
 
 
 def _features(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
-    """Full production feature set — same pipeline the models were trained on.
+    """Full production feature set, same pipeline the models were trained on.
 
     Delegates to predictor.build_features (TA + ICT + VIX/sector/earnings aux)
     so live paper trades never diverge from the trained feature space.
@@ -205,7 +205,7 @@ def _ml_vote(ticker: str, df: pd.DataFrame) -> str:
         missing = [f for f in feat if f not in df.columns]
         if missing:
             print(f"  [ml] {ticker}: {len(missing)} trained features not built "
-                  f"({', '.join(missing[:4])}…) — ML vote disabled")
+                  f"({', '.join(missing[:4])}...), ML vote disabled")
             return "HOLD"
         X    = sc.transform(df[feat].iloc[-1:].values)
         cur  = float(df["Close"].iloc[-1])
@@ -223,7 +223,7 @@ def _ml_vote(ticker: str, df: pd.DataFrame) -> str:
         if votes_dn >= 2:   return "SELL"
         return "HOLD"
     except Exception as e:
-        print(f"  [ml] {ticker}: model inference failed ({type(e).__name__}: {e}) — ML vote disabled")
+        print(f"  [ml] {ticker}: model inference failed ({type(e).__name__}: {e}), ML vote disabled")
         return "HOLD"
 
 
