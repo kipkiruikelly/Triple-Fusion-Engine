@@ -24,3 +24,12 @@ pytest>=8.0  # dev/test only
 authlib>=1.7
 email-validator>=2.2
 python-dotenv>=1.0
+
+# ── Phase 1: Enhanced ML Stack ──────────────────────────────────────────────────
+xgboost>=2.0.0            # Gradient boosting (stacking ensemble)
+lightgbm>=4.0.0           # LightGBM gradient boosting (stacking ensemble)
+tensorflow>=2.15.0        # LSTM neural network (requires Python 3.9-3.12)
+keras>=2.15.0             # High-level TF API for LSTM
+
+# ── Phase 1: Analysis & Validation ──────────────────────────────────────────────
+scipy>=1.11.0             # Statistical functions for walk-forward metrics

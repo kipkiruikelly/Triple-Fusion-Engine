@@ -195,6 +195,20 @@ def engineer_features(df):
 
     df = engineer_ict_features(df)
 
+    # Phase 1: Enhanced ICT features (BOS/CHoCH, Order Flow, Market Structure)
+    try:
+        from feature_engineering import add_enhanced_ict_features
+        df = add_enhanced_ict_features(df)
+    except ImportError:
+        pass  # feature_engineering.py is optional
+
+    # Phase 1: Alpha features for ML models
+    try:
+        from alphas import add_alpha_features
+        df = add_alpha_features(df)
+    except ImportError:
+        pass  # alphas.py is loaded separately
+
     before = len(df)
     df.dropna(inplace=True)
     print(f"  {len(df):,} rows after feature engineering ({before - len(df)} dropped for warm-up)")
