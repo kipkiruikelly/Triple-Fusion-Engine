@@ -885,13 +885,14 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
 
     # XGBoost vote
     xgb_prob = 0.5
+    xgb_up = False
     if xgb_model is not None:
         if hasattr(xgb_model, "classes_"):
             xgb_prob = float(xgb_model.predict_proba(X)[0][1])
-            model_votes.append(xgb_prob > 0.5)
+            xgb_up = xgb_prob > 0.5
         else:
-            _, _, xgb_up_v = _infer_model(xgb_model, X, current_price)
-            model_votes.append(bool(xgb_up_v))
+            _, _, xgb_up = _infer_model(xgb_model, X, current_price)
+        model_votes.append(bool(xgb_up))
         model_names.append("XGB")
 
     # LightGBM vote
