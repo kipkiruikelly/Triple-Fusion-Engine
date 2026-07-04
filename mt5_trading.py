@@ -177,20 +177,10 @@ class MetaApiBackend:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(message)s")
 log = logging.getLogger("mt5_trading")
 
-# Phase 2: Centralized config (falls back to defaults if config.py unavailable)
-try:
-    from config import settings as _cfg
-    MAX_LOG_ENTRIES  = _cfg.MAX_LOG_ENTRIES
-    MAX_POSITIONS    = _cfg.MAX_POSITIONS
-    DAILY_LOSS_LIMIT = _cfg.DAILY_LOSS_LIMIT
-    PAPER_BALANCE    = _cfg.PAPER_BALANCE
-    RISK_PCT         = _cfg.RISK_PCT
-except ImportError:
-    MAX_LOG_ENTRIES  = 200
-    MAX_POSITIONS    = 3
-    DAILY_LOSS_LIMIT = 0.05
-    PAPER_BALANCE    = 10_000.0
-    RISK_PCT         = 1.0
+MAX_LOG_ENTRIES  = 200
+MAX_POSITIONS    = 3
+DAILY_LOSS_LIMIT = 0.05
+PAPER_BALANCE    = 10_000.0   # virtual account balance
 
 
 # ── Pure-Python indicator helpers ────────────────────────────────────────────
@@ -380,11 +370,6 @@ class MT5Trader:
         self._mt5_instance = None
         self._paper        = None       # PaperAccount when in paper mode
         self._mapi         = None       # MetaApiBackend when in metaapi mode
-
-        # Phase 3: Advanced risk management & smart routing
-        self.risk_manager  = None  # initialized lazily
-        self.execution_log: list = []  # execution quality tracking
-        self._peak_equity  = 0.0
 
     @property
     def is_paper(self):
@@ -828,20 +813,6 @@ class MT5Trader:
         except Exception:
             return 0
 
-    def _get_open_positions_list(self, symbol: str) -> list:
-        """Return list of open position dicts for risk manager guardrails."""
-        if self.is_paper:
-            return self._paper.positions if self._paper else []
-        if self.is_metaapi:
-            try:
-                return self._mapi.get_positions(symbol) or []
-            except Exception:
-                return []
-        try:
-            positions = self._mt5_instance.positions_get(symbol=symbol)
-            return list(positions) if positions else []
-        except Exception:
-            return []
     def _calc_lot(self, risk_pct: float, sl_points: float, price: float) -> float:
         balance  = self.account.get("balance", PAPER_BALANCE)
         risk_amt = balance * (risk_pct / 100.0)
@@ -1014,52 +985,22 @@ class MT5Trader:
         mode = "Paper" if self.is_paper else "Live"
         self._log("INFO", f"{mode} trading started, {symbol} {timeframe} risk={risk_pct}% interval={interval}s")
 
-        # Phase 3: Initialize risk manager
-        if self.risk_manager is None:
-            try:
-                from risk_manager import RiskManager
-                self.risk_manager = RiskManager(
-                    max_positions=MAX_POSITIONS,
-                    daily_loss_limit=DAILY_LOSS_LIMIT,
-                    base_risk_pct=RISK_PCT,
-                )
-            except ImportError:
-                pass
-
-        self._peak_equity = self.account.get("equity", self.equity_open or PAPER_BALANCE)
-
         while self.trading:
             try:
                 self.refresh_account()
 
-                # Phase 3: Enhanced guardrails via risk manager
-                eq = self.account.get("equity", PAPER_BALANCE)
-                self._peak_equity = max(self._peak_equity, eq)
-
-                if self.risk_manager:
-                    if self.equity_open and self.equity_open > 0:
-                        self.risk_manager.reset_daily()
-                    allowed, reason = self.risk_manager.check_guardrails(
-                        self.account, self._get_open_positions_list(symbol),
-                        symbol, daily_start_equity=self.equity_open,
-                    )
-                    if not allowed:
-                        self._log("WARN", f"Guardrail: {reason}")
-                        if "halt" in reason.lower() or "limit" in reason.lower():
-                            self.trading = False
-                            self.status_msg = f"Halted: {reason}"
-                            break
-                else:
-                    # Legacy guard: daily loss limit
-                    if self.equity_open and eq and self.equity_open > 0:
-                        drawdown = (self.equity_open - eq) / self.equity_open
-                        if drawdown >= DAILY_LOSS_LIMIT:
-                            self._log("WARN", f"Daily loss limit hit ({drawdown*100:.1f}%). Trading halted.")
-                            self.trading = False
-                            self.status_msg = f"Halted, {DAILY_LOSS_LIMIT*100:.0f}% daily loss limit"
-                            break
+                # Daily loss guard
+                eq = self.account.get("equity", 0)
+                if self.equity_open and eq and self.equity_open > 0:
+                    drawdown = (self.equity_open - eq) / self.equity_open
+                    if drawdown >= DAILY_LOSS_LIMIT:
+                        self._log("WARN", f"Daily loss limit hit ({drawdown*100:.1f}%). Trading halted.")
+                        self.trading    = False
+                        self.status_msg = f"Halted, {DAILY_LOSS_LIMIT*100:.0f}% daily loss limit"
+                        break
 
                 # Max positions guard
+                if self._count_positions(symbol) >= MAX_POSITIONS:
                     self._log("INFO", f"Max positions ({MAX_POSITIONS}) held, waiting")
                     time.sleep(interval)
                     continue

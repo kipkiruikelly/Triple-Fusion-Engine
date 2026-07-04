@@ -1,7 +1,6 @@
 """
 data_pipeline.py
 ML-based Quantitative Trading System
-Phase 2: Multi-ticker parallel fetching, intraday support, centralized config.
 
 Downloads historical OHLCV data for a given ticker, engineers technical
 indicator features, splits the dataset chronologically, scales the features,
@@ -15,7 +14,6 @@ Author: BullLogic
 
 import os
 import warnings
-import argparse
 warnings.filterwarnings("ignore")
 
 import numpy as np
@@ -25,34 +23,16 @@ import ta
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from sklearn.preprocessing import MinMaxScaler
 
 
-# ── Configuration ───────────────────────────────────────────────────────────────
-# Phase 2: Centralized config via config.py with CLI override support
-
-try:
-    from config import settings as _cfg
-    TICKER      = _cfg.DEFAULT_TICKER
-    START_DATE  = _cfg.START_DATE
-    END_DATE    = _cfg.END_DATE
-    LOOKBACK    = _cfg.LOOKBACK
-    TRAIN_RATIO = _cfg.TRAIN_RATIO
-    VAL_RATIO   = _cfg.VAL_RATIO
-    DEFAULT_TICKERS = _cfg.DEFAULT_TICKERS
-    MAX_PARALLEL = _cfg.MAX_PARALLEL_FETCHES
-    INTRADAY_INTERVALS = _cfg.INTRADAY_INTERVALS
-except ImportError:
-    TICKER      = "QQQ"
-    START_DATE  = "1999-01-01"
-    END_DATE    = "2026-06-01"
-    LOOKBACK    = 60
-    TRAIN_RATIO = 0.80
-    VAL_RATIO   = 0.10
-    DEFAULT_TICKERS = ["QQQ", "SPY", "AAPL"]
-    MAX_PARALLEL = 5
-    INTRADAY_INTERVALS = ["1h"]
+# Configuration
+TICKER      = "QQQ"
+START_DATE  = "1999-01-01"
+END_DATE    = "2026-06-01"
+LOOKBACK    = 60
+TRAIN_RATIO = 0.80
+VAL_RATIO   = 0.10
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "Data")
@@ -215,20 +195,6 @@ def engineer_features(df):
 
     df = engineer_ict_features(df)
 
-    # Phase 1: Enhanced ICT features (BOS/CHoCH, Order Flow, Market Structure)
-    try:
-        from feature_engineering import add_enhanced_ict_features
-        df = add_enhanced_ict_features(df)
-    except ImportError:
-        pass  # feature_engineering.py is optional
-
-    # Phase 1: Alpha features for ML models
-    try:
-        from alphas import add_alpha_features
-        df = add_alpha_features(df)
-    except ImportError:
-        pass  # alphas.py is loaded separately
-
     before = len(df)
     df.dropna(inplace=True)
     print(f"  {len(df):,} rows after feature engineering ({before - len(df)} dropped for warm-up)")
@@ -329,13 +295,11 @@ def save_charts(df, df_train, df_val, df_test, ticker):
     print("  Charts saved to Data/")
 
 
-def run_pipeline_for_ticker(ticker: str, start: str, end: str) -> None:
-    """Run the full data pipeline for a single ticker."""
-    print(f"\n{'='*60}")
-    print(f"  Pipeline: {ticker}  |  {start} → {end}")
-    print(f"{'='*60}")
+def main():
+    print(f"\nML-based Quantitative Trading System, Data Pipeline")
+    print(f"Ticker: {TICKER} | Period: {START_DATE} to {END_DATE}\n")
 
-    df_raw      = download_data(ticker, start, end)
+    df_raw      = download_data(TICKER, START_DATE, END_DATE)
     df_clean    = clean_data(df_raw)
     df_featured = engineer_features(df_clean)
 
@@ -343,7 +307,7 @@ def run_pipeline_for_ticker(ticker: str, start: str, end: str) -> None:
     df_train, df_val, df_test = split_data(df_featured, TRAIN_RATIO, VAL_RATIO)
 
     X_train_sc, X_val_sc, X_test_sc, scaler, close_idx = scale_features(
-        df_train, df_val, df_test, FEATURES, ticker
+        df_train, df_val, df_test, FEATURES, TICKER
     )
 
     print("Building LSTM sequences...")
@@ -354,64 +318,17 @@ def run_pipeline_for_ticker(ticker: str, start: str, end: str) -> None:
 
     print("Saving outputs...")
     for name, arr in [
-        (f"X_train_{ticker}", X_train), (f"X_val_{ticker}",   X_val),
-        (f"X_test_{ticker}",  X_test),  (f"y_train_{ticker}", y_train),
-        (f"y_val_{ticker}",   y_val),   (f"y_test_{ticker}",  y_test),
+        (f"X_train_{TICKER}", X_train), (f"X_val_{TICKER}",   X_val),
+        (f"X_test_{TICKER}",  X_test),  (f"y_train_{TICKER}", y_train),
+        (f"y_val_{TICKER}",   y_val),   (f"y_test_{TICKER}",  y_test),
     ]:
         np.save(os.path.join(DATA_DIR, f"{name}.npy"), arr)
 
-    df_featured.to_csv(os.path.join(DATA_DIR, f"{ticker}_featured.csv"))
-    save_charts(df_featured, df_train, df_val, df_test, ticker)
-    print(f"  ✓ {ticker} pipeline complete\n")
+    df_featured.to_csv(os.path.join(DATA_DIR, f"{TICKER}_featured.csv"))
+    save_charts(df_featured, df_train, df_val, df_test, TICKER)
 
-
-def main():
-    parser = argparse.ArgumentParser(description="Data Pipeline — Phase 2 multi-ticker")
-    parser.add_argument("--ticker",  default=None, metavar="SYM",
-                        help="Single ticker (default: QQQ)")
-    parser.add_argument("--tickers", nargs="+", metavar="SYM",
-                        help="Multiple tickers, space-separated")
-    parser.add_argument("--all",     action="store_true",
-                        help=f"All default tickers: {DEFAULT_TICKERS}")
-    parser.add_argument("--start",   default=START_DATE, metavar="DATE")
-    parser.add_argument("--end",     default=END_DATE,   metavar="DATE")
-    parser.add_argument("--parallel", default=MAX_PARALLEL, type=int, metavar="N",
-                        help=f"Max parallel fetches (default: {MAX_PARALLEL})")
-    parser.add_argument("--intraday", action="store_true",
-                        help=f"Also fetch intraday data: {INTRADAY_INTERVALS}")
-    args = parser.parse_args()
-
-    print(f"\nML-based Quantitative Trading System, Data Pipeline")
-
-    # Determine ticker list
-    if args.tickers:
-        tickers = args.tickers
-    elif args.all:
-        tickers = DEFAULT_TICKERS
-    else:
-        tickers = [args.ticker or TICKER]
-
-    print(f"Tickers: {tickers} | Period: {args.start} to {args.end}")
-    print(f"Parallel workers: {args.parallel}\n")
-
-    # Parallel pipeline execution
-    if len(tickers) == 1:
-        run_pipeline_for_ticker(tickers[0], args.start, args.end)
-    else:
-        with ThreadPoolExecutor(max_workers=min(args.parallel, len(tickers))) as executor:
-            futures = {
-                executor.submit(run_pipeline_for_ticker, t, args.start, args.end): t
-                for t in tickers
-            }
-            for future in as_completed(futures):
-                t = futures[future]
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"  ✗ {t} FAILED: {e}")
-
-    print(f"\nPipeline complete. Outputs saved to: {DATA_DIR}")
-    print("Next step: python model_training.py --all-tickers\n")
+    print(f"\nPipeline complete. All outputs saved to: {DATA_DIR}")
+    print("Next step: python model_training.py\n")
 
 
 if __name__ == "__main__":
