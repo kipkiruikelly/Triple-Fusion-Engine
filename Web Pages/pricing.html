@@ -1,17 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pricing, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
-      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
-      --accent: #FF6B35; --green: #00C076; --white: #FFFFFF;
-    }
+    
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
     .topbar {
@@ -121,8 +118,9 @@
 <body>
 
 <div class="topbar">
-  <a class="logo" href="/"><Bull<span>Logic</span></a>
+  <a class="logo" href="/">Bull<span>Logic</span></a>
   <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <a href="/performance">Track Record</a>
     {% if current_user.is_authenticated %}
       <a href="/">Dashboard</a>
@@ -212,7 +210,7 @@
           {% if mpesa_enabled %}
           <button class="btn-plan" id="mpesa-btn"
             onclick="openMpesa()"
-            style="background:#4CAF50;color:#fff;border:none;margin-top:{% if stripe_enabled %}0{% else %}0{% endif %}">
+            style="background:#4CAF50;color:var(--white);border:none;margin-top:{% if stripe_enabled %}0{% else %}0{% endif %}">
             Pay with M-Pesa 📱
           </button>
           {% else %}
@@ -292,24 +290,24 @@
 
 <!-- M-Pesa modal -->
 <div id="mpesa-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center">
-  <div style="background:#1A1F2E;border:1px solid #2A3150;border-radius:14px;padding:32px 28px;width:100%;max-width:400px;margin:16px">
-    <div style="font-size:14pt;font-weight:800;color:#fff;margin-bottom:6px">Pay with M-Pesa 📱</div>
-    <div id="mpesa-subtitle" style="color:#7A8499;font-size:9.5pt;margin-bottom:20px">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px 28px;width:100%;max-width:400px;margin:16px">
+    <div style="font-size:14pt;font-weight:800;color:var(--white);margin-bottom:6px">Pay with M-Pesa 📱</div>
+    <div id="mpesa-subtitle" style="color:var(--muted);font-size:9.5pt;margin-bottom:20px">
       KES {{ pro_monthly_kes }} / 30 days
     </div>
 
     <div id="mpesa-form-section">
-      <label style="font-size:9.5pt;color:#7A8499;display:block;margin-bottom:6px">Safaricom phone number</label>
+      <label style="font-size:9.5pt;color:var(--muted);display:block;margin-bottom:6px">Safaricom phone number</label>
       <input id="mpesa-phone" type="tel" placeholder="07XXXXXXXX"
-        style="width:100%;padding:11px 14px;background:#0F1217;border:1px solid #2A3150;border-radius:6px;
-               color:#E2E8F0;font-size:11pt;font-family:Inter,sans-serif;margin-bottom:16px;outline:none">
+        style="width:100%;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+               color:var(--text);font-size:11pt;font-family:Inter,sans-serif;margin-bottom:16px;outline:none">
       <div id="mpesa-error" style="color:#FF4D4D;font-size:9pt;margin-bottom:10px;display:none"></div>
       <button onclick="submitMpesa()"
-        style="width:100%;padding:12px;background:#4CAF50;color:#fff;border:none;border-radius:6px;
+        style="width:100%;padding:12px;background:#4CAF50;color:var(--white);border:none;border-radius:6px;
                font-size:11pt;font-weight:700;cursor:pointer;font-family:Inter,sans-serif">
         Send STK Push
       </button>
-      <div style="color:#7A8499;font-size:8pt;margin-top:10px;text-align:center;line-height:1.5">
+      <div style="color:var(--muted);font-size:8pt;margin-top:10px;text-align:center;line-height:1.5">
         By paying you agree to the <a href="/terms" target="_blank" style="color:#FF6B35;text-decoration:none">Terms of Service</a> (<a href="/terms#refunds" target="_blank" style="color:#FF6B35;text-decoration:none">refund terms</a>)
         and <a href="/privacy-policy" target="_blank" style="color:#FF6B35;text-decoration:none">Privacy Policy</a>.
         A receipt is emailed after confirmation.
@@ -318,21 +316,21 @@
 
     <div id="mpesa-waiting" style="display:none;text-align:center;padding:16px 0">
       <div style="font-size:28px;margin-bottom:12px">📲</div>
-      <div style="color:#E2E8F0;font-size:11pt;font-weight:600;margin-bottom:8px">Check your phone!</div>
-      <div style="color:#7A8499;font-size:9.5pt;margin-bottom:20px">Enter your M-Pesa PIN when prompted.</div>
-      <div id="mpesa-poll-msg" style="color:#7A8499;font-size:9pt">Waiting for confirmation…</div>
+      <div style="color:var(--text);font-size:11pt;font-weight:600;margin-bottom:8px">Check your phone!</div>
+      <div style="color:var(--muted);font-size:9.5pt;margin-bottom:20px">Enter your M-Pesa PIN when prompted.</div>
+      <div id="mpesa-poll-msg" style="color:var(--muted);font-size:9pt">Waiting for confirmation…</div>
     </div>
 
     <div id="mpesa-success" style="display:none;text-align:center;padding:16px 0">
       <div style="font-size:36px;margin-bottom:12px">🎉</div>
       <div style="color:#00C076;font-size:12pt;font-weight:700;margin-bottom:8px">Payment confirmed!</div>
-      <div id="mpesa-success-msg" style="color:#7A8499;font-size:9.5pt;margin-bottom:20px"></div>
+      <div id="mpesa-success-msg" style="color:var(--muted);font-size:9.5pt;margin-bottom:20px"></div>
       <a href="/" style="display:inline-block;padding:10px 24px;background:#FF6B35;color:#fff;text-decoration:none;border-radius:6px;font-weight:700;font-size:10.5pt">Go to Dashboard</a>
     </div>
 
     <button onclick="closeMpesa()"
-      style="margin-top:16px;width:100%;padding:9px;background:transparent;color:#7A8499;
-             border:1px solid #2A3150;border-radius:6px;font-size:10pt;cursor:pointer;font-family:Inter,sans-serif">
+      style="margin-top:16px;width:100%;padding:9px;background:transparent;color:var(--muted);
+             border:1px solid var(--border);border-radius:6px;font-size:10pt;cursor:pointer;font-family:Inter,sans-serif">
       Cancel
     </button>
   </div>
@@ -437,7 +435,7 @@ function pollPayment() {
 setBilling('monthly');
 </script>
 
-<footer style="border-top:1px solid #2A3150;padding:16px;text-align:center;font-size:8.5pt;color:#7A8499">
+<footer style="border-top:1px solid var(--border);padding:16px;text-align:center;font-size:8.5pt;color:var(--muted)">
   <a href="/track-record" style="color:inherit;text-decoration:none;margin:0 8px">Track Record</a> ·
   <a href="/faq" style="color:inherit;text-decoration:none;margin:0 8px">FAQ</a> ·
   <a href="/privacy-policy" style="color:inherit;text-decoration:none;margin:0 8px">Privacy</a> ·

@@ -1,16 +1,17 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Before you start, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#0F1217;--surface:#1A1F2E;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--green:#00C076;--blue:#3B82F6;--yellow:#EAB308}
+    
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
     .box{width:min(560px,94vw)}
-    .logo{font-size:16pt;font-weight:700;color:#fff;text-align:center}.logo span{color:var(--accent)}
+    .logo{font-size:16pt;font-weight:700;color:var(--white);text-align:center}.logo span{color:var(--accent)}
     h1{font-size:14pt;text-align:center;margin:14px 0 6px}
     .sub{color:var(--muted);font-size:9.5pt;text-align:center;margin-bottom:22px}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:12px;display:flex;gap:14px}
@@ -23,6 +24,7 @@
   </style>
 </head>
 <body>
+  <button id="themeToggle" class="theme-toggle theme-toggle-float" onclick="toggleTheme()">☾ Dark</button>
   <div class="box">
     <div class="logo">Bull<span>Logic</span></div>
     <h1>Three things before your first prediction</h1>

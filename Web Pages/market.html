@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Market Overview, BullLogic</title>
@@ -8,12 +9,7 @@
   <script src="https://s3.tradingview.com/tv.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
-      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
-      --accent: #FF6B35; --green: #00C076; --red: #FF4D4D;
-      --blue: #3B82F6; --white: #FFFFFF;
-    }
+    
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
     .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
@@ -118,6 +114,7 @@
     </div>
   </div>
   <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <span>{{ current_user.username }}</span>
     {% if not current_user.is_pro %}
       <a href="/pricing" class="btn-upgrade">Upgrade</a>

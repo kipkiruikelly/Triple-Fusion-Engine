@@ -1,18 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Trade Journal, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
-      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
-      --accent: #FF6B35; --green: #00C853; --red: #FF4D4D;
-      --yellow: #FFD54F; --white: #FFFFFF;
-    }
+    :root{--green:#00C853;--yellow:#FFD54F}
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
     .topbar {
       background: var(--surface); border-bottom: 1px solid var(--border);
@@ -128,6 +124,7 @@
     <a href="/journal" class="active">Journal</a>
     <a href="/alerts">Alerts</a>
     <a href="/profile">Profile</a>
+    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
   </div>
 </div>
 

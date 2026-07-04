@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MT5 Algo Trading, BullLogic</title>
@@ -8,20 +9,7 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg:      #0F1217;
-      --surface: #1A1F2E;
-      --surface2:#222840;
-      --border:  #2A3150;
-      --text:    #E2E8F0;
-      --muted:   #7A8499;
-      --accent:  #FF6B35;
-      --green:   #00C076;
-      --red:     #FF4D4D;
-      --yellow:  #FBBF24;
-      --blue:    #3B82F6;
-      --white:   #FFFFFF;
-    }
+    :root{--yellow:#FBBF24}
 
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -125,6 +113,7 @@
 <div class="topbar">
   <a href="/" class="logo" style="text-decoration:none;">Market<span>Predict</span> <span style="font-size:9pt;color:var(--accent);font-weight:600;letter-spacing:0.5px;">MT5</span></a>
   <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;">PRO</span>
     <a href="/" class="btn-nav">Dashboard</a>
     <a href="/logout" class="btn-nav">Logout</a>

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="csrf" content="{{ session.get('csrf_token','') }}"/>
@@ -9,8 +10,6 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#0F1217;--surface:#1A1F2E;--surface2:#222840;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--green:#00C076;--red:#FF4D4D;--blue:#3B82F6;--yellow:#EAB308;--white:#FFFFFF;--shadow:rgba(0,0,0,.4)}
-    [data-theme="light"]{--bg:#F4F6FA;--surface:#FFFFFF;--surface2:#EEF1F7;--border:#D8DEE9;--text:#1A2233;--muted:#5C6779;--white:#111827;--shadow:rgba(20,30,60,.12)}
     body{font-family:'Inter',sans-serif;font-size:10.5pt;background:var(--bg);color:var(--text);min-height:100vh}
     a{color:var(--blue);text-decoration:none}
     /* layout */
@@ -143,7 +142,7 @@
            onkeydown="if(event.key==='Enter')location='/admin/users?q='+encodeURIComponent(this.value)"></div>
       <button class="top-ico" id="bellBtn" onclick="toggleBell()" title="Admin alerts">🔔<span class="bell-dot" id="bellDot" style="display:none">0</span></button>
       <div class="dropdown" id="bellDrop" style="right:120px;top:48px"></div>
-      <button class="top-ico" onclick="toggleTheme()" title="Toggle dark/light" id="themeBtn">◐</button>
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
       <div class="profile">
         <button class="profile-btn" onclick="document.getElementById('profDrop').classList.toggle('open')">
           <span class="avatar">{{ current_user.username[0]|upper }}</span> {{ current_user.username }} ▾
@@ -232,16 +231,26 @@ function pager(el, page, per, total, go) {
   el.querySelector('#pg-next').onclick = () => go(page + 1);
 }
 
+// ── Chart.js follows the active theme ──────────────────────────
+function applyChartTheme() {
+  if (!window.Chart) return;
+  const c = blTheme.colors();
+  Chart.defaults.color = c.muted;
+  Chart.defaults.borderColor = c.border;
+  document.querySelectorAll('canvas').forEach(cv => {
+    const ch = Chart.getChart(cv);
+    if (ch) ch.update('none');
+  });
+}
+applyChartTheme();
+window.addEventListener('themechange', applyChartTheme);
+
 // ── layout state ───────────────────────────────────────────────
 function toggleSidebar() {
   const s = document.getElementById('shell').classList.toggle('collapsed');
   localStorage.setItem('adm-side', s ? '1' : '0');
 }
 if (localStorage.getItem('adm-side') === '1') document.getElementById('shell').classList.add('collapsed');
-
-function applyTheme(t) { document.documentElement.dataset.theme = t; localStorage.setItem('adm-theme', t); }
-function toggleTheme() { applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'); }
-applyTheme(localStorage.getItem('adm-theme') || 'dark');
 
 // active nav link
 (() => {

@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Strategy Rules, BullLogic Paper Trading</title>
@@ -8,10 +9,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    :root{--bg:#0F1217;--surface:#1A1F2E;--border:#2A3150;--text:#E2E8F0;--muted:#7A8499;--accent:#FF6B35;--green:#00C076;--yellow:#FFB020}
+    :root{--yellow:#FFB020}
     body{font-family:'Inter',sans-serif;font-size:10.5pt;background:var(--bg);color:var(--text);min-height:100vh}
     .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0}
-    .logo{font-size:14pt;font-weight:700;color:#fff;text-decoration:none}.logo span{color:var(--accent)}
+    .logo{font-size:14pt;font-weight:700;color:var(--white);text-decoration:none}.logo span{color:var(--accent)}
     .btn{padding:6px 14px;border-radius:6px;font-size:9pt;font-weight:600;text-decoration:none;color:var(--text);border:1px solid var(--border)}
     .wrap{max-width:860px;margin:0 auto;padding:36px 20px}
     h1{font-size:19pt;margin-bottom:6px}
@@ -23,7 +24,7 @@
     td{padding:9px 10px;font-size:9pt;border-bottom:1px solid var(--border);vertical-align:top}
     tr:last-child td{border-bottom:none}
     .muted{color:var(--muted)}
-    code{background:#222840;border-radius:4px;padding:1px 6px;font-size:8.5pt}
+    code{background:var(--surface2);border-radius:4px;padding:1px 6px;font-size:8.5pt}
     .simbadge{background:rgba(255,176,32,.12);color:var(--yellow);border:1px solid rgba(255,176,32,.4);font-size:8pt;font-weight:700;padding:3px 10px;border-radius:20px;vertical-align:middle}
     ul{margin:8px 0 8px 20px;line-height:1.8;font-size:9.5pt}
     .note{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;margin-top:20px;font-size:9pt;color:var(--muted);line-height:1.7}
@@ -33,6 +34,7 @@
 <div class="topbar">
   <a href="/" class="logo">Bull<span>Logic</span></a>
   <div style="display:flex;gap:10px">
+    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <a href="/paper" class="btn">Results</a>
     <a href="/" class="btn">← App</a>
   </div>

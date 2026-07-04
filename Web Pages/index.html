@@ -1,48 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BullLogic, Trading Platform</title>
   <link rel="manifest" href="/static/manifest.json"/>
   <meta name="theme-color" content="#FF6B35"/>
-  <script>if(localStorage.getItem('bl-theme')==='light')document.documentElement.classList.add('light');</script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg:        #0F1217;
-      --surface:   #1A1F2E;
-      --surface2:  #222840;
-      --border:    #2A3150;
-      --text:      #E2E8F0;
-      --muted:     #7A8499;
-      --accent:    #FF6B35;
-      --green:     #00C076;
-      --red:       #FF4D4D;
-      --blue:      #3B82F6;
-      --white:     #FFFFFF;
-    }
 
-    html.light {
-      --bg:       #F4F6F9;
-      --surface:  #FFFFFF;
-      --surface2: #EEF0F5;
-      --border:   #D8DCE8;
-      --text:     #1E2330;
-      --muted:    #64748B;
-      --white:    #1E2330;
-    }
 
-    html.light .topbar,
-    html.light .ticker-strip,
-    html.light .sidebar { background: #fff; }
-    html.light footer { background: #fff; }
-    html.light .stat-card,
-    html.light .info-section,
-    html.light .search-section,
-    html.light .model-card { background: #fff; }
+
+
+
+
 
     body {
       font-family: 'Inter', sans-serif;
@@ -641,7 +615,7 @@
       <span style="font-size:16px">🔔</span>
       <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-5px;background:var(--accent);color:#fff;font-size:7.5pt;font-weight:700;min-width:16px;height:16px;border-radius:8px;text-align:center;line-height:16px;padding:0 3px">0</span>
     </div>
-    <button id="themeToggle" onclick="toggleTheme()" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);font-size:9pt;font-weight:600;padding:5px 10px;border-radius:4px;cursor:pointer;font-family:inherit">☀ Light</button>
+    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     {% if current_user.is_authenticated and current_user.role in ('viewer', 'support', 'admin') %}
     <a href="/admin" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">⚙ Admin</a>
     {% endif %}
@@ -1567,22 +1541,6 @@ async function loadSidebarPrices() {
 loadSidebarPrices();
 setInterval(loadSidebarPrices, 30000);
 
-// ── Theme toggle ───────────────────────────────────────────────────────────
-(function(){
-  const stored = localStorage.getItem('bl-theme');
-  if (stored === 'light') {
-    document.documentElement.classList.add('light');
-    const btn = document.getElementById('themeToggle');
-    if (btn) btn.textContent = '☾ Dark';
-  }
-})();
-
-function toggleTheme() {
-  const isLight = document.documentElement.classList.toggle('light');
-  localStorage.setItem('bl-theme', isLight ? 'light' : 'dark');
-  const btn = document.getElementById('themeToggle');
-  if (btn) btn.textContent = isLight ? '☾ Dark' : '☀ Light';
-}
 </script>
 
 <footer style="border-top:1px solid var(--border);margin-top:40px;padding:16px;text-align:center;font-size:8.5pt;color:var(--muted)">

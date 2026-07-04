@@ -128,6 +128,45 @@ def create_app():
     register_notification_routes(app)
     register_paper_routes(app)
 
+    # ── Theme (account-backed dark/light/system) ──────────────────────────────
+    # Every template renders <html {{ theme_attr }}> so logged-in users get the
+    # right theme server-side (no flash, works without JS). The preference
+    # chain is: account setting, then bl-theme cookie, then OS setting via the
+    # prefers-color-scheme fallback baked into _theme.html.
+
+    @app.context_processor
+    def _inject_theme():
+        from flask import request
+        from flask_login import current_user
+        from markupsafe import Markup
+        pref = ""
+        is_account = False
+        if getattr(current_user, "is_authenticated", False):
+            pref = current_user.theme_preference or "system"
+            is_account = True
+        else:
+            cookie = request.cookies.get("bl-theme", "")
+            if cookie in ("light", "dark", "system"):
+                pref = cookie
+        attr = Markup(' data-theme="%s"' % pref) if pref in ("light", "dark") else Markup("")
+        return {"theme_pref": pref, "theme_is_account": is_account, "theme_attr": attr}
+
+    # ── Error pages ───────────────────────────────────────────────────────────
+
+    @app.errorhandler(404)
+    def _not_found(e):
+        from flask import render_template, request
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "Not found"}), 404
+        return render_template("404.html"), 404
+
+    @app.errorhandler(500)
+    def _server_error(e):
+        from flask import render_template, request
+        if request.path.startswith("/api/"):
+            return jsonify({"ok": False, "error": "Internal server error"}), 500
+        return render_template("500.html"), 500
+
     # ── Infrastructure routes (health, metrics, sw.js, model-metrics) ─────────
 
     @app.route("/sw.js")
@@ -435,6 +474,7 @@ def _run_migrations(db):
         ("prediction_history",  "interval",        "VARCHAR(4) DEFAULT '1d'"),
         ("price_alert",         "note",            "VARCHAR(100)"),
         ("price_alert",         "triggered_at",    "DATETIME"),
+        ("user",                "theme_preference", "VARCHAR(10) DEFAULT 'system'"),
     ]
     with engine.connect() as conn:
         for table, column, coltype in migrations:

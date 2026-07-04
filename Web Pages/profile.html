@@ -1,18 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Profile, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
-      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
-      --accent: #FF6B35; --green: #00C076; --red: #FF4D4D;
-      --blue: #3B82F6; --white: #FFFFFF;
-    }
+    
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
     .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
@@ -125,6 +121,7 @@
     </div>
   </div>
   <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <span>{{ current_user.username }}</span>
     {% if not current_user.is_pro %}
       <a href="/pricing" class="btn-upgrade">Upgrade</a>
@@ -403,6 +400,17 @@
       </div>
     </div>
 
+    <!-- Appearance -->
+    <div class="card">
+      <div class="section-title" style="margin-bottom:12px">Appearance</div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Choose how BullLogic looks. The choice is saved to your account and follows you on every device you sign in from. System follows your device's light or dark setting.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="theme-choice" data-value="light" onclick="saveThemePref('light')" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer;font-family:inherit">☀ Light</button>
+        <button class="theme-choice" data-value="dark" onclick="saveThemePref('dark')" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer;font-family:inherit">☾ Dark</button>
+        <button class="theme-choice" data-value="system" onclick="saveThemePref('system')" style="background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer;font-family:inherit">◐ System</button>
+      </div>
+    </div>
+
     <!-- Daily Digest -->
     <div class="card">
       <div class="section-title" style="margin-bottom:12px">Daily Market Digest</div>
@@ -446,6 +454,16 @@
       fetch('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({usage_notice_enabled:v})});
     }
+    function markThemePref(){
+      document.querySelectorAll('.theme-choice').forEach(b=>{
+        const on = b.dataset.value === blTheme.pref();
+        b.style.borderColor = on ? 'var(--accent)' : 'var(--border)';
+        b.style.color = on ? 'var(--text)' : 'var(--muted)';
+      });
+    }
+    function saveThemePref(v){ blTheme.set(v); markThemePref(); }
+    window.addEventListener('themechange', markThemePref);
+    markThemePref();
     function deleteAccount(){
       if (!confirm('Delete your BullLogic account and all your data permanently? This cannot be undone.')) return;
       fetch('/account/delete',{method:'POST',headers:{'Content-Type':'application/json'},

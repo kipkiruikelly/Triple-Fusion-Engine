@@ -1,0 +1,169 @@
+{#
+  Shared theme system. Include once in the <head> of every page:
+      {% include "_theme.html" %}
+
+  Preference chain (most specific wins):
+    1. Account setting (users.theme_preference) for logged-in users.
+       The server renders data-theme on <html> and this partial mirrors the
+       account value into localStorage so the account always wins.
+    2. localStorage / bl-theme cookie for logged-out visitors.
+    3. OS setting via prefers-color-scheme (also works with JS disabled).
+
+  Values are light | dark | system. The resolved mode (light or dark only)
+  is stored in the data-theme attribute on <html>; all colors come from the
+  CSS custom properties below.
+#}
+<script>
+(function () {
+  var d = document.documentElement;
+  var acct = "{{ theme_pref if theme_is_account else '' }}";
+  function readCookie() {
+    var m = document.cookie.match(/(?:^|;\s*)bl-theme=(light|dark|system)/);
+    return m ? m[1] : "";
+  }
+  var pref = "";
+  try {
+    if (acct) { localStorage.setItem("bl-theme", acct); pref = acct; }
+    else { pref = localStorage.getItem("bl-theme") || readCookie(); }
+  } catch (e) { pref = acct || readCookie(); }
+  if (pref !== "light" && pref !== "dark" && pref !== "system") pref = "system";
+  window.__blThemePref = pref;
+  var resolved = pref === "system"
+    ? ((window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark")
+    : pref;
+  d.setAttribute("data-theme", resolved);
+  d.classList.toggle("light", resolved === "light");
+})();
+</script>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:       #0F1217;
+    --surface:  #1A1F2E;
+    --surface2: #222840;
+    --border:   #2A3150;
+    --text:     #E2E8F0;
+    --muted:    #7A8499;
+    --accent:   #FF6B35;
+    --green:    #00C076;
+    --red:      #FF4D4D;
+    --blue:     #3B82F6;
+    --yellow:   #EAB308;
+    --white:    #FFFFFF;
+    --shadow:   rgba(0,0,0,.4);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:       #F4F6FA;
+    --surface:  #FFFFFF;
+    --surface2: #EEF1F7;
+    --border:   #D8DEE9;
+    --text:     #1A2233;
+    --muted:    #5C6779;
+    --accent:   #E85A20;
+    --green:    #059669;
+    --red:      #DC2626;
+    --blue:     #2563EB;
+    --yellow:   #A16207;
+    --white:    #111827;
+    --shadow:   rgba(20,30,60,.12);
+  }
+  /* System fallback: no data-theme attribute means no JS ran (or the user
+     chose "system" and JS is off), so follow the OS setting. */
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) {
+      color-scheme: light;
+      --bg:       #F4F6FA;
+      --surface:  #FFFFFF;
+      --surface2: #EEF1F7;
+      --border:   #D8DEE9;
+      --text:     #1A2233;
+      --muted:    #5C6779;
+      --accent:   #E85A20;
+      --green:    #059669;
+      --red:      #DC2626;
+      --blue:     #2563EB;
+      --yellow:   #A16207;
+      --white:    #111827;
+      --shadow:   rgba(20,30,60,.12);
+    }
+  }
+  .theme-toggle {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 9pt;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    width: auto; /* pages with button{width:100%} must not stretch the toggle */
+  }
+  .theme-toggle:hover { color: var(--text); }
+  /* For standalone pages (auth, errors) that have no topbar. */
+  .theme-toggle-float { position: fixed; top: 14px; right: 14px; z-index: 1000; }
+</style>
+<script>
+window.blTheme = {
+  pref: function () { return window.__blThemePref || "system"; },
+  resolved: function () {
+    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  },
+  colors: function () {
+    var s = getComputedStyle(document.documentElement);
+    function v(n) { return s.getPropertyValue(n).trim(); }
+    return { bg: v("--bg"), surface: v("--surface"), surface2: v("--surface2"),
+             border: v("--border"), text: v("--text"), muted: v("--muted"),
+             accent: v("--accent"), green: v("--green"), red: v("--red"),
+             blue: v("--blue"), yellow: v("--yellow") };
+  },
+  set: function (pref, opts) {
+    if (pref !== "light" && pref !== "dark" && pref !== "system") return;
+    window.__blThemePref = pref;
+    try { localStorage.setItem("bl-theme", pref); } catch (e) {}
+    document.cookie = "bl-theme=" + pref + "; path=/; max-age=31536000; SameSite=Lax";
+    var resolved = pref === "system"
+      ? ((window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches) ? "light" : "dark")
+      : pref;
+    var d = document.documentElement;
+    d.setAttribute("data-theme", resolved);
+    d.classList.toggle("light", resolved === "light");
+    blTheme.updateButtons();
+    if (!(opts && opts.skipSave)) {
+      try {
+        fetch("/api/theme", { method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ theme: pref }) });
+      } catch (e) {}
+    }
+    try {
+      window.dispatchEvent(new CustomEvent("themechange",
+        { detail: { pref: pref, resolved: resolved } }));
+    } catch (e) {}
+  },
+  updateButtons: function () {
+    var r = blTheme.resolved();
+    var label = r === "light" ? "☀ Light" : "☾ Dark";
+    var els = document.querySelectorAll("#themeToggle,[data-theme-toggle]");
+    for (var i = 0; i < els.length; i++) {
+      els[i].textContent = label;
+      els[i].title = "Theme: " + blTheme.pref() + ". Click to switch.";
+    }
+  }
+};
+function toggleTheme() {
+  blTheme.set(blTheme.resolved() === "light" ? "dark" : "light");
+}
+(function () {
+  if (window.matchMedia) {
+    try {
+      matchMedia("(prefers-color-scheme: light)").addEventListener("change", function () {
+        if (blTheme.pref() === "system") blTheme.set("system", { skipSave: true });
+      });
+    } catch (e) {}
+  }
+  document.addEventListener("DOMContentLoaded", blTheme.updateButtons);
+})();
+</script>

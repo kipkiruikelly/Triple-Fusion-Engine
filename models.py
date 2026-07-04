@@ -36,6 +36,7 @@ class User(UserMixin, db.Model):
     stripe_subscription_id  = db.Column(db.String(64), nullable=True)
     alerts_enabled          = db.Column(db.Boolean, default=True)
     pro_expires_at          = db.Column(db.Date, nullable=True)
+    theme_preference        = db.Column(db.String(10), default='system')  # light|dark|system
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

@@ -369,6 +369,26 @@ def register_auth_routes(app):
         db.session.commit()
         return jsonify({"ok": True, "alerts_enabled": current_user.alerts_enabled})
 
+    # ── Theme preference ───────────────────────────────────────────────────────
+
+    @app.route("/api/theme", methods=["POST"])
+    def api_theme_set():
+        """Persist the theme choice. Logged-in users save it to their account
+        so it follows them across devices; everyone gets a cookie so the next
+        server render is correct even before any JS runs."""
+        data  = request.get_json(silent=True) or {}
+        theme = data.get("theme")
+        if theme not in ("light", "dark", "system"):
+            return jsonify({"ok": False,
+                            "error": "theme must be light, dark or system"}), 400
+        if current_user.is_authenticated:
+            current_user.theme_preference = theme
+            db.session.commit()
+        resp = make_response(jsonify({"ok": True, "theme": theme}))
+        resp.set_cookie("bl-theme", theme, max_age=365 * 24 * 3600,
+                        samesite="Lax", httponly=False)
+        return resp
+
     # ── User preferences ───────────────────────────────────────────────────────
 
     @app.route("/api/preferences", methods=["GET"])
@@ -378,7 +398,7 @@ def register_auth_routes(app):
         return jsonify({
             "ok": True,
             "digest_enabled": prefs.digest_enabled if prefs else False,
-            "theme":          prefs.theme          if prefs else "dark",
+            "theme":          current_user.theme_preference or "system",
             "default_ticker": prefs.default_ticker if prefs else "AAPL",
             "timezone":       prefs.timezone        if prefs else "UTC",
             "usage_notice_enabled": prefs.usage_notice_enabled if prefs else True,
@@ -395,8 +415,8 @@ def register_auth_routes(app):
             db.session.add(prefs)
         if "digest_enabled" in data:
             prefs.digest_enabled = bool(data["digest_enabled"])
-        if "theme" in data and data["theme"] in ("dark", "light"):
-            prefs.theme = data["theme"]
+        if "theme" in data and data["theme"] in ("dark", "light", "system"):
+            current_user.theme_preference = data["theme"]
         if "default_ticker" in data:
             prefs.default_ticker = (data["default_ticker"] or "AAPL").upper()[:12]
         if "timezone" in data:

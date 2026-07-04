@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Live Performance, BullLogic</title>
@@ -8,12 +9,7 @@
   <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg:      #0F1217; --surface: #1A1F2E; --surface2: #222840;
-      --border:  #2A3150; --text: #E2E8F0; --muted: #7A8499;
-      --accent:  #FF6B35; --green: #00C076; --red: #FF4D4D;
-      --white:   #FFFFFF;
-    }
+    
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
     .topbar {
@@ -107,8 +103,9 @@
 <body>
 
 <div class="topbar">
-  <a class="logo" href="/"><Bull<span>Logic</span></a>
+  <a class="logo" href="/">Bull<span>Logic</span></a>
   <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <a href="/">Predict</a>
     <a href="/pricing">Pricing</a>
     {% if current_user.is_authenticated %}
@@ -295,13 +292,20 @@
 
   if (!dates || !dates.length) return;
 
-  var chart = LightweightCharts.createChart(el, {
-    layout: { background: { color: '#1A1F2E' }, textColor: '#7A8499' },
-    grid:   { vertLines: { color: '#2A3150' }, horzLines: { color: '#2A3150' } },
-    rightPriceScale: { borderColor: '#2A3150' },
-    timeScale: { borderColor: '#2A3150', timeVisible: true },
+  function themeOpts() {
+    var c = blTheme.colors();
+    return {
+      layout: { background: { color: c.surface }, textColor: c.muted },
+      grid:   { vertLines: { color: c.border }, horzLines: { color: c.border } },
+      rightPriceScale: { borderColor: c.border },
+      timeScale: { borderColor: c.border, timeVisible: true },
+    };
+  }
+
+  var chart = LightweightCharts.createChart(el, Object.assign({
     width: el.clientWidth, height: 280,
-  });
+  }, themeOpts()));
+  window.addEventListener('themechange', function() { chart.applyOptions(themeOpts()); });
 
   var series = chart.addAreaSeries({
     lineColor: '#FF6B35', topColor: 'rgba(255,107,53,0.25)',

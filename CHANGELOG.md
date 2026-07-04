@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-07-04, Account-backed dark/light theme across every page
+
+### Persistence
+- New theme_preference column on users (light/dark/system, default
+  system) with an ad-hoc migration; POST /api/theme saves the choice to
+  the account for logged-in users and always sets a bl-theme cookie.
+- The account preference wins on every device: server renders the right
+  data-theme and the boot script mirrors the account value into
+  localStorage, overwriting any stale device choice. Logged-out
+  visitors fall back to localStorage/cookie, then the OS setting via
+  prefers-color-scheme (which also covers JS-disabled browsers).
+
+### One theme system, every page
+- New shared partial _theme.html included in the head of all templates:
+  the full light and dark palette as CSS custom properties defined
+  once, a tiny blocking boot script that sets data-theme before first
+  paint (no flash of the wrong theme), toggle/save helpers, and a
+  themechange event.
+- All 40+ main templates, the admin console, auth pages, docs pages,
+  paper trading pages, offline/maintenance, and new 404/500 error pages
+  now share it. Duplicated per-page :root palettes and the three old
+  incompatible toggle implementations (bl-theme class flip, adm-theme
+  dataset flip, per-page copies) were removed; hardcoded palette colors
+  in styles were replaced with variables.
+- Charts re-render with theme-appropriate colors when the theme
+  changes: lightweight-charts (prediction result, backtest,
+  performance), Chart.js (portfolio, admin dashboard and analytics),
+  and the paper trading SVG equity curve.
+
+### UI
+- Consistent theme toggle in the header of every page (floating button
+  on pages without a topbar), showing the current mode.
+- New Appearance section in Profile with Light / Dark / System, saved
+  to the account instantly.
+- Emails intentionally keep their own styling.
+
+### Fixes found during the walkthrough
+- Broken logo markup on performance, pricing and model-metrics pages
+  rendered "Logic" instead of "BullLogic".
+- Full-width button styles on the auth pages no longer stretch the
+  theme toggle.
+
 ## 2026-07-03, Paper trading engine and WorldQuant-style alpha framework
 
 All simulated, virtual money only. No real order execution anywhere; a

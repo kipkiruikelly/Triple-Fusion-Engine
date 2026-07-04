@@ -1,17 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"{{ theme_attr }}>
 <head>
+  {% include "_theme.html" %}
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Model Quality, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --bg: #0F1217; --surface: #1A1F2E; --surface2: #222840;
-      --border: #2A3150; --text: #E2E8F0; --muted: #7A8499;
-      --accent: #FF6B35; --green: #00C076; --yellow: #F6C90E; --red: #FF4D4D;
-    }
+    :root{--yellow:#F6C90E}
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
     .topbar {
@@ -20,19 +17,19 @@
       display: flex; align-items: center; justify-content: space-between;
       position: sticky; top: 0; z-index: 100;
     }
-    .logo { font-size: 15pt; font-weight: 700; color: #fff; letter-spacing: -0.5px; text-decoration: none; }
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
     .logo span { color: var(--accent); }
     .topbar-right { display: flex; align-items: center; gap: 10px; }
     .topbar-right a {
       color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500;
       padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s;
     }
-    .topbar-right a:hover { color: #fff; border-color: var(--accent); }
+    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
 
     .page { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
 
     .page-header { margin-bottom: 28px; }
-    .page-header h1 { font-size: 20pt; font-weight: 800; color: #fff; }
+    .page-header h1 { font-size: 20pt; font-weight: 800; color: var(--white); }
     .page-header p  { color: var(--muted); font-size: 10.5pt; margin-top: 6px; }
     .meta { font-size: 9.5pt; color: var(--muted); margin-top: 4px; }
     .meta strong { color: var(--text); }
@@ -67,7 +64,7 @@
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: var(--surface2); }
     tbody td { padding: 9px 14px; color: var(--text); white-space: nowrap; }
-    .ticker-cell { font-weight: 700; color: #fff; }
+    .ticker-cell { font-weight: 700; color: var(--white); }
     .tf-cell {
       display: inline-block; padding: 2px 8px; border-radius: 4px;
       font-size: 8.5pt; font-weight: 600;
@@ -88,7 +85,7 @@
     .summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 14px; margin-bottom: 28px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
     .card .lbl { font-size: 9pt; color: var(--muted); margin-bottom: 5px; }
-    .card .val { font-size: 18pt; font-weight: 800; color: #fff; }
+    .card .val { font-size: 18pt; font-weight: 800; color: var(--white); }
     .card .val.green  { color: var(--green); }
     .card .val.yellow { color: var(--yellow); }
     .card .val.red    { color: var(--red); }
@@ -99,8 +96,9 @@
 </head>
 <body>
 <div class="topbar">
-  <a class="logo" href="/"><Bull<span>Logic</span></a>
+  <a class="logo" href="/">Bull<span>Logic</span></a>
   <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
     <a href="/">Dashboard</a>
     <a href="/screener">Screener</a>
     <a href="/profile">Profile</a>
