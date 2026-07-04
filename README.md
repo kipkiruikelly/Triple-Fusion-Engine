@@ -2,7 +2,7 @@
 
 **BullLogic**
 
-A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. **Phase 1** upgrades the ML stack from simple LR+RF fusion to a full stacking ensemble with XGBoost, LightGBM, local LSTM training, enhanced ICT-inspired features, and robust walk-forward backtesting.
+A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. **Phases 1-3** delivered stacking ML, Docker microservices, and advanced risk management. **Phase 4** adds alternative data (sentiment, economic calendar), gamification (competitions, leaderboards, achievements), data quality monitoring, and model versioning for reproducibility.
 
 ---
 
@@ -19,6 +19,17 @@ A production-grade machine-learning web application that predicts next-day stock
 - **MetaApi Integration**, Connect to any MT5 broker from Mac, Linux, or Windows without Wine
 - **Paper Trading**, $10,000 virtual account with real market data; no broker needed
 - **Risk Management**, ATR-based SL/TP (1.5× / 3×), 1% risk per trade, 5% daily loss circuit-breaker
+- **Phase 3: Smart Order Router**, TWAP, VWAP, Iceberg execution, market impact estimation, volume profiles
+- **Phase 3: Kelly Criterion Sizing**, Optimal position sizing from historical win rate & win/loss ratio
+- **Phase 3: Dynamic Trailing Stops**, ATR-based trailing stops that lock in profits as price moves favorably
+- **Phase 3: Drawdown Protection**, Multi-tier position reduction as drawdown deepens (automatic risk scaling)
+- **Phase 3: Correlation Monitoring**, Detect correlated positions and reduce aggregate exposure
+- **Phase 3: Execution Quality**, Slippage analysis, fill rate tracking, VWAP benchmarking
+- **Phase 4: Sentiment Analysis**, News + Reddit sentiment scoring with custom financial lexicon (VADER-style)
+- **Phase 4: Economic Calendar**, Pre-loaded major events (FOMC, NFP, CPI), volatility warnings
+- **Phase 4: Data Quality**, Freshness checks, OHLC validation, anomaly detection, gap detection
+- **Phase 4: Gamification**, Paper trading competitions, 12 achievements, leaderboards, performance reports
+- **Phase 4: Model Versioning**, Reproducible training with feature/data hashing, version tracking
 
 ---
 
@@ -51,6 +62,62 @@ mt5_trading.py        →  trading engine (MetaApi / paper / direct MT5 bridge)
 - Majority vote determines action; tie → HOLD
 - Stacking ensemble prediction used as primary price target when available
 - Confidence based on vote agreement ratio (higher agreement = higher confidence)
+
+---
+
+---
+
+## Docker (Phase 2 Microservices)
+
+```bash
+# Build and start all services
+docker compose up -d
+
+# Start specific services
+docker compose up -d web predictor redis
+
+# Run one-off pipeline on all default tickers
+docker compose run pipeline --all
+
+# Train models in container
+docker compose run trainer --all-tickers
+
+# View logs
+docker compose logs -f web
+```
+
+**Services:**
+| Service | Port | Description |
+|---|---|---|
+| `web` | 5000 | Flask web UI + REST API |
+| `predictor` | 5001 | Standalone ML prediction API |
+| `trader` | — | MT5 trading engine |
+| `redis` | 6379 | Message broker + cache |
+| `pipeline` | — | Data collection (one-off, `--profile tools`) |
+| `trainer` | — | Model training (one-off, `--profile tools`) |
+
+---
+
+## Configuration (Phase 2 Centralized)
+
+All settings are managed through `config.py` (Pydantic) with environment-specific presets:
+
+```bash
+# Development (default): debug mode, SQLite, short data range
+ENV=development python app.py
+
+# Staging: no debug, PostgreSQL, medium data range
+ENV=staging python app.py
+
+# Production: conservative risk, full history, requires SECRET_KEY
+ENV=production python app.py
+```
+
+Key configuration groups:
+- `config.py` → Single source of truth for all constants
+- `.env` → Secrets and environment-specific overrides (gitignored)
+- `.env.example` → Template with all available variables
+- `settings.DEFAULT_TICKERS` → Multi-ticker list for batch operations
 
 ---
 

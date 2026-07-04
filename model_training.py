@@ -48,9 +48,18 @@ logger = logging.getLogger(__name__)
 
 # ── Configuration ───────────────────────────────────────────────────────────────
 
-TICKER      = "QQQ"
-TRAIN_RATIO = 0.80
-VAL_RATIO   = 0.10
+# Phase 2: Centralized config via config.py
+try:
+    from config import settings as _cfg
+    TICKER      = _cfg.DEFAULT_TICKER
+    TRAIN_RATIO = _cfg.TRAIN_RATIO
+    VAL_RATIO   = _cfg.VAL_RATIO
+    CV_FOLDS    = _cfg.CV_FOLDS
+except ImportError:
+    TICKER      = "QQQ"
+    TRAIN_RATIO = 0.80
+    VAL_RATIO   = 0.10
+    CV_FOLDS    = 5
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR   = os.path.join(BASE_DIR, "Data")
