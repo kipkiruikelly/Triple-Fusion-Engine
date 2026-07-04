@@ -142,7 +142,11 @@ def _infer_model(model, X: np.ndarray, current_price: float):
 
 
 def _load_models(ticker: str, interval: str = "1d"):
-    """Return (lr, rf, scaler, feature_cols, xgb), cached after first load. xgb may be None."""
+    """Return (lr, rf, scaler, feature_cols, xgb, lgb, stacking, lstm), cached.
+
+    New in Phase 1: supports LightGBM, stacking ensemble, and LSTM models.
+    Any of xgb, lgb, stacking, lstm may be None if the model file is missing.
+    """
     key = (ticker.upper(), interval)
     if key in _model_cache:
         return _model_cache[key]
@@ -153,10 +157,42 @@ def _load_models(ticker: str, interval: str = "1d"):
     rf    = joblib.load(os.path.join(MODELS_DIR, f"rf_model_{t}{suffix}.pkl"))
     sc    = joblib.load(os.path.join(MODELS_DIR, f"scaler_sklearn_{t}{suffix}.pkl"))
     feat  = joblib.load(os.path.join(MODELS_DIR, f"feature_cols_sklearn_{t}{suffix}.pkl"))
+
+    # Optional: XGBoost
     xgb_path = os.path.join(MODELS_DIR, f"xgb_model_{t}{suffix}.pkl")
     xgb   = joblib.load(xgb_path) if os.path.exists(xgb_path) else None
-    _model_cache[key] = (lr, rf, sc, feat, xgb)
-    return lr, rf, sc, feat, xgb
+
+    # Optional: LightGBM
+    lgb_path = os.path.join(MODELS_DIR, f"lgb_model_{t}{suffix}.pkl")
+    lgb = joblib.load(lgb_path) if os.path.exists(lgb_path) else None
+
+    # Optional: Stacking ensemble
+    stacking = None
+    stacking_meta_path = os.path.join(MODELS_DIR, f"stacking_meta_{t}{suffix}.pkl")
+    if os.path.exists(stacking_meta_path):
+        try:
+            stacking = {
+                "meta":      joblib.load(stacking_meta_path),
+                "scaler":    joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_scaler_{t}{suffix}.pkl")),
+                "top10_idx": joblib.load(os.path.join(MODELS_DIR, f"stacking_top10_idx_{t}{suffix}.pkl")),
+                "meta_cols": joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_cols_{t}{suffix}.pkl")),
+            }
+        except Exception:
+            stacking = None
+
+    # Optional: LSTM
+    lstm = None
+    lstm_path = os.path.join(MODELS_DIR, f"lstm_model_{t}{suffix}.h5")
+    if os.path.exists(lstm_path):
+        try:
+            os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+            import tensorflow as tf
+            lstm = tf.keras.models.load_model(lstm_path)
+        except Exception:
+            lstm = None
+
+    _model_cache[key] = (lr, rf, sc, feat, xgb, lgb, stacking, lstm)
+    return lr, rf, sc, feat, xgb, lgb, stacking, lstm
 
 
 _FETCH_PERIOD = {
@@ -824,8 +860,8 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
             "Check the ticker symbol."
         )
 
-    # Load models first so we know which feature set to build
-    lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
+    # Load models — now includes lgb, stacking, lstm (Phase 1)
+    lr_model, rf_model, scaler, feature_cols, xgb_model, lgb_model, stacking, lstm_model = _load_models(ticker, interval)
 
     if _is_professional_model(feature_cols):
         df = _build_pro_features(df, ticker, interval)
@@ -843,28 +879,121 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
 
     price_change = lr_pred - current_price
 
+    # ── Phase 1: Multi-model ensemble voting ────────────────────────────────
+    model_votes = [bool(lr_up), bool(rf_up)]
+    model_names = ["LR", "RF"]
+
+    # XGBoost vote
+    xgb_prob = 0.5
+    xgb_up = False
     if xgb_model is not None:
-        xgb_prob   = float(xgb_model.predict_proba(X)[0][1])
-        xgb_up     = xgb_prob > 0.5
-        votes_up   = sum([bool(lr_up), bool(rf_up), xgb_up])
-        direction  = "Up" if xgb_prob > 0.5 else "Down"
-        confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
-        signal_strength = ("Strong" if votes_up == 3 and confidence >= 62
-                           else ("Strong" if votes_up == 0 and confidence >= 62
-                           else ("Moderate" if votes_up >= 2 or votes_up == 0
-                           else "Weak")))
+        if hasattr(xgb_model, "classes_"):
+            xgb_prob = float(xgb_model.predict_proba(X)[0][1])
+            xgb_up = xgb_prob > 0.5
+        else:
+            _, _, xgb_up = _infer_model(xgb_model, X, current_price)
+        model_votes.append(bool(xgb_up))
+        model_names.append("XGB")
+
+    # LightGBM vote
+    if lgb_model is not None:
+        _, _, lgb_up_v = _infer_model(lgb_model, X, current_price)
+        model_votes.append(bool(lgb_up_v))
+        model_names.append("LGB")
+
+    # Stacking ensemble prediction (becomes primary when available)
+    stacking_pred = None
+    if stacking is not None:
+        try:
+            meta_feats = np.zeros((1, 0))
+            meta_feats = np.column_stack([meta_feats, [lr_pred]])
+            meta_feats = np.column_stack([meta_feats, [rf_pred]])
+            if xgb_model is not None and hasattr(xgb_model, "predict"):
+                meta_feats = np.column_stack([meta_feats,
+                    [current_price * (1 + float(xgb_model.predict(X)[0]) / 100)]])
+            if lgb_model is not None:
+                meta_feats = np.column_stack([meta_feats,
+                    [current_price * (1 + float(lgb_model.predict(X)[0]) / 100)]])
+            meta_feats = np.column_stack([meta_feats,
+                X[:, stacking["top10_idx"]][:, :len(stacking["top10_idx"])]])
+            # Pad/trim meta_feats to match expected feature count
+            expected = len(stacking["meta_cols"])
+            if meta_feats.shape[1] < expected:
+                pad = np.zeros((1, expected - meta_feats.shape[1]))
+                meta_feats = np.column_stack([meta_feats, pad])
+            elif meta_feats.shape[1] > expected:
+                meta_feats = meta_feats[:, :expected]
+            meta_feats_sc = stacking["scaler"].transform(meta_feats)
+            stacking_pred = float(stacking["meta"].predict(meta_feats_sc)[0])
+            model_votes.append(stacking_pred > current_price)
+            model_names.append("Stack")
+        except Exception:
+            stacking_pred = None
+
+    # LSTM prediction (separate path, treated as an extra model vote)
+    lstm_pred = None
+    if lstm_model is not None:
+        try:
+            # LSTM needs sequence input; build from recent bars
+            lstm_scaler_path = os.path.join(BASE_DIR, "Data", f"scaler_{ticker}.pkl")
+            lstm_feat_path  = os.path.join(BASE_DIR, "Data", f"feature_cols_{ticker}.pkl")
+            if os.path.exists(lstm_scaler_path) and os.path.exists(lstm_feat_path):
+                lstm_scaler = joblib.load(lstm_scaler_path)
+                lstm_feats  = joblib.load(lstm_feat_path)
+                lookback = 60
+                recent = df[lstm_feats].tail(lookback).values
+                if len(recent) >= lookback:
+                    seq = lstm_scaler.transform(recent).reshape(1, lookback, -1)
+                    lstm_pred_scaled = float(lstm_model.predict(seq, verbose=0)[0][0])
+                    # Inverse transform: place prediction back into feature space
+                    last_step = recent[-1:].copy()
+                    close_idx = lstm_feats.index("Close") if "Close" in lstm_feats else 0
+                    last_step[0, close_idx] = lstm_pred_scaled
+                    lstm_pred = float(lstm_scaler.inverse_transform(last_step)[0, close_idx])
+                    model_votes.append(lstm_pred > current_price)
+                    model_names.append("LSTM")
+        except Exception:
+            lstm_pred = None
+
+    # Use stacking ensemble prediction as primary when available
+    if stacking_pred is not None:
+        lr_pred = stacking_pred
+    elif lstm_pred is not None:
+        lr_pred = lstm_pred
+
+    price_change = lr_pred - current_price
+    change_pct   = abs(price_change / current_price * 100)
+
+    # Vote tally and ensemble direction
+    votes_up = sum(1 for v in model_votes if v)
+    total_v  = len(model_votes)
+
+    if votes_up > total_v / 2:
+        direction = "Up"
+    elif votes_up < total_v / 2:
+        direction = "Down"
     else:
-        xgb_prob   = 0.5
-        xgb_up     = lr_up
-        votes_up   = sum([bool(lr_up), bool(rf_up)])
-        direction  = "Up" if lr_up else "Down"
+        direction = "Up" if lr_up else "Down"
+
+    # Confidence: agreement ratio
+    agreement_pct = max(votes_up, total_v - votes_up) / total_v * 100
+    if stacking_pred is not None:
+        confidence = round(min(95, max(51, agreement_pct)), 1)
+    elif xgb_model is not None and hasattr(xgb_model, "classes_"):
+        confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
+    else:
         daily_ret  = df.get("Daily_Return", df.get("Returns", pd.Series(dtype=float)))
         recent_vol = float(daily_ret.tail(20).std()) if not daily_ret.empty else 1.0
-        change_pct = abs(price_change / current_price * 100)
         confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
-        signal_strength = "Moderate" if votes_up == 2 or votes_up == 0 else "Weak"
 
-    change_pct = abs(price_change / current_price * 100)
+    # Signal strength based on vote margin
+    vote_margin = abs(votes_up - total_v / 2) / (total_v / 2 + 1e-8)
+    if vote_margin >= 0.8:
+        signal_strength = "Strong"
+    elif vote_margin >= 0.4:
+        signal_strength = "Moderate"
+    else:
+        signal_strength = "Weak"
 
     # Chart data (last 90 bars)
     chart_df     = df.tail(90)
@@ -1081,7 +1210,7 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
         if df.empty or len(df) < min_bars:
             return {"action": "HOLD", "error": "Insufficient data", "confidence": 0}
 
-        lr_model, rf_model, scaler, feature_cols, xgb_model = _load_models(ticker, interval)
+        lr_model, rf_model, scaler, feature_cols, xgb_model, lgb_model, stacking, lstm_model = _load_models(ticker, interval)
 
         if _is_professional_model(feature_cols):
             df = _build_pro_features(df, ticker, interval)
@@ -1097,24 +1226,62 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
         lr_pred, _, lr_up    = _infer_model(lr_model, X, current_price)
         rf_pred, rf_ret, rf_up = _infer_model(rf_model, X, current_price)
 
+        # ── Phase 1: Multi-model vote tally ─────────────────────────────────
+        model_votes = [bool(lr_up), bool(rf_up)]
+
+        # XGBoost
+        xgb_prob = 0.5
         if xgb_model is not None:
-            xgb_prob = float(xgb_model.predict_proba(X)[0][1])
-            xgb_up   = xgb_prob > 0.5
-            votes_up = sum([lr_up, rf_up, xgb_up])
-            votes_dn = 3 - votes_up
-            if votes_up >= 2:   action = "BUY"
-            elif votes_dn >= 2: action = "SELL"
-            else:               action = "HOLD"
+            if hasattr(xgb_model, "classes_"):
+                xgb_prob = float(xgb_model.predict_proba(X)[0][1])
+                model_votes.append(xgb_prob > 0.5)
+            else:
+                _, _, xgb_up_v = _infer_model(xgb_model, X, current_price)
+                model_votes.append(bool(xgb_up_v))
+
+        # LightGBM
+        if lgb_model is not None:
+            _, _, lgb_up_v = _infer_model(lgb_model, X, current_price)
+            model_votes.append(bool(lgb_up_v))
+
+        # Stacking ensemble
+        if stacking is not None:
+            try:
+                meta_feats = np.zeros((1, 0))
+                meta_feats = np.column_stack([meta_feats, [lr_pred], [rf_pred]])
+                if xgb_model is not None and hasattr(xgb_model, "predict"):
+                    meta_feats = np.column_stack([meta_feats,
+                        [current_price * (1 + float(xgb_model.predict(X)[0]) / 100)]])
+                if lgb_model is not None:
+                    meta_feats = np.column_stack([meta_feats,
+                        [current_price * (1 + float(lgb_model.predict(X)[0]) / 100)]])
+                meta_feats = np.column_stack([meta_feats,
+                    X[:, stacking["top10_idx"]][:, :len(stacking["top10_idx"])]])
+                expected = len(stacking["meta_cols"])
+                if meta_feats.shape[1] < expected:
+                    meta_feats = np.column_stack([meta_feats,
+                        np.zeros((1, expected - meta_feats.shape[1]))])
+                meta_feats_sc = stacking["scaler"].transform(meta_feats)
+                stacking_pred = float(stacking["meta"].predict(meta_feats_sc)[0])
+                model_votes.append(stacking_pred > current_price)
+            except Exception:
+                pass
+
+        votes_up = sum(1 for v in model_votes if v)
+        total_v  = len(model_votes)
+
+        if votes_up > total_v / 2:
+            action = "BUY"
+        elif votes_up < total_v / 2:
+            action = "SELL"
+        else:
+            action = "HOLD"
+
+        agreement_pct = max(votes_up, total_v - votes_up) / total_v * 100
+        if xgb_model is not None and hasattr(xgb_model, "classes_"):
             confidence = round(min(95, max(51, max(xgb_prob, 1 - xgb_prob) * 100)), 1)
         else:
-            xgb_prob = 0.5
-            if lr_up and rf_up:           action = "BUY"
-            elif not lr_up and not rf_up: action = "SELL"
-            else:                          action = "HOLD"
-            daily_ret  = df.get("Daily_Return", df.get("Returns", pd.Series(dtype=float)))
-            recent_vol = float(daily_ret.tail(20).std()) if not daily_ret.empty else 1.0
-            change_pct = abs(lr_pred - current_price) / current_price * 100
-            confidence = min(95, max(51, 50 + (change_pct / max(recent_vol, 0.1)) * 10))
+            confidence = round(min(95, max(51, agreement_pct)), 1)
 
         rsi       = float(df["RSI_14"].iloc[-1])
         macd_hist = float(df["MACD_Hist"].iloc[-1])

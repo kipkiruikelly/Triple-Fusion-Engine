@@ -24,3 +24,25 @@ pytest>=8.0  # dev/test only
 authlib>=1.7
 email-validator>=2.2
 python-dotenv>=1.0
+
+# ── Phase 1: Enhanced ML Stack ──────────────────────────────────────────────────
+xgboost>=2.0.0            # Gradient boosting (stacking ensemble)
+lightgbm>=4.0.0           # LightGBM gradient boosting (stacking ensemble)
+tensorflow>=2.15.0        # LSTM neural network (requires Python 3.9-3.12)
+keras>=2.15.0             # High-level TF API for LSTM
+
+# ── Phase 1–3: Analysis, Risk & Validation ───────────────────────────────────────
+scipy>=1.11.0             # Statistical functions (Kelly, walk-forward, correlations)
+
+# ── Phase 2: Configuration & Microservices ──────────────────────────────────────
+pydantic>=2.0.0           # Settings validation (config.py)
+pydantic-settings>=2.0.0  # Environment-aware settings
+redis>=5.0.0              # Message broker + cache (optional, falls back to in-memory)
+hiredis>=2.0.0            # Faster Redis parser (optional)
+
+# ── Testing ──────────────────────────────────────────────────────────────────────
+pytest>=8.0               # Test framework
+pytest-cov>=5.0            # Coverage reports
+pytest-html>=4.0           # HTML test reports
+pytest-mock>=3.0           # Mocking utilities
+coverage>=7.0              # Coverage measurement

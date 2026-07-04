@@ -1,14 +1,17 @@
-# ML-based Quantitative Trading System
+# Triple-Fusion-Engine — Stock Market Prediction & Algorithmic Trading System
 
 **BullLogic**
 
-A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. Combines Linear Regression, Random Forest, and LSTM models with a live MT5 trading engine powered by MetaApi.
+A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. **Phases 1-3** delivered stacking ML, Docker microservices, and advanced risk management. **Phase 4** adds alternative data (sentiment, economic calendar), gamification (competitions, leaderboards, achievements), data quality monitoring, and model versioning for reproducibility.
 
 ---
 
 ## Features
 
-- **ML Price Predictions**, LR + RF models predict next-day closing price; LSTM slot available via Colab
+- **Stacking Ensemble ML**, XGBoost + LightGBM + Random Forest + Linear Regression with Ridge meta-learner
+- **LSTM Neural Network**, Local training with bidirectional LSTM, dropout, early stopping (no Colab required)
+- **ICT-Inspired Features**, Order Blocks, FVGs, BOS/CHoCH, Order Flow Delta, Market Structure analysis
+- **Walk-Forward Backtesting**, Purged/embargoed time-based splits, fold-level metrics, stability scoring
 - **Technical Analysis**, RSI, MACD, Bollinger Bands, EMA, ATR computed live from yfinance data
 - **TradingView Charts**, Interactive live chart with RSI and MACD studies for any ticker
 - **User Accounts**, Registration, login, subscription tiers (Free: 5 predictions/day, Pro: unlimited)
@@ -16,57 +19,148 @@ A production-grade machine-learning web application that predicts next-day stock
 - **MetaApi Integration**, Connect to any MT5 broker from Mac, Linux, or Windows without Wine
 - **Paper Trading**, $10,000 virtual account with real market data; no broker needed
 - **Risk Management**, ATR-based SL/TP (1.5× / 3×), 1% risk per trade, 5% daily loss circuit-breaker
+- **Phase 3: Smart Order Router**, TWAP, VWAP, Iceberg execution, market impact estimation, volume profiles
+- **Phase 3: Kelly Criterion Sizing**, Optimal position sizing from historical win rate & win/loss ratio
+- **Phase 3: Dynamic Trailing Stops**, ATR-based trailing stops that lock in profits as price moves favorably
+- **Phase 3: Drawdown Protection**, Multi-tier position reduction as drawdown deepens (automatic risk scaling)
+- **Phase 3: Correlation Monitoring**, Detect correlated positions and reduce aggregate exposure
+- **Phase 3: Execution Quality**, Slippage analysis, fill rate tracking, VWAP benchmarking
+- **Phase 4: Sentiment Analysis**, News + Reddit sentiment scoring with custom financial lexicon (VADER-style)
+- **Phase 4: Economic Calendar**, Pre-loaded major events (FOMC, NFP, CPI), volatility warnings
+- **Phase 4: Data Quality**, Freshness checks, OHLC validation, anomaly detection, gap detection
+- **Phase 4: Gamification**, Paper trading competitions, 12 achievements, leaderboards, performance reports
+- **Phase 4: Model Versioning**, Reproducible training with feature/data hashing, version tracking
 
 ---
 
-## Architecture
+## Architecture (Phase 1 Enhanced)
 
 ```
-data_pipeline.py   →  Data/AAPL_featured.csv + numpy arrays
-model_training.py  →  Saved Models/lr_model_AAPL.pkl + rf_model_AAPL.pkl + scalers
-predictor.py       →  shared ML inference layer (used by Flask + trading loop)
-app.py             →  Flask web app (auth, predictions, MT5 routes)
-mt5_trading.py     →  trading engine (MetaApi / paper / direct MT5 bridge)
+data_pipeline.py      →  Data/AAPL_featured.csv + numpy arrays + enhanced ICT features
+feature_engineering.py →  BOS/CHoCH, Enhanced FVG, Order Flow, Market Structure
+model_training.py     →  Saved Models/lr_model_AAPL.pkl + rf_model_AAPL.pkl + xgb + lgb
+stacking_ensemble.py  →  Saved Models/stacking_meta_AAPL.pkl (Ridge meta-learner)
+lstm_trainer.py       →  Saved Models/lstm_model_AAPL.h5 (bidirectional LSTM)
+predictor.py          →  shared ML inference layer (uses all models + stacking ensemble)
+walk_forward.py       →  Walk-forward analysis with purged splits and stability scoring
+app.py                →  Flask web app (auth, predictions, MT5 routes)
+mt5_trading.py        →  trading engine (MetaApi / paper / direct MT5 bridge)
 ```
 
-### Two-Scaler Architecture
-| Scaler | Used for |
-|---|---|
-| `Data/scaler_AAPL.pkl` | LSTM pipeline (19 raw OHLCV + indicator features) |
-| `Saved Models/scaler_sklearn_AAPL.pkl` | LR + RF pipeline (25 features incl. lag terms) |
+### Model Hierarchy
+| Model | Target | Role |
+|---|---|---|
+| Linear Regression | Next close price | Baseline, stable |
+| Random Forest | Next return % | Feature-rich, non-linear |
+| XGBoost | Next return % | Gradient boosting, regularization |
+| LightGBM | Next return % | Fast gradient boosting, leaf-wise |
+| **Stacking Ensemble** | **Next close price** | **Meta-learner combining all above** |
+| LSTM | Next close price | Deep learning, sequence memory |
 
-### ML Signal Fusion (trading loop)
-- **BUY**, LR predicts price up AND RF predicts positive return
-- **SELL**, both models predict down
-- **HOLD**, models disagree, or tech indicator conflicts with ML direction
+### Multi-Model Voting (trading loop)
+- All available models vote: BUY (price up) or SELL (price down)
+- Majority vote determines action; tie → HOLD
+- Stacking ensemble prediction used as primary price target when available
+- Confidence based on vote agreement ratio (higher agreement = higher confidence)
+
+---
+
+---
+
+## Docker (Phase 2 Microservices)
+
+```bash
+# Build and start all services
+docker compose up -d
+
+# Start specific services
+docker compose up -d web predictor redis
+
+# Run one-off pipeline on all default tickers
+docker compose run pipeline --all
+
+# Train models in container
+docker compose run trainer --all-tickers
+
+# View logs
+docker compose logs -f web
+```
+
+**Services:**
+| Service | Port | Description |
+|---|---|---|
+| `web` | 5000 | Flask web UI + REST API |
+| `predictor` | 5001 | Standalone ML prediction API |
+| `trader` | — | MT5 trading engine |
+| `redis` | 6379 | Message broker + cache |
+| `pipeline` | — | Data collection (one-off, `--profile tools`) |
+| `trainer` | — | Model training (one-off, `--profile tools`) |
+
+---
+
+## Configuration (Phase 2 Centralized)
+
+All settings are managed through `config.py` (Pydantic) with environment-specific presets:
+
+```bash
+# Development (default): debug mode, SQLite, short data range
+ENV=development python app.py
+
+# Staging: no debug, PostgreSQL, medium data range
+ENV=staging python app.py
+
+# Production: conservative risk, full history, requires SECRET_KEY
+ENV=production python app.py
+```
+
+Key configuration groups:
+- `config.py` → Single source of truth for all constants
+- `.env` → Secrets and environment-specific overrides (gitignored)
+- `.env.example` → Template with all available variables
+- `settings.DEFAULT_TICKERS` → Multi-ticker list for batch operations
 
 ---
 
 ## Setup
 
 ### Requirements
-- Python 3.10+
-- Anaconda base environment (Python 3.13 works for everything except LSTM training)
+- Python 3.10–3.12 (venv recommended)
+- TensorFlow requires Python 3.9–3.12 (project venv uses Python 3.11)
 
-### 1. Install dependencies
+### 1. Create virtual environment & install dependencies
 ```bash
+python -m venv .venv
+.venv\Scripts\activate       # Windows
+source .venv/bin/activate    # Mac/Linux
 pip install -r requirements.txt
 ```
 
-### 2. Build training data
+### 2. Build training data (with enhanced ICT features)
 ```bash
 python data_pipeline.py
 ```
 
-### 3. Train ML models
+### 3. Train base models (LR, RF, XGBoost, LightGBM)
 ```bash
 python model_training.py
 ```
 
-### 4. LSTM training (optional)
-Open `Step2_LSTM_Training.ipynb` in Google Colab, run all cells, then download `lstm_model_AAPL.keras` into `Saved Models/`.
+### 4. Train stacking ensemble
+```bash
+python stacking_ensemble.py --ticker QQQ
+```
 
-### 5. Run the app
+### 5. Train LSTM (local, no Colab needed)
+```bash
+python lstm_trainer.py --ticker QQQ --epochs 80
+```
+
+### 6. Run walk-forward validation
+```bash
+python walk_forward.py --ticker QQQ --folds 5
+```
+
+### 7. Run the app
 ```bash
 python app.py
 ```
@@ -115,10 +209,15 @@ WINEPREFIX=~/.mt5 wine python.exe -m mt5linux -p 18812 --host 0.0.0.0
 ```
 Stock-Market-Predictor/
 ├── app.py                        # Flask app, auth, prediction routes, MT5 API
-├── predictor.py                  # Shared ML inference (run_prediction, ml_signal)
+├── predictor.py                  # Shared ML inference (multi-model voting)
 ├── mt5_trading.py                # Trading engine (MetaApi / paper / direct MT5)
 ├── data_pipeline.py              # Step 1, download OHLCV data, engineer features
-├── model_training.py             # Step 2, train LR + RF, evaluate, save models
+├── model_training.py             # Step 2, train LR + RF + XGB + LGB
+├── stacking_ensemble.py          # Phase 1, cross-validated stacking ensemble
+├── lstm_trainer.py               # Phase 1, bidirectional LSTM training
+├── feature_engineering.py        # Phase 1, enhanced ICT features
+├── walk_forward.py               # Phase 1, walk-forward analysis framework
+├── alphas.py                     # WorldQuant-style alpha library
 ├── requirements.txt
 ├── Procfile                      # gunicorn entry point for deployment
 │
@@ -127,12 +226,16 @@ Stock-Market-Predictor/
 │   ├── X_train_AAPL.npy  ...
 │   └── scaler_AAPL.pkl
 │
-├── Saved Models/                 # Generated by model_training.py
+├── Saved Models/                 # Generated by training scripts
 │   ├── lr_model_AAPL.pkl
 │   ├── rf_model_AAPL.pkl
+│   ├── xgb_model_AAPL.pkl
+│   ├── lgb_model_AAPL.pkl
 │   ├── scaler_sklearn_AAPL.pkl
 │   ├── feature_cols_sklearn_AAPL.pkl
-│   └── lstm_model_AAPL.keras    # from Colab
+│   ├── stacking_meta_AAPL.pkl    # Meta-learner
+│   ├── stacking_meta_scaler_AAPL.pkl
+│   └── lstm_model_AAPL.h5        # Bidirectional LSTM
 │
 ├── Web Pages/
 │   ├── index.html                # Home, ticker input, quota counter
@@ -142,8 +245,35 @@ Stock-Market-Predictor/
 │   ├── register.html
 │   └── pricing.html
 │
+├── tests/                        # Unit tests
+├── tools/                        # Deployment scripts (Caddy, NSSM, ngrok)
+│
 └── Step1_Data_Collection_Pipeline.ipynb
     Step2_LSTM_Training.ipynb
+```
+
+---
+
+## Quick Start (All Models)
+
+```bash
+# 1. Pipeline
+python data_pipeline.py
+
+# 2. Base models
+python model_training.py
+
+# 3. Stacking ensemble
+python stacking_ensemble.py --ticker QQQ
+
+# 4. LSTM
+python lstm_trainer.py --ticker QQQ
+
+# 5. Validate
+python walk_forward.py --ticker QQQ --folds 5
+
+# 6. Launch
+python app.py
 ```
 
 ---
@@ -152,7 +282,7 @@ Stock-Market-Predictor/
 
 | Constant | File | Default | Description |
 |---|---|---|---|
-| `TICKER` | `data_pipeline.py` | `AAPL` | Symbol used for training |
+| `TICKER` | `data_pipeline.py` | `QQQ` | Symbol used for training |
 | `FREE_DAILY_LIMIT` | `app.py` | `5` | Predictions per day for free users |
 | `MAX_POSITIONS` | `mt5_trading.py` | `3` | Max concurrent open positions |
 | `DAILY_LOSS_LIMIT` | `mt5_trading.py` | `0.05` | 5% equity drawdown halts trading |

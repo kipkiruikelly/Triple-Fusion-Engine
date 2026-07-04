@@ -1,22 +1,33 @@
 """
 model_training.py
-ML-based Quantitative Trading System
+ML-based Quantitative Trading System — Enhanced with Stacking Ensemble & LSTM.
 
-Loads the prepared dataset from the Data directory, trains Linear Regression
-and Random Forest models, evaluates both on the held-out test set, and saves
-the trained models and performance charts to the Saved Models directory.
+Trains the full model suite for the Triple-Fusion-Engine:
+  - Linear Regression (baseline, predicts next close price)
+  - Random Forest (predicts next return %)
+  - XGBoost (gradient boosting, predicts next return %)
+  - LightGBM (gradient boosting, predicts next return %)
+  - Stacking Ensemble (meta-learner combining all base models)
+  - LSTM (via lstm_trainer.py, neural network on sequence data)
 
-The LSTM model is trained separately on Google Colab (Step2_LSTM_Training.ipynb)
-due to TensorFlow compatibility constraints on Python 3.13.
+Models are saved to Saved Models/ for use by predictor.py and backtest.py.
 
 Usage:
-    python model_training.py
+    python model_training.py                          # QQQ, all models
+    python model_training.py --ticker AAPL            # Single ticker
+    python model_training.py --skip-lstm --skip-stacking  # Base models only
+    python model_training.py --all-tickers            # All tickers with data
 
 Author: BullLogic
 """
 
 import os
+import sys
 import warnings
+import argparse
+import logging
+from typing import Dict, List, Optional, Tuple, Any
+
 warnings.filterwarnings("ignore")
 
 import numpy as np
@@ -32,15 +43,27 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 sns.set_theme(style="whitegrid")
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
 
-# Configuration
-TICKER      = "QQQ"
-TRAIN_RATIO = 0.80
-VAL_RATIO   = 0.10
+# ── Configuration ───────────────────────────────────────────────────────────────
 
-BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR     = os.path.join(BASE_DIR, "Data")
-MODELS_DIR   = os.path.join(BASE_DIR, "Saved Models")
+# Phase 2: Centralized config via config.py
+try:
+    from config import settings as _cfg
+    TICKER      = _cfg.DEFAULT_TICKER
+    TRAIN_RATIO = _cfg.TRAIN_RATIO
+    VAL_RATIO   = _cfg.VAL_RATIO
+    CV_FOLDS    = _cfg.CV_FOLDS
+except ImportError:
+    TICKER      = "QQQ"
+    TRAIN_RATIO = 0.80
+    VAL_RATIO   = 0.10
+    CV_FOLDS    = 5
+
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR   = os.path.join(BASE_DIR, "Data")
+MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 FEATURES = [
@@ -66,165 +89,334 @@ FEATURES = [
 ]
 
 
-def load_data(ticker):
-    print("Loading data...")
-    df = pd.read_csv(
-        os.path.join(DATA_DIR, f"{ticker}_featured.csv"),
-        index_col="Date", parse_dates=True
-    )
+def _check_optional_packages() -> Dict[str, bool]:
+    """Check availability of optional ML packages."""
+    status = {"xgb": False, "lgb": False, "tf": False}
+    try:
+        import xgboost  # noqa: F401
+        status["xgb"] = True
+    except ImportError:
+        logger.warning("XGBoost not installed. Skipping XGBoost training.")
+    try:
+        import lightgbm  # noqa: F401
+        status["lgb"] = True
+    except ImportError:
+        logger.warning("LightGBM not installed. Skipping LightGBM training.")
+    try:
+        import tensorflow  # noqa: F401
+        status["tf"] = True
+    except ImportError:
+        logger.warning("TensorFlow not installed. Skipping LSTM training.")
+    return status
 
+
+def load_data(ticker: str) -> Dict[str, Any]:
+    """Load featured data and prepare train/val/test splits."""
+    csv_path = os.path.join(DATA_DIR, f"{ticker}_featured.csv")
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(
+            f"Featured data not found: {csv_path}. Run 'python data_pipeline.py' first."
+        )
+
+    logger.info("Loading data from %s", csv_path)
+    df = pd.read_csv(csv_path, index_col="Date", parse_dates=True)
+
+    # Ensure required features exist
+    available = [f for f in FEATURES if f in df.columns]
+    missing   = [f for f in FEATURES if f not in df.columns]
+    if missing:
+        logger.info("Filling missing features with 0: %s", missing)
+    for f in missing:
+        df[f] = 0.0
+
+    # Alpha features
+    alpha_cols = [c for c in df.columns if c.startswith("Alpha_")]
+    if alpha_cols:
+        available.extend(alpha_cols)
+
+    # Lag features if not present
     for lag in range(1, 6):
-        df[f"Close_lag_{lag}"]  = df["Close"].shift(lag)
-        df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
+        if f"Close_lag_{lag}" not in df.columns:
+            df[f"Close_lag_{lag}"] = df["Close"].shift(lag)
+    for lag in range(1, 4):
+        if f"Return_lag_{lag}" not in df.columns:
+            df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
 
+    # Targets
     df["Next_Close"]  = df["Close"].shift(-1)
-    # RF predicts % return so its output is not bounded by the training price range
     df["Next_Return"] = (df["Next_Close"] / df["Close"] - 1) * 100
     df.dropna(inplace=True)
 
-    n         = len(df)
+    n = len(df)
     train_end = int(n * TRAIN_RATIO)
     val_end   = int(n * (TRAIN_RATIO + VAL_RATIO))
 
-    X_train = df.iloc[:train_end][FEATURES].values
-    X_val   = df.iloc[train_end:val_end][FEATURES].values
-    X_test  = df.iloc[val_end:][FEATURES].values
+    X = df[available].values
+    y_close  = df["Next_Close"].values
+    y_return = df["Next_Return"].values
+    close_test = df.iloc[val_end:]["Close"].values
+    close_train = df.iloc[:train_end]["Close"].values
 
-    y_train     = df.iloc[:train_end]["Next_Close"].values
-    y_val       = df.iloc[train_end:val_end]["Next_Close"].values
-    y_test      = df.iloc[val_end:]["Next_Close"].values
+    # Scale features
+    scaler = MinMaxScaler()
+    X_train_sc = scaler.fit_transform(X[:train_end])
+    X_val_sc   = scaler.transform(X[train_end:val_end])
+    X_test_sc  = scaler.transform(X[val_end:])
 
-    y_train_ret = df.iloc[:train_end]["Next_Return"].values
-    y_val_ret   = df.iloc[train_end:val_end]["Next_Return"].values
-    y_test_ret  = df.iloc[val_end:]["Next_Return"].values
-    close_test  = df.iloc[val_end:]["Close"].values
+    logger.info("Train: %d, Val: %d, Test: %d rows | %d features",
+                train_end, val_end - train_end, n - val_end, len(available))
 
-    scaler     = MinMaxScaler()
-    X_train_sc = scaler.fit_transform(X_train)
-    X_val_sc   = scaler.transform(X_val)
-    X_test_sc  = scaler.transform(X_test)
-
+    # Save scaler and feature list
     joblib.dump(scaler,   os.path.join(MODELS_DIR, f"scaler_sklearn_{ticker}.pkl"))
-    joblib.dump(FEATURES, os.path.join(MODELS_DIR, f"feature_cols_sklearn_{ticker}.pkl"))
-
-    print(f"  Train: {X_train_sc.shape}, Val: {X_val_sc.shape}, Test: {X_test_sc.shape}")
-    print(f"  Test price range: ${y_test.min():.2f} to ${y_test.max():.2f}")
+    joblib.dump(available, os.path.join(MODELS_DIR, f"feature_cols_sklearn_{ticker}.pkl"))
 
     return {
         "X_train": X_train_sc, "X_val": X_val_sc, "X_test": X_test_sc,
-        "y_train": y_train,    "y_val": y_val,     "y_test": y_test,
-        "y_train_ret": y_train_ret, "y_val_ret": y_val_ret, "y_test_ret": y_test_ret,
-        "close_test": close_test,
+        "y_train_close": y_close[:train_end],
+        "y_val_close":   y_close[train_end:val_end],
+        "y_test_close":  y_close[val_end:],
+        "y_train_return": y_return[:train_end],
+        "y_val_return":   y_return[train_end:val_end],
+        "y_test_return":  y_return[val_end:],
+        "close_train": close_train,
+        "close_test":  close_test,
+        "feature_cols": available,
+        "scaler": scaler,
     }
 
 
-def evaluate(y_true, y_pred, name):
-    mae     = mean_absolute_error(y_true, y_pred)
-    rmse    = np.sqrt(mean_squared_error(y_true, y_pred))
-    r2      = r2_score(y_true, y_pred)
-    dir_acc = np.mean((np.diff(y_true) > 0) == (np.diff(y_pred) > 0)) * 100
+def evaluate(y_true: np.ndarray, y_pred: np.ndarray, name: str) -> dict:
+    """Compute standard regression metrics."""
+    mae  = mean_absolute_error(y_true, y_pred)
+    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
+    r2   = r2_score(y_true, y_pred)
+    dir_acc = float(np.mean(
+        (np.diff(y_true) > 0) == (np.diff(y_pred) > 0)
+    ) * 100) if len(y_true) > 1 else 50.0
 
-    print(f"  {name}")
-    print(f"    MAE:  ${mae:.2f}  |  RMSE: ${rmse:.2f}  |  R2: {r2:.4f}  |  Dir. Acc: {dir_acc:.1f}%")
+    logger.info("  %-22s  MAE: $%7.2f  RMSE: $%7.2f  R²: %6.4f  Dir: %5.1f%%",
+                name, mae, rmse, r2, dir_acc)
+    return {
+        "model": name, "mae": round(mae, 2), "rmse": round(rmse, 2),
+        "r2": round(r2, 4), "directional_accuracy": round(dir_acc, 1),
+    }
 
-    return {"model": name, "mae": round(mae, 2), "rmse": round(rmse, 2),
-            "r2": round(r2, 4), "directional_accuracy": round(dir_acc, 1)}
 
+# ── Base Model Training ─────────────────────────────────────────────────────────
 
-def train_linear_regression(data):
-    print("\nTraining Linear Regression...")
+def train_linear_regression(data: Dict[str, Any], ticker: str) -> Tuple[Any, np.ndarray, dict]:
+    """Train Linear Regression (predicts next close price)."""
+    logger.info("Training Linear Regression...")
     model = LinearRegression()
-    model.fit(data["X_train"], data["y_train"])
-
-    y_pred  = model.predict(data["X_test"])
-    metrics = evaluate(data["y_test"], y_pred, "Linear Regression")
-
-    joblib.dump(model, os.path.join(MODELS_DIR, f"lr_model_{TICKER}.pkl"))
-    return model, metrics, y_pred
+    model.fit(data["X_train"], data["y_train_close"])
+    y_pred = model.predict(data["X_test"])
+    metrics = evaluate(data["y_test_close"], y_pred, "Linear Regression")
+    joblib.dump(model, os.path.join(MODELS_DIR, f"lr_model_{ticker}.pkl"))
+    return model, y_pred, metrics
 
 
-def train_random_forest(data):
-    print("\nTraining Random Forest (300 trees)...")
+def train_random_forest(data: Dict[str, Any], ticker: str) -> Tuple[Any, np.ndarray, dict]:
+    """Train Random Forest (predicts next return %)."""
+    logger.info("Training Random Forest (300 trees)...")
     model = RandomForestRegressor(
         n_estimators=300, max_depth=12,
         min_samples_split=4, min_samples_leaf=2,
-        max_features=0.7, random_state=42, n_jobs=-1
+        max_features=0.7, random_state=42, n_jobs=-1,
     )
-    model.fit(data["X_train"], data["y_train_ret"])
-
+    model.fit(data["X_train"], data["y_train_return"])
     ret_pred = model.predict(data["X_test"])
     y_pred   = data["close_test"] * (1 + ret_pred / 100)
-    metrics  = evaluate(data["y_test"], y_pred, "Random Forest")
+    metrics  = evaluate(data["y_test_close"], y_pred, "Random Forest")
 
+    # Feature importance
     importance = pd.DataFrame({
-        "Feature": FEATURES, "Importance": model.feature_importances_
+        "Feature": data["feature_cols"],
+        "Importance": model.feature_importances_,
     }).sort_values("Importance", ascending=False)
 
-    print("\n  Top 5 features by importance:")
-    for _, row in importance.head(5).iterrows():
-        print(f"    {row['Feature']:<22} {row['Importance']:.4f}")
+    logger.info("  Top 5 RF features: %s",
+                ", ".join(f"{r['Feature']}({r['Importance']:.3f})"
+                          for _, r in importance.head(5).iterrows()))
 
-    joblib.dump(model, os.path.join(MODELS_DIR, f"rf_model_{TICKER}.pkl"))
-    importance.to_csv(os.path.join(MODELS_DIR, f"rf_feature_importance_{TICKER}.csv"), index=False)
-    return model, metrics, y_pred
+    joblib.dump(model, os.path.join(MODELS_DIR, f"rf_model_{ticker}.pkl"))
+    importance.to_csv(os.path.join(MODELS_DIR, f"rf_feature_importance_{ticker}.csv"), index=False)
+    return model, y_pred, metrics
 
 
-def save_charts(y_true, lr_pred, rf_pred, rf_model):
-    print("\nSaving charts...")
-    fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
-    x = range(len(y_true))
+def train_xgboost(data: Dict[str, Any], ticker: str) -> Optional[Tuple[Any, np.ndarray, dict]]:
+    """Train XGBoost (predicts next return %). Returns None if XGBoost unavailable."""
+    try:
+        import xgboost as xgb
+    except ImportError:
+        return None
 
-    for ax, pred, name, color in [
-        (axes[0], lr_pred, "Linear Regression", "#E74C3C"),
-        (axes[1], rf_pred, "Random Forest",      "#F39C12"),
-    ]:
-        ax.plot(x, y_true, color="#1F4E79", lw=1.5, label="Actual Price")
-        ax.plot(x, pred,   color=color,     lw=1.5, linestyle="--", label=f"{name} Prediction")
-        ax.fill_between(x, y_true, pred, alpha=0.08, color=color)
-        ax.set_title(f"{TICKER}, {name}: Actual vs Predicted", fontweight="bold")
+    logger.info("Training XGBoost...")
+    model = xgb.XGBRegressor(
+        n_estimators=300, max_depth=6, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8, reg_alpha=1, reg_lambda=1,
+        random_state=42, n_jobs=-1, verbosity=0,
+    )
+    model.fit(data["X_train"], data["y_train_return"])
+    ret_pred = model.predict(data["X_test"])
+    y_pred   = data["close_test"] * (1 + ret_pred / 100)
+    metrics  = evaluate(data["y_test_close"], y_pred, "XGBoost")
+    joblib.dump(model, os.path.join(MODELS_DIR, f"xgb_model_{ticker}.pkl"))
+    return model, y_pred, metrics
+
+
+def train_lightgbm(data: Dict[str, Any], ticker: str) -> Optional[Tuple[Any, np.ndarray, dict]]:
+    """Train LightGBM (predicts next return %). Returns None if LightGBM unavailable."""
+    try:
+        import lightgbm as lgb
+    except ImportError:
+        return None
+
+    logger.info("Training LightGBM...")
+    model = lgb.LGBMRegressor(
+        n_estimators=300, max_depth=8, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8, reg_alpha=0.1, reg_lambda=0.1,
+        random_state=42, n_jobs=-1, verbose=-1,
+    )
+    model.fit(data["X_train"], data["y_train_return"])
+    ret_pred = model.predict(data["X_test"])
+    y_pred   = data["close_test"] * (1 + ret_pred / 100)
+    metrics  = evaluate(data["y_test_close"], y_pred, "LightGBM")
+    joblib.dump(model, os.path.join(MODELS_DIR, f"lgb_model_{ticker}.pkl"))
+    return model, y_pred, metrics
+
+
+# ── Charts ──────────────────────────────────────────────────────────────────────
+
+def save_charts(
+    data: Dict[str, Any],
+    preds: Dict[str, np.ndarray],
+    ticker: str,
+) -> None:
+    """Save prediction comparison and feature importance charts."""
+    logger.info("Saving charts...")
+
+    # Actual vs Predicted comparison
+    n_models = len(preds)
+    fig, axes = plt.subplots(n_models, 1, figsize=(14, 3 * n_models), sharex=True)
+    if n_models == 1:
+        axes = [axes]
+
+    x = range(len(data["y_test_close"]))
+    colors = {"Linear Regression": "#E74C3C", "Random Forest": "#F39C12",
+              "XGBoost": "#27AE60", "LightGBM": "#8E44AD"}
+
+    for ax, (name, pred) in zip(axes, preds.items()):
+        color = colors.get(name, "#2E75B6")
+        ax.plot(x, data["y_test_close"], color="#1F4E79", lw=1.5, label="Actual")
+        ax.plot(x, pred, color=color, lw=1.5, linestyle="--", label=name)
+        ax.fill_between(x, data["y_test_close"], pred, alpha=0.08, color=color)
+        ax.set_title(f"{ticker} – {name}: Actual vs Predicted", fontweight="bold")
         ax.set_ylabel("Price (USD)")
         ax.legend(fontsize=9)
 
-    axes[1].set_xlabel("Trading Days (Test Set)")
+    axes[-1].set_xlabel("Trading Days (Test Set)")
     plt.tight_layout()
-    plt.savefig(os.path.join(MODELS_DIR, f"{TICKER}_predictions.png"), dpi=150, bbox_inches="tight")
+    plt.savefig(os.path.join(MODELS_DIR, f"{ticker}_predictions.png"), dpi=150, bbox_inches="tight")
     plt.close()
+    logger.info("  Charts saved → %s_predictions.png", ticker)
 
-    imp = pd.DataFrame({
-        "Feature": FEATURES, "Importance": rf_model.feature_importances_
-    }).sort_values("Importance", ascending=True).tail(10)
 
-    fig, ax = plt.subplots(figsize=(10, 6))
-    bars = ax.barh(imp["Feature"], imp["Importance"], color="#2E75B6", alpha=0.8, edgecolor="white")
-    ax.set_title(f"{TICKER}, Random Forest Feature Importances (Top 10)", fontweight="bold")
-    ax.set_xlabel("Importance Score")
-    for bar, val in zip(bars, imp["Importance"]):
-        ax.text(bar.get_width() + 0.001, bar.get_y() + bar.get_height() / 2,
-                f"{val:.4f}", va="center", fontsize=9)
-    plt.tight_layout()
-    plt.savefig(os.path.join(MODELS_DIR, f"{TICKER}_feature_importance.png"), dpi=150, bbox_inches="tight")
-    plt.close()
-    print(f"  Charts saved to Saved Models/")
-
+# ── Main ────────────────────────────────────────────────────────────────────────
 
 def main():
-    print(f"\nML-based Quantitative Trading System, Model Training")
-    print(f"Ticker: {TICKER}\n")
+    parser = argparse.ArgumentParser(
+        description="Enhanced Model Training for Triple-Fusion-Engine")
+    parser.add_argument("--ticker",       default="QQQ", metavar="SYM")
+    parser.add_argument("--skip-lstm",    action="store_true",
+                        help="Skip LSTM training")
+    parser.add_argument("--skip-stacking", action="store_true",
+                        help="Skip stacking ensemble (use stacking_ensemble.py separately)")
+    parser.add_argument("--skip-xgboost", action="store_true",
+                        help="Skip XGBoost training")
+    parser.add_argument("--skip-lightgbm", action="store_true",
+                        help="Skip LightGBM training")
+    parser.add_argument("--all-tickers",  action="store_true",
+                        help="Train on all tickers with featured data")
+    args = parser.parse_args()
 
-    data = load_data(TICKER)
+    pkg = _check_optional_packages()
 
-    lr_model,  lr_metrics,  lr_pred  = train_linear_regression(data)
-    rf_model,  rf_metrics,  rf_pred  = train_random_forest(data)
+    tickers = [args.ticker]
+    if args.all_tickers:
+        import glob
+        csvs = glob.glob(os.path.join(DATA_DIR, "*_featured.csv"))
+        tickers = sorted([
+            os.path.basename(p).replace("_featured.csv", "")
+            for p in csvs
+        ])
+        logger.info("Found %d tickers with data: %s", len(tickers), tickers)
 
-    save_charts(data["y_test"], lr_pred, rf_pred, rf_model)
+    for ticker in tickers:
+        logger.info("\n%s Training models for %s %s", "=" * 45, ticker, "=" * 45)
 
-    print("\nResults summary:")
-    results = pd.DataFrame([lr_metrics, rf_metrics])
-    print(results.to_string(index=False))
-    results.to_csv(os.path.join(MODELS_DIR, f"model_comparison_{TICKER}.csv"), index=False)
+        try:
+            data = load_data(ticker)
+        except FileNotFoundError as e:
+            logger.error("%s", e)
+            continue
 
-    print(f"\nTraining complete. Models saved to: {MODELS_DIR}")
-    print("LSTM training: open Step2_LSTM_Training.ipynb in Google Colab\n")
+        preds = {}
+        all_metrics = []
+
+        # 1. Linear Regression
+        lr_model, lr_pred, lr_metrics = train_linear_regression(data, ticker)
+        preds["Linear Regression"] = lr_pred
+        all_metrics.append(lr_metrics)
+
+        # 2. Random Forest
+        rf_model, rf_pred, rf_metrics = train_random_forest(data, ticker)
+        preds["Random Forest"] = rf_pred
+        all_metrics.append(rf_metrics)
+
+        # 3. XGBoost
+        if not args.skip_xgboost and pkg["xgb"]:
+            xgb_result = train_xgboost(data, ticker)
+            if xgb_result:
+                _, xgb_pred, xgb_metrics = xgb_result
+                preds["XGBoost"] = xgb_pred
+                all_metrics.append(xgb_metrics)
+
+        # 4. LightGBM
+        if not args.skip_lightgbm and pkg["lgb"]:
+            lgb_result = train_lightgbm(data, ticker)
+            if lgb_result:
+                _, lgb_pred, lgb_metrics = lgb_result
+                preds["LightGBM"] = lgb_pred
+                all_metrics.append(lgb_metrics)
+
+        # Charts
+        save_charts(data, preds, ticker)
+
+        # Summary
+        logger.info("\n%s Results Summary %s", "-" * 12, "-" * 12)
+        results = pd.DataFrame(all_metrics)
+        logger.info("\n" + results.to_string(index=False))
+        results.to_csv(os.path.join(MODELS_DIR, f"model_comparison_{ticker}.csv"), index=False)
+
+        # ── Stacking Ensemble (delegated to stacking_ensemble.py) ────────────
+        if not args.skip_stacking:
+            logger.info("\n%s Stacking Ensemble %s", "-" * 12, "-" * 12)
+            logger.info("Run 'python stacking_ensemble.py --ticker %s' for "
+                        "cross-validated stacking ensemble.", ticker)
+
+        # ── LSTM (delegated to lstm_trainer.py) ──────────────────────────────
+        if not args.skip_lstm and pkg["tf"]:
+            logger.info("\n%s LSTM Training %s", "-" * 12, "-" * 12)
+            logger.info("Run 'python lstm_trainer.py --ticker %s' for LSTM training.", ticker)
+        elif not args.skip_lstm and not pkg["tf"]:
+            logger.info("\nLSTM: TensorFlow not available. Use Colab notebook "
+                        "(Step2_LSTM_Training.ipynb) or install TensorFlow.")
+
+    logger.info("\nTraining complete. Models saved to: %s", MODELS_DIR)
+    logger.info("Next steps:")
+    logger.info("  1. python stacking_ensemble.py --ticker %s", args.ticker)
+    logger.info("  2. python lstm_trainer.py --ticker %s", args.ticker)
+    logger.info("  3. python predictor.py  (or start Flask app)")
 
 
 if __name__ == "__main__":
