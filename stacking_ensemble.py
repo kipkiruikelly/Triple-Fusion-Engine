@@ -161,6 +161,10 @@ def load_data(ticker: str) -> Dict[str, Any]:
         "y_train_return": y_return[:train_end],
         "y_val_return":   y_return[train_end:val_end],
         "y_test_return":  y_return[val_end:],
+        # Close arrays aligned row-for-row with each split, so return→price
+        # conversions never depend on re-deriving the dropna row set.
+        "close_train": df.iloc[:train_end]["Close"].values,
+        "close_val":   df.iloc[train_end:val_end]["Close"].values,
         "close_test": close_test,
         "feature_cols": available,
         "scaler": scaler,
@@ -463,7 +467,7 @@ def save_comparison_chart(
         ax.plot(x, y_true, color="#1F4E79", lw=1.5, label="Actual Price")
         ax.plot(x, pred,     color=color,     lw=1.5, linestyle="--", label=f"{name.upper()} Prediction")
         ax.fill_between(x, y_true, pred, alpha=0.08, color=color)
-        ax.set_title(f"{ticker} – {name.upper()}: Actual vs Predicted", fontweight="bold")
+        ax.set_title(f"{ticker} - {name.upper()}: Actual vs Predicted", fontweight="bold")
         ax.set_ylabel("Price (USD)")
         ax.legend(fontsize=9)
 
@@ -516,8 +520,8 @@ def main():
 
         # Final test evaluation for stacking
         if not args.skip_stacking:
-            _, meta_scaler = joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_scaler_{ticker}.pkl")), \
-                             joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_{ticker}.pkl"))
+            meta_scaler = joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_scaler_{ticker}.pkl"))
+            meta_learner = joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_{ticker}.pkl"))
             top10_idx = joblib.load(os.path.join(MODELS_DIR, f"stacking_top10_idx_{ticker}.pkl"))
             meta_cols = joblib.load(os.path.join(MODELS_DIR, f"stacking_meta_cols_{ticker}.pkl"))
 

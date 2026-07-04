@@ -1,4 +1,4 @@
-# Triple-Fusion-Engine Test Suite
+# BullLogic Test Suite
 
 Comprehensive test suite covering all Phase 1-4 modules with pytest.
 

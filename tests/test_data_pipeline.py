@@ -1,4 +1,4 @@
-"""Tests for data_pipeline.py — data download, cleaning, feature engineering."""
+"""Tests for data_pipeline.py - data download, cleaning, feature engineering."""
 import sys
 from pathlib import Path
 
@@ -124,22 +124,35 @@ class TestFeatureEngineering:
 
 
 class TestSplitData:
-    """Test split_data function."""
+    """Test split_data function.
 
-    def test_train_val_test_split_sizes(self, sample_df):
+    Feature engineering drops ~200 warm-up bars (200-SMA and other long
+    lookbacks), so these tests need a frame comfortably larger than the
+    200-bar sample_df fixture or nothing survives the dropna.
+    """
+
+    @staticmethod
+    def _featured_df():
+        from tests.mock_data import sample_ohlcv
+        from data_pipeline import engineer_features
+        df = engineer_features(sample_ohlcv(n_bars=600, seed=42))
+        assert len(df) > 100, "warm-up drop should leave usable rows"
+        return df
+
+    def test_train_val_test_split_sizes(self):
         """Splits should respect train/val ratios."""
-        from data_pipeline import engineer_features, split_data
-        df = engineer_features(sample_df.copy())
+        from data_pipeline import split_data
+        df = self._featured_df()
         train, val, test = split_data(df, 0.80, 0.10)
         n = len(df)
         assert len(train) + len(val) + len(test) == n
         assert len(train) > len(val)
         assert len(train) > len(test)
 
-    def test_splits_are_chronological(self, sample_df):
+    def test_splits_are_chronological(self):
         """Train should be earliest, then val, then test."""
-        from data_pipeline import engineer_features, split_data
-        df = engineer_features(sample_df.copy())
+        from data_pipeline import split_data
+        df = self._featured_df()
         train, val, test = split_data(df, 0.80, 0.10)
         assert train.index.max() < val.index.min()
         assert val.index.max() < test.index.min()

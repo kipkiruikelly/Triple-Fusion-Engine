@@ -1,4 +1,4 @@
-"""Tests for walk_forward.py — purged splits and metrics."""
+"""Tests for walk_forward.py - purged splits and metrics."""
 import sys
 from pathlib import Path
 

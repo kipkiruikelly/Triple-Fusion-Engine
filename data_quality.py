@@ -57,11 +57,17 @@ class DataQualityMonitor:
             dict with passed (bool), score (0-100), issues (list), warnings (list).
         """
         if df is None or df.empty:
-            return {
+            report = {
                 "passed": False, "score": 0,
                 "issues": ["DataFrame is empty or None"],
                 "warnings": [],
+                "ticker": ticker,
+                "n_rows": 0,
+                "checked_at": datetime.now().isoformat(),
             }
+            logger.warning("Data quality FAILED for %s: empty/None DataFrame", ticker)
+            self.issues_log.append(report)
+            return report
 
         issues = []
         warnings = []
@@ -152,9 +158,13 @@ class DataQualityMonitor:
         if not isinstance(df.index, pd.DatetimeIndex):
             return 0
         diffs = df.index.to_series().diff().dropna()
-        # Assume daily frequency for gap detection
         median_diff = diffs.median()
-        gaps = diffs[diffs > median_diff * 2]
+        if median_diff >= pd.Timedelta(hours=20):
+            # Daily bars: weekend/holiday spacing (up to 4 calendar days,
+            # e.g. Friday → Tuesday) is expected, not a data gap.
+            gaps = diffs[diffs > pd.Timedelta(days=4)]
+        else:
+            gaps = diffs[diffs > median_diff * 2]
         return len(gaps)
 
     def _detect_volume_spikes(self, df: pd.DataFrame) -> int:
@@ -261,7 +271,9 @@ class DataQualityMonitor:
         warnings = [r for r in self.issues_log if r.get("warnings")]
 
         return {
-            "status": "dirty" if failures else ("warning" if warnings else "clean"),
+            # Failures decide health; warnings are advisory and reported
+            # separately in warnings_count.
+            "status": "dirty" if failures else "clean",
             "total_checks": len(self.issues_log),
             "failures": len(failures),
             "warnings_count": len(warnings),

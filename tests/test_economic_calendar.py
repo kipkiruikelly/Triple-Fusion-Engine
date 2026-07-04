@@ -1,5 +1,5 @@
 """
-Tests for economic_calendar.py — event listing, date-based lookups,
+Tests for economic_calendar.py - event listing, date-based lookups,
 high-impact day detection, volatility warnings, and impact scoring.
 
 All tests use the pre-loaded _MAJOR_EVENTS data so they are fully

@@ -123,7 +123,7 @@ class TestExecutionReport:
 
     def test_minimal_construction(self) -> None:
         """ExecutionReport can be built with all required fields."""
-        # only scalar fields — slices is optional
+        # only scalar fields - slices is optional
         report = ExecutionReport(
             parent_action="BUY",
             parent_lots=2.0,

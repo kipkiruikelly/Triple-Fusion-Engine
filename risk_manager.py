@@ -119,7 +119,8 @@ class RiskManager:
             min_trades: Minimum trades required before using Kelly.
 
         Returns:
-            Kelly fraction as decimal (e.g. 0.02 = 2% risk per trade).
+            Risk per trade in percent (e.g. 2.0 = 2% of equity), clamped
+            to [min_risk_pct, max_risk_pct].
         """
         if len(self.trade_history) < min_trades:
             logger.debug("Kelly: insufficient history (%d < %d trades), using base risk %.2f%%",
@@ -150,15 +151,16 @@ class RiskManager:
         kelly = (p * b - q) / b
         kelly = max(0.0, kelly)
 
-        # Half-Kelly for conservatism
-        half_kelly = kelly / 2
+        # Half-Kelly for conservatism; convert the fraction to percent so
+        # it shares units with base/min/max_risk_pct (1.0 = 1% of equity).
+        half_kelly_pct = (kelly / 2) * 100
 
-        # Clamp to configurable bounds
-        risk_pct = max(self.min_risk_pct, min(self.max_risk_pct, half_kelly))
+        # Clamp to configurable bounds (all in percent)
+        risk_pct = max(self.min_risk_pct, min(self.max_risk_pct, half_kelly_pct))
 
         logger.info(
-            "Kelly: win_rate=%.1f%% b=%.2f kelly=%.4f half_kelly=%.4f → risk=%.2f%%",
-            p * 100, b, kelly, half_kelly, risk_pct * 100,
+            "Kelly: win_rate=%.1f%% b=%.2f kelly=%.4f half_kelly=%.2f%% → risk=%.2f%%",
+            p * 100, b, kelly, half_kelly_pct, risk_pct,
         )
         return risk_pct
 
@@ -225,22 +227,24 @@ class RiskManager:
         Returns:
             (stop_price, stop_type) where stop_type is "initial" or "trailing".
         """
+        # Trailing engages only once the caller reports favorable movement
+        # via high/low_since_entry; otherwise the stop stays at the wider
+        # initial level so initial_sl_mult is honored at entry.
         if action == "BUY":
-            # Initial stop: below entry
             initial_sl = entry_price - initial_sl_mult * atr
-            # Trailing stop: below best price
-            best = high_since_entry if high_since_entry else max(entry_price, current_price)
-            trail_sl = best - trail_mult * atr
-            # Trailing stop only moves up
-            stop = max(initial_sl, trail_sl)
-            stop_type = "trailing" if stop > initial_sl else "initial"
+            stop, stop_type = initial_sl, "initial"
+            if high_since_entry and high_since_entry > entry_price:
+                trail_sl = high_since_entry - trail_mult * atr
+                if trail_sl > initial_sl:  # trailing only ever tightens
+                    stop, stop_type = trail_sl, "trailing"
         else:
             # SELL
             initial_sl = entry_price + initial_sl_mult * atr
-            best = low_since_entry if low_since_entry else min(entry_price, current_price)
-            trail_sl = best + trail_mult * atr
-            stop = min(initial_sl, trail_sl)
-            stop_type = "trailing" if stop < initial_sl else "initial"
+            stop, stop_type = initial_sl, "initial"
+            if low_since_entry and low_since_entry < entry_price:
+                trail_sl = low_since_entry + trail_mult * atr
+                if trail_sl < initial_sl:
+                    stop, stop_type = trail_sl, "trailing"
 
         return round(stop, 5), stop_type
 
@@ -317,7 +321,7 @@ class RiskManager:
                 if abs(corr) >= threshold:
                     high_corr[(s1, s2)] = round(corr, 3)
                     logger.warning(
-                        "High correlation: %s—%s = %.3f (threshold %.2f)",
+                        "High correlation: %s-%s = %.3f (threshold %.2f)",
                         s1, s2, corr, threshold,
                     )
 
@@ -377,7 +381,27 @@ class RiskManager:
         if len(positions) >= self.max_positions:
             return False, f"Max positions ({self.max_positions}) reached"
 
-        # 2. Daily loss limit
+        # 2. Cooling-off from a previously hit daily loss limit
+        if self._daily_loss_hit and self._loss_hit_date:
+            days_since = (date.today() - self._loss_hit_date).days
+            if days_since < self._cooling_off_days:
+                return False, f"Cooling off ({self._cooling_off_days - days_since}d remaining)"
+
+        # 3. Drawdown tier check (graduated response; halts at the final
+        #    tier). Checked before the binary daily-loss breaker so a deep
+        #    drawdown reports as a halt, not as a daily-loss trip.
+        dd_mult = 1.0
+        if daily_start_equity and daily_start_equity > 0:
+            peak = max(daily_start_equity, account.get("peak_equity", equity))
+            dd = (peak - equity) / peak * 100
+            dd_mult = self.drawdown_multiplier(dd)
+            if dd_mult <= 0:
+                return False, f"Drawdown halt: {dd:.1f}%"
+
+        # 4. Daily loss limit - binary breaker for any intraday loss at or
+        #    beyond the limit. (Deeper losses in the 5-20% tier band still
+        #    block here; the tiers additionally scale sizing for callers
+        #    that trade again after a reset.)
         if daily_start_equity and daily_start_equity > 0:
             daily_loss = (daily_start_equity - equity) / daily_start_equity
             if daily_loss >= self.daily_loss_limit:
@@ -389,20 +413,6 @@ class RiskManager:
                         daily_loss * 100, self.daily_loss_limit * 100,
                     )
                 return False, f"Daily loss limit: {daily_loss*100:.1f}%"
-
-            # Cooling-off: if limit was hit, check if we're past cooling period
-            if self._daily_loss_hit and self._loss_hit_date:
-                days_since = (date.today() - self._loss_hit_date).days
-                if days_since < self._cooling_off_days:
-                    return False, f"Cooling off ({self._cooling_off_days - days_since}d remaining)"
-
-        # 3. Drawdown tier check
-        if daily_start_equity and daily_start_equity > 0:
-            peak = max(daily_start_equity, account.get("peak_equity", equity))
-            dd = (peak - equity) / peak * 100
-            dd_mult = self.drawdown_multiplier(dd)
-            if dd_mult <= 0:
-                return False, f"Drawdown halt: {dd:.1f}%"
 
         # 4. Minimum account equity
         min_equity = account.get("balance", 100) * 0.5

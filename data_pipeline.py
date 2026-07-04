@@ -366,7 +366,7 @@ def run_pipeline_for_ticker(ticker: str, start: str, end: str) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Data Pipeline — Phase 2 multi-ticker")
+    parser = argparse.ArgumentParser(description="Data Pipeline - Phase 2 multi-ticker")
     parser.add_argument("--ticker",  default=None, metavar="SYM",
                         help="Single ticker (default: QQQ)")
     parser.add_argument("--tickers", nargs="+", metavar="SYM",

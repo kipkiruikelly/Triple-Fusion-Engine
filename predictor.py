@@ -860,7 +860,7 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
             "Check the ticker symbol."
         )
 
-    # Load models — now includes lgb, stacking, lstm (Phase 1)
+    # Load models - now includes lgb, stacking, lstm (Phase 1)
     lr_model, rf_model, scaler, feature_cols, xgb_model, lgb_model, stacking, lstm_model = _load_models(ticker, interval)
 
     if _is_professional_model(feature_cols):

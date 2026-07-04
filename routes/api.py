@@ -3,15 +3,15 @@ routes/api.py
 REST API endpoints for the Triple-Fusion-Engine dashboard.
 
 Provides JSON APIs consumed by the frontend JavaScript modules:
-  /api/dashboard      — Portfolio summary, P&L, positions count, win rate
-  /api/predictions    — Prediction history and signal generation
-  /api/watchlist      — User watchlist CRUD
-  /api/leaderboard    — Global rankings (weekly/monthly/all-time)
-  /api/competitions   — Competition listing, entry, leaderboard
-  /api/achievements   — User achievements with progress
-  /api/notifications  — Notification center (list, mark read)
-  /api/settings       — User preferences (theme, risk, notifications)
-  /api/profile        — User profile with subscription details
+  /api/dashboard      - Portfolio summary, P&L, positions count, win rate
+  /api/predictions    - Prediction history and signal generation
+  /api/watchlist      - User watchlist CRUD
+  /api/leaderboard    - Global rankings (weekly/monthly/all-time)
+  /api/competitions   - Competition listing, entry, leaderboard
+  /api/achievements   - User achievements with progress
+  /api/notifications  - Notification center (list, mark read)
+  /api/settings       - User preferences (theme, risk, notifications)
+  /api/profile        - User profile with subscription details
 
 All endpoints require authentication (Flask-Login). Rate-limited
 per the user's subscription tier.
@@ -45,6 +45,20 @@ def _json_error(message, status=400):
     return jsonify({"ok": False, "error": message}), status
 
 
+def _json_simulated(data=None, **kwargs):
+    """Success response for endpoints backed by demonstration data.
+
+    Every payload that is not driven by real user/market state MUST go
+    through this helper so no client can mistake it for live data.
+    """
+    resp = {"ok": True, "simulated": True,
+            "note": "Demonstration data - not live account or market state."}
+    if data is not None:
+        resp["data"] = data
+    resp.update(kwargs)
+    return jsonify(resp)
+
+
 # ── Dashboard ───────────────────────────────────────────────────────────────────
 
 @api_bp.route("/dashboard")
@@ -63,19 +77,23 @@ def dashboard():
         }
 
         # Try to get real data from the trading engine if available
+        engine_live = False
         try:
             from app import _trading_engine
             if _trading_engine and _trading_engine.connected:
                 acct = _trading_engine.account
                 portfolio["equity"] = acct.get("equity", portfolio["equity"])
                 portfolio["balance"] = acct.get("balance", portfolio["balance"])
+                engine_live = True
         except Exception:
             pass
 
         # Recent predictions count today
         predictions_today = getattr(current_user, "predictions_today", 0)
 
-        return _json_ok({
+        # Placeholder portfolio numbers must be labeled as such.
+        respond = _json_ok if engine_live else _json_simulated
+        return respond({
             "portfolio": portfolio,
             "predictions_today": predictions_today,
             "plan": getattr(current_user, "plan", "free"),
@@ -167,7 +185,7 @@ def watchlist_get():
     """Return user's watchlist with current prices.
 
     Add/remove live in routes/predictions.py (/api/watchlist/add and
-    /api/watchlist/remove) — the same WatchlistItem table backs both.
+    /api/watchlist/remove) - the same WatchlistItem table backs both.
     """
     try:
         from models import WatchlistItem
@@ -241,7 +259,7 @@ def leaderboard_users():
                 "is_current_user": True,
             })
 
-        return _json_ok({
+        return _json_simulated({
             "leaderboard": mock_entries[:limit],
             "period": period,
             "metric": metric,
@@ -288,7 +306,7 @@ def competitions_list():
 
         filtered = [c for c in mock_comps if c["status"] == status] if status != "all" else mock_comps
 
-        return _json_ok({"competitions": filtered})
+        return _json_simulated({"competitions": filtered})
     except Exception as e:
         logger.exception("Competitions API error")
         return _json_error(str(e), 500)
@@ -300,7 +318,7 @@ def competition_leaderboard(comp_id):
     """Return leaderboard for a specific competition."""
     try:
         # Mock: would query CompetitionEntry table
-        return _json_ok({
+        return _json_simulated({
             "competition_id": comp_id,
             "leaderboard": [
                 {"rank": 1, "username": "AlphaTrader", "return_pct": 12.5, "equity": 11250.0},
@@ -321,14 +339,16 @@ def achievements_user():
     """Return user's achievement progress."""
     try:
         from models import UserAchievement
+        from gamification import ACHIEVEMENTS
         unlocked = UserAchievement.query.filter_by(user_id=current_user.id).all()
         unlocked_ids = [a.achievement_id for a in unlocked]
 
         return _json_ok({
             "unlocked": unlocked_ids,
-            "total": 12,
+            "total": len(ACHIEVEMENTS),
             "points": len(unlocked_ids) * 10,  # simplified
-        })
+        }, note="Achievement awarding is not yet automated; unlocked list "
+                "reflects only rows explicitly written to user_achievement.")
     except Exception as e:
         logger.exception("Achievements API error")
         return _json_error(str(e), 500)
@@ -336,32 +356,9 @@ def achievements_user():
 
 # ── Notifications ───────────────────────────────────────────────────────────────
 
-@api_bp.route("/notifications")
-@login_required
-def notifications_list():
-    """Return user notifications."""
-    try:
-        # Mock notifications (in production: query Notification table)
-        mock_notifs = [
-            {"id": 1, "type": "trade", "message": "BUY AAPL @ $185.50 executed",
-             "timestamp": datetime.now().isoformat(), "read": False},
-            {"id": 2, "type": "achievement", "message": "Achievement unlocked: First Trade!",
-             "timestamp": (datetime.now() - timedelta(hours=2)).isoformat(), "read": False},
-            {"id": 3, "type": "prediction", "message": "New prediction: NVDA — BUY (72% confidence)",
-             "timestamp": (datetime.now() - timedelta(hours=5)).isoformat(), "read": True},
-            {"id": 4, "type": "competition", "message": "July Showdown starts tomorrow!",
-             "timestamp": (datetime.now() - timedelta(days=1)).isoformat(), "read": True},
-            {"id": 5, "type": "alert", "message": "FOMC rate decision in 3 days",
-             "timestamp": (datetime.now() - timedelta(days=2)).isoformat(), "read": True},
-        ]
-
-        return _json_ok({
-            "notifications": mock_notifs,
-            "unread_count": sum(1 for n in mock_notifs if not n["read"]),
-        })
-    except Exception as e:
-        logger.exception("Notifications API error")
-        return _json_error(str(e), 500)
+# NOTE: GET /api/notifications is served by routes/notifications.py from
+# the real Notification table (that route registers first). The mock that
+# used to live here was dead, shadowed code and has been removed.
 
 
 @api_bp.route("/notifications/count")
@@ -383,7 +380,8 @@ def notifications_mark_read():
     data = request.get_json(silent=True) or {}
     notif_id = data.get("id")
     mark_all = data.get("all", False)
-    return _json_ok({"marked_read": True})
+    return _json_ok({"marked_read": True},
+                    note="Not persisted - notification storage is not wired up yet.")
 
 
 # ── Settings ─────────────────────────────────────────────────────────────────────
@@ -470,7 +468,7 @@ def market_movers():
             {"ticker": "META", "name": "Meta Platforms", "change_pct": 3.1},
             {"ticker": "AAPL", "name": "Apple Inc", "change_pct": -2.4},
         ]
-        return _json_ok({"movers": movers[:limit]})
+        return _json_simulated({"movers": movers[:limit]})
     except Exception as e:
         return _json_error(str(e), 500)
 
@@ -486,11 +484,11 @@ def activity_recent():
         activities = [
             {"type": "trade", "message": "BUY AAPL executed @ $185.50", "timestamp": datetime.now().isoformat()},
             {"type": "prediction", "message": "NVDA prediction: BUY (72% confidence)", "timestamp": (datetime.now() - timedelta(minutes=30)).isoformat()},
-            {"type": "achievement", "message": "Achievement unlocked: Hot Hand — 5 wins in a row!", "timestamp": (datetime.now() - timedelta(hours=1)).isoformat()},
-            {"type": "alert", "message": "FOMC rate decision in 3 days — consider reducing positions", "timestamp": (datetime.now() - timedelta(hours=3)).isoformat()},
+            {"type": "achievement", "message": "Achievement unlocked: Hot Hand - 5 wins in a row!", "timestamp": (datetime.now() - timedelta(hours=1)).isoformat()},
+            {"type": "alert", "message": "FOMC rate decision in 3 days - consider reducing positions", "timestamp": (datetime.now() - timedelta(hours=3)).isoformat()},
             {"type": "system", "message": "Daily loss limit reset for new trading day", "timestamp": (datetime.now() - timedelta(hours=8)).isoformat()},
         ]
-        return _json_ok({"activities": activities[:limit]})
+        return _json_simulated({"activities": activities[:limit]})
     except Exception as e:
         return _json_error(str(e), 500)
 
@@ -502,7 +500,7 @@ def activity_recent():
 def portfolio():
     """Return portfolio summary for dashboard."""
     try:
-        return _json_ok({
+        return _json_simulated({
             "equity": 10_000.0,
             "balance": 10_000.0,
             "daily_pnl": 125.50,
@@ -523,7 +521,7 @@ def equity_curve():
         days = 90
         rng = np.random.default_rng(42)
         equity = 10000 * np.cumprod(1 + rng.normal(0.0005, 0.01, days))
-        return _json_ok({"equity": [round(float(e), 2) for e in equity]})
+        return _json_simulated({"equity": [round(float(e), 2) for e in equity]})
     except Exception as e:
         return _json_error(str(e), 500)
 
@@ -552,7 +550,7 @@ def trading_place():
         from mt5_trading import trader as mt5_trader
         if not mt5_trader.connected:
             return _json_error(
-                "Trading engine not connected — connect a paper account on the MT5 page first.", 400)
+                "Trading engine not connected - connect a paper account on the MT5 page first.", 400)
 
         result = mt5_trader.place_order(symbol, action, risk_pct, float(data.get("atr", 0)))
         if result.get("ok"):

@@ -1,4 +1,4 @@
-# Deployment Guide — Triple-Fusion-Engine
+# BullLogic Deployment Guide
 
 Production deployment guide for the BullLogic algorithmic trading platform.
 
@@ -28,6 +28,44 @@ docker compose up -d --build
 
 # Verify all services are healthy
 docker compose ps
+```
+
+### Production Deploy (Recommended)
+
+For production, use the overlay compose file with resource limits, persistent
+named volumes, and log rotation:
+
+```bash
+# Copy the production env template
+cp .env.production .env
+nano .env  # Fill in all required values (especially SECRET_KEY)
+
+# Build and start with production overrides
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+
+# Verify
+docker compose ps
+./scripts/healthcheck.sh
+```
+
+**What the production overlay adds over the base compose file:**
+
+| Feature | Base | Production |
+|---------|------|------------|
+| Volumes | Bind mounts (host dirs) | Named Docker volumes |
+| Restart | `unless-stopped` | `always` (survives daemon restarts) |
+| Redis | No persistence config | AOF enabled + `allkeys-lru` + RDB snapshots |
+| Resource limits | None | CPU/memory limits per service |
+| Log rotation | Default (unlimited) | JSON-file driver, 10 MB x 3-5 files |
+| Gunicorn | Basic config | `--preload`, `--max-requests 1000`, recycling |
+| Healthchecks | Basic intervals | Added `start_period` (40s web, 60s predictor) |
+| Trader safety | None | `ENABLE_LIVE_TRADING=false` hard override |
+
+**With monitoring stack:**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.monitoring.yml up -d --build
 ```
 
 ### Service Health Checks
@@ -115,39 +153,47 @@ docker compose run --rm web python -c "from db_utils import run_migrations; run_
 
 ## Monitoring
 
-### Health Check Endpoint
-
-```
-GET /health
-Response: {"status": "ok", "uptime_seconds": 3600, "version": "3.0.0"}
-```
-
-### Docker Monitoring
+### Unified Health Check
 
 ```bash
-# Container status
-docker compose ps
+# Check all services at once (exit code 0 = healthy)
+./scripts/healthcheck.sh
 
-# Resource usage
-docker stats
+# Single service only
+./scripts/healthcheck.sh --service web
 
-# Logs
-docker compose logs -f --tail=100 web
-docker compose logs -f --tail=100 trader
+# Silent mode for cron / UptimeRobot
+./scripts/healthcheck.sh --quiet
 ```
+
+### Prometheus + Grafana Stack
+
+Start the monitoring stack alongside the main services:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+  -f docker-compose.monitoring.yml up -d --build
+```
+
+**Access:**
+- Grafana: `http://localhost:3000` (default: admin / admin)
+- Prometheus: `http://localhost:9090`
+- cadvisor (container metrics): `http://localhost:8080`
+- Node Exporter (host metrics): `http://localhost:9100`
+
+The stack auto-configures:
+- Prometheus scrapes the web `/health` and predictor `/health` endpoints
+- cadvisor collects per-container CPU, memory, disk, and network
+- Node exporter collects host-level metrics
+- Grafana datasource (Prometheus) is provisioned automatically
+
+Dashboard JSON files placed in `monitoring/grafana/dashboards/` are auto-loaded.
 
 ### Log Rotation
 
-Add to `/etc/docker/daemon.json`:
-```json
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "5"
-  }
-}
-```
+The production compose file already configures log rotation per service
+(JSON-file driver, max 10 MB x 3-5 files). No daemon-level config needed.
+For global settings, add to `/etc/docker/daemon.json`.
 
 ## Backup Strategy
 
@@ -155,19 +201,21 @@ Add to `/etc/docker/daemon.json`:
 
 ```bash
 #!/bin/bash
-# /etc/cron.daily/backup-tfe
-BACKUP_DIR=/backups/tfe
-mkdir -p $BACKUP_DIR
-DATE=$(date +%Y%m%d)
+# Daily cron entry (02:00):
+# 0 2 * * * cd /opt/tfe && ./scripts/backup.sh >> logs/backup.log 2>&1
 
-# SQLite backup
-cp instance/users.db $BACKUP_DIR/users_$DATE.db
+# Local backup (DB + models)
+./scripts/backup.sh
 
-# Model backup
-tar -czf $BACKUP_DIR/models_$DATE.tar.gz "Saved Models/"
+# With S3 upload
+./scripts/backup.sh --upload
+```
 
-# Keep last 30 days
-find $BACKUP_DIR -mtime +30 -delete
+### Restoring from Backup
+
+```bash
+# Restore from local backup
+./scripts/restore.sh
 ```
 
 ### Model Versioning

@@ -1,5 +1,5 @@
 """
-Tests for sentiment.py — VADER scoring, news fetching, composite sentiment,
+Tests for sentiment.py - VADER scoring, news fetching, composite sentiment,
 and trading signal generation.
 
 All external API calls (requests.get) are mocked via unittest.mock.patch
@@ -75,7 +75,7 @@ class TestVaderSentiment:
         """'not good' should be negative while 'good' alone is positive."""
         score_good = _vader_sentiment("good")
         score_not_good = _vader_sentiment("not good")
-        # "good" is not in the lexicon, so both will be 0.0 — test "not strong" instead
+        # "good" is not in the lexicon, so both will be 0.0 - test "not strong" instead
         score_strong = _vader_sentiment("strong")
         score_not_strong = _vader_sentiment("not strong")
         assert score_strong > 0, f"Expected positive for 'strong', got {score_strong}"
@@ -92,6 +92,7 @@ class TestVaderSentiment:
 class TestFetchNewsHeadlines:
     """Tests for the NewsAPI headline fetcher."""
 
+    @patch("sentiment.NEWS_API_KEY", "test-key")
     @patch("sentiment.requests.get")
     def test_successful_fetch(self, mock_get: MagicMock):
         """A normal API response returns extracted headlines."""

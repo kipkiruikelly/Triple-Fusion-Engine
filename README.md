@@ -1,295 +1,152 @@
-# Triple-Fusion-Engine — Stock Market Prediction & Algorithmic Trading System
+# BullLogic
 
-**BullLogic**
+Stock market prediction and paper-trading platform, powered by the
+Triple Fusion prediction engine (ICT structure + machine learning +
+technical analysis). Built as a Flask web application with user
+accounts, subscriptions, and a verified M-Pesa/Stripe payment stack.
 
-A production-grade machine-learning web application that predicts next-day stock closing prices and executes algorithmic trades automatically. **Phases 1-3** delivered stacking ML, Docker microservices, and advanced risk management. **Phase 4** adds alternative data (sentiment, economic calendar), gamification (competitions, leaderboards, achievements), data quality monitoring, and model versioning for reproducibility.
-
----
-
-## Features
-
-- **Stacking Ensemble ML**, XGBoost + LightGBM + Random Forest + Linear Regression with Ridge meta-learner
-- **LSTM Neural Network**, Local training with bidirectional LSTM, dropout, early stopping (no Colab required)
-- **ICT-Inspired Features**, Order Blocks, FVGs, BOS/CHoCH, Order Flow Delta, Market Structure analysis
-- **Walk-Forward Backtesting**, Purged/embargoed time-based splits, fold-level metrics, stability scoring
-- **Technical Analysis**, RSI, MACD, Bollinger Bands, EMA, ATR computed live from yfinance data
-- **TradingView Charts**, Interactive live chart with RSI and MACD studies for any ticker
-- **User Accounts**, Registration, login, subscription tiers (Free: 5 predictions/day, Pro: unlimited)
-- **Algorithmic Trading**, ML-fused signals automatically placed as real or paper trades
-- **MetaApi Integration**, Connect to any MT5 broker from Mac, Linux, or Windows without Wine
-- **Paper Trading**, $10,000 virtual account with real market data; no broker needed
-- **Risk Management**, ATR-based SL/TP (1.5× / 3×), 1% risk per trade, 5% daily loss circuit-breaker
-- **Phase 3: Smart Order Router**, TWAP, VWAP, Iceberg execution, market impact estimation, volume profiles
-- **Phase 3: Kelly Criterion Sizing**, Optimal position sizing from historical win rate & win/loss ratio
-- **Phase 3: Dynamic Trailing Stops**, ATR-based trailing stops that lock in profits as price moves favorably
-- **Phase 3: Drawdown Protection**, Multi-tier position reduction as drawdown deepens (automatic risk scaling)
-- **Phase 3: Correlation Monitoring**, Detect correlated positions and reduce aggregate exposure
-- **Phase 3: Execution Quality**, Slippage analysis, fill rate tracking, VWAP benchmarking
-- **Phase 4: Sentiment Analysis**, News + Reddit sentiment scoring with custom financial lexicon (VADER-style)
-- **Phase 4: Economic Calendar**, Pre-loaded major events (FOMC, NFP, CPI), volatility warnings
-- **Phase 4: Data Quality**, Freshness checks, OHLC validation, anomaly detection, gap detection
-- **Phase 4: Gamification**, Paper trading competitions, 12 achievements, leaderboards, performance reports
-- **Phase 4: Model Versioning**, Reproducible training with feature/data hashing, version tracking
+Every claim in this README is limited to what has been verified by
+execution. The full per-feature audit lives in
+[FEATURE_TRUTH_MAP.md](FEATURE_TRUTH_MAP.md); the ensemble evaluation
+(including its negative result) lives in
+[ENSEMBLE_REPORT.md](ENSEMBLE_REPORT.md).
 
 ---
 
-## Architecture (Phase 1 Enhanced)
+## Working today (verified end to end)
+
+- **ML price predictions** for 60+ ticker/interval combinations across
+  equities, crypto, forex and commodities: Linear Regression + Random
+  Forest voting (plus an LSTM vote on AAPL daily), with ATR-derived
+  stop-loss/take-profit levels and confidence from vote agreement.
+- **Honest accuracy tracking**: every prediction is stored, later graded
+  against the realized price, and published on the public
+  `/track-record` page. Nothing is cherry-picked.
+- **Paper trading engine**: virtual portfolio trading two signal streams
+  head to head with realistic spread/slippage/commission, risk limits,
+  a daily loss circuit breaker, and an append-only audit trail. It has
+  produced real (simulated-money) trades on this install.
+- **User accounts and billing**: registration with email verification,
+  Google OAuth sign-in, password reset, Free/Pro tiers, Stripe checkout,
+  and M-Pesa Daraja STK Push (verified live in the sandbox end to end:
+  push, PIN entry, callback, receipt, Pro activation).
+- **Risk management library** (`risk_manager.py`): Kelly-criterion
+  sizing, ATR trailing stops, tiered drawdown reduction with a 20% halt,
+  daily-loss breaker with cooling-off, correlation checks. 74/74 tests.
+- **Verified market data**: yfinance quotes cross-checked against the
+  Pyth oracle with divergence warnings and automatic failover.
+- **Technical analysis + TradingView charts**, watchlists with live
+  signals, screener, scanner, research pages, admin console.
+
+## Safety: live trading is off by default
+
+Real order execution (MetaApi or a direct MT5 bridge) is **refused
+everywhere** unless an operator explicitly sets `ENABLE_LIVE_TRADING=true`
+in the environment. The default is off, no broker credentials ship with
+the project, and `tests/test_mt5_safety.py` asserts that paper trading
+is the only active execution path. Paper trading needs no flag.
+
+## Experimental / in progress (not yet real features)
+
+These exist as tested libraries or scaffolds but are NOT wired into the
+product, and their API endpoints label their responses
+`"simulated": true` where demonstration data is returned:
+
+- **Stacking ensemble (XGBoost + LightGBM + Ridge meta-learner)**: the
+  trainer runs and is evaluated in ENSEMBLE_REPORT.md, but on held-out
+  data it did not beat the best single model and its artifacts are not
+  compatible with the live feature pipeline, so it is not deployed.
+- **Walk-forward framework**: purged/embargoed splits and fold metrics
+  are real; per-fold model evaluation is not implemented yet (the fold
+  backtest currently runs a fixed SMA crossover and says so loudly).
+- **Sentiment analysis**: the financial lexicon scorer is real; NewsAPI
+  integration requires a `NEWSAPI_KEY`; the Reddit component is a
+  placeholder model and is flagged as simulated in every payload.
+- **Economic calendar**: a curated static list of real 2026 events
+  (FOMC/NFP/CPI) with volatility warnings; not a live feed.
+- **Gamification**: competition/achievement engine works in memory with
+  tests, but competitions and trader leaderboards in the API are
+  demonstration data and no achievements are awarded automatically yet.
+- **Smart order router (TWAP/VWAP/Iceberg)**, **message bus
+  (Redis/in-memory)**, **data quality monitor**: tested libraries,
+  nothing in the running app calls them yet.
+- **Model versioning** (`db_utils.py`): migration runner works; version
+  records are not persisted yet and rollback does not exist.
+- **Docker/microservices** (`docker-compose.yml`, `predictor_api.py`):
+  compose files and a standalone prediction API exist but have not been
+  verified end to end in this audit.
+
+---
+
+## Architecture
 
 ```
-data_pipeline.py      →  Data/AAPL_featured.csv + numpy arrays + enhanced ICT features
-feature_engineering.py →  BOS/CHoCH, Enhanced FVG, Order Flow, Market Structure
-model_training.py     →  Saved Models/lr_model_AAPL.pkl + rf_model_AAPL.pkl + xgb + lgb
-stacking_ensemble.py  →  Saved Models/stacking_meta_AAPL.pkl (Ridge meta-learner)
-lstm_trainer.py       →  Saved Models/lstm_model_AAPL.h5 (bidirectional LSTM)
-predictor.py          →  shared ML inference layer (uses all models + stacking ensemble)
-walk_forward.py       →  Walk-forward analysis with purged splits and stability scoring
-app.py                →  Flask web app (auth, predictions, MT5 routes)
-mt5_trading.py        →  trading engine (MetaApi / paper / direct MT5 bridge)
+data_pipeline.py       ->  featured datasets (TA + ICT features)
+model_training.py      ->  Saved Models/ (LR + RF per ticker/interval)
+predictor.py           ->  shared inference: multi-model vote, SL/TP, confidence
+app.py + routes/       ->  Flask web app (auth, predictions, payments, admin)
+paper_engine.py        ->  virtual portfolio, audited simulated trading
+mt5_trading.py         ->  trading engine (paper by default; live is env-gated)
+ops.py                 ->  background jobs: accuracy grading, digests, paper cycles
 ```
-
-### Model Hierarchy
-| Model | Target | Role |
-|---|---|---|
-| Linear Regression | Next close price | Baseline, stable |
-| Random Forest | Next return % | Feature-rich, non-linear |
-| XGBoost | Next return % | Gradient boosting, regularization |
-| LightGBM | Next return % | Fast gradient boosting, leaf-wise |
-| **Stacking Ensemble** | **Next close price** | **Meta-learner combining all above** |
-| LSTM | Next close price | Deep learning, sequence memory |
-
-### Multi-Model Voting (trading loop)
-- All available models vote: BUY (price up) or SELL (price down)
-- Majority vote determines action; tie → HOLD
-- Stacking ensemble prediction used as primary price target when available
-- Confidence based on vote agreement ratio (higher agreement = higher confidence)
-
----
-
----
-
-## Docker (Phase 2 Microservices)
-
-```bash
-# Build and start all services
-docker compose up -d
-
-# Start specific services
-docker compose up -d web predictor redis
-
-# Run one-off pipeline on all default tickers
-docker compose run pipeline --all
-
-# Train models in container
-docker compose run trainer --all-tickers
-
-# View logs
-docker compose logs -f web
-```
-
-**Services:**
-| Service | Port | Description |
-|---|---|---|
-| `web` | 5000 | Flask web UI + REST API |
-| `predictor` | 5001 | Standalone ML prediction API |
-| `trader` | — | MT5 trading engine |
-| `redis` | 6379 | Message broker + cache |
-| `pipeline` | — | Data collection (one-off, `--profile tools`) |
-| `trainer` | — | Model training (one-off, `--profile tools`) |
-
----
-
-## Configuration (Phase 2 Centralized)
-
-All settings are managed through `config.py` (Pydantic) with environment-specific presets:
-
-```bash
-# Development (default): debug mode, SQLite, short data range
-ENV=development python app.py
-
-# Staging: no debug, PostgreSQL, medium data range
-ENV=staging python app.py
-
-# Production: conservative risk, full history, requires SECRET_KEY
-ENV=production python app.py
-```
-
-Key configuration groups:
-- `config.py` → Single source of truth for all constants
-- `.env` → Secrets and environment-specific overrides (gitignored)
-- `.env.example` → Template with all available variables
-- `settings.DEFAULT_TICKERS` → Multi-ticker list for batch operations
-
----
 
 ## Setup
 
-### Requirements
-- Python 3.10–3.12 (venv recommended)
-- TensorFlow requires Python 3.9–3.12 (project venv uses Python 3.11)
+Requirements: Python 3.10-3.12 (this project's venv uses 3.11).
 
-### 1. Create virtual environment & install dependencies
 ```bash
 python -m venv .venv
 .venv\Scripts\activate       # Windows
 source .venv/bin/activate    # Mac/Linux
 pip install -r requirements.txt
+
+cp .env.example .env         # fill in secrets
+
+python app.py                # http://127.0.0.1:5000
 ```
 
-### 2. Build training data (with enhanced ICT features)
+Training pipeline (regenerates models):
+
 ```bash
-python data_pipeline.py
+python data_pipeline.py                        # build featured datasets
+python train_all_tickers.py --tickers QQQ      # train through the live feature builder
 ```
 
-### 3. Train base models (LR, RF, XGBoost, LightGBM)
+Tests:
+
 ```bash
-python model_training.py
+python -m pytest tests/ -q
 ```
 
-### 4. Train stacking ensemble
-```bash
-python stacking_ensemble.py --ticker QQQ
-```
+## Hosted server access
 
-### 5. Train LSTM (local, no Colab needed)
-```bash
-python lstm_trainer.py --ticker QQQ --epochs 80
-```
-
-### 6. Run walk-forward validation
-```bash
-python walk_forward.py --ticker QQQ --folds 5
-```
-
-### 7. Run the app
-```bash
-python app.py
-```
-Open **http://127.0.0.1:5000**
-
----
-
-## Hosted Server Access
-
-The app runs as a persistent systemd service on a Kali Linux server, accessible privately via Tailscale VPN:
+The app runs as a persistent service on a private server, reachable via
+Tailscale VPN:
 
 | Access | URL |
 |---|---|
 | HTTPS (recommended) | https://kali.tail3ceaef.ts.net |
 | Direct IP | http://100.116.236.84:5000 |
-| SSH | `ssh xkcdhatguy@100.116.236.84` |
 
-Requires Tailscale installed and connected to the `kipkiruikelly.github` tailnet.
+Requires Tailscale connected to the `kipkiruikelly.github` tailnet.
 
----
+## Trading options
 
-## Algorithmic Trading
-
-### Option A, MetaApi (recommended, works on Mac/Linux/Windows)
-1. Sign up at [metaapi.cloud](https://metaapi.cloud) (free tier available)
-2. Add your broker's MT5 account in the MetaApi dashboard
-3. In the app: go to **MT5 Algo Trading** → **MetaApi** tab
-4. Paste your **API Token** and **Account ID** → Connect
-5. Set symbol, timeframe, risk % → **Start Algorithm**
-
-### Option B, Paper Trading (no account needed)
-- Click the **Paper** tab → Connect instantly
-- Trades execute against live yfinance prices with $10,000 virtual balance
-
-### Option C, Direct MT5 Bridge (Linux only)
-Requires Wine ≥ 10.12 with Python + MetaTrader5 + rpyc installed inside the Wine prefix.
-```bash
-sudo apt install wine-devel
-WINEPREFIX=~/.mt5 wine python.exe -m mt5linux -p 18812 --host 0.0.0.0
-```
-
----
-
-## Project Structure
-
-```
-Stock-Market-Predictor/
-├── app.py                        # Flask app, auth, prediction routes, MT5 API
-├── predictor.py                  # Shared ML inference (multi-model voting)
-├── mt5_trading.py                # Trading engine (MetaApi / paper / direct MT5)
-├── data_pipeline.py              # Step 1, download OHLCV data, engineer features
-├── model_training.py             # Step 2, train LR + RF + XGB + LGB
-├── stacking_ensemble.py          # Phase 1, cross-validated stacking ensemble
-├── lstm_trainer.py               # Phase 1, bidirectional LSTM training
-├── feature_engineering.py        # Phase 1, enhanced ICT features
-├── walk_forward.py               # Phase 1, walk-forward analysis framework
-├── alphas.py                     # WorldQuant-style alpha library
-├── requirements.txt
-├── Procfile                      # gunicorn entry point for deployment
-│
-├── Data/                         # Generated by data_pipeline.py
-│   ├── AAPL_featured.csv
-│   ├── X_train_AAPL.npy  ...
-│   └── scaler_AAPL.pkl
-│
-├── Saved Models/                 # Generated by training scripts
-│   ├── lr_model_AAPL.pkl
-│   ├── rf_model_AAPL.pkl
-│   ├── xgb_model_AAPL.pkl
-│   ├── lgb_model_AAPL.pkl
-│   ├── scaler_sklearn_AAPL.pkl
-│   ├── feature_cols_sklearn_AAPL.pkl
-│   ├── stacking_meta_AAPL.pkl    # Meta-learner
-│   ├── stacking_meta_scaler_AAPL.pkl
-│   └── lstm_model_AAPL.h5        # Bidirectional LSTM
-│
-├── Web Pages/
-│   ├── index.html                # Home, ticker input, quota counter
-│   ├── result.html               # Prediction result + TradingView chart
-│   ├── mt5.html                  # Algo trading dashboard
-│   ├── login.html
-│   ├── register.html
-│   └── pricing.html
-│
-├── tests/                        # Unit tests
-├── tools/                        # Deployment scripts (Caddy, NSSM, ngrok)
-│
-└── Step1_Data_Collection_Pipeline.ipynb
-    Step2_LSTM_Training.ipynb
-```
-
----
-
-## Quick Start (All Models)
-
-```bash
-# 1. Pipeline
-python data_pipeline.py
-
-# 2. Base models
-python model_training.py
-
-# 3. Stacking ensemble
-python stacking_ensemble.py --ticker QQQ
-
-# 4. LSTM
-python lstm_trainer.py --ticker QQQ
-
-# 5. Validate
-python walk_forward.py --ticker QQQ --folds 5
-
-# 6. Launch
-python app.py
-```
-
----
+- **Paper trading (default, recommended)**: connect instantly in the MT5
+  page's Paper tab; $10,000 virtual balance against live prices.
+- **Live trading (opt-in only)**: requires an operator to set
+  `ENABLE_LIVE_TRADING=true`, plus MetaApi credentials or a Linux MT5
+  bridge. Without the flag every live order path refuses.
 
 ## Configuration
 
-| Constant | File | Default | Description |
-|---|---|---|---|
-| `TICKER` | `data_pipeline.py` | `QQQ` | Symbol used for training |
-| `FREE_DAILY_LIMIT` | `app.py` | `5` | Predictions per day for free users |
-| `MAX_POSITIONS` | `mt5_trading.py` | `3` | Max concurrent open positions |
-| `DAILY_LOSS_LIMIT` | `mt5_trading.py` | `0.05` | 5% equity drawdown halts trading |
-| `PAPER_BALANCE` | `mt5_trading.py` | `10000` | Starting virtual balance |
-
----
+Settings are centralized in `config.py` (Pydantic) with
+development/staging/production presets; secrets and overrides live in
+`.env` (gitignored, template in `.env.example`).
 
 ## Disclaimer
 
-Predictions and trades generated by this system are for **educational purposes only**. They do not constitute financial advice. Past performance does not guarantee future results. Never risk capital you cannot afford to lose.
+Predictions and trades generated by this system are for **educational
+purposes only**. They do not constitute financial advice. Past
+performance does not guarantee future results. Never risk capital you
+cannot afford to lose.

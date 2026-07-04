@@ -215,18 +215,18 @@ def walk_forward_analysis(
     mode: str = "fused",
     initial_capital: float = 10_000.0,
 ) -> WalkForwardResult:
-    """Run walk-forward analysis using the existing backtest signal pipeline.
+    """Run walk-forward analysis over purged/embargoed time splits.
 
-    For each fold:
-      1. Train models on the training window data
-      2. Run backtest on the test window using those models
-      3. Compute and store fold metrics
+    LIMITATION (verified 2026-07-05): the per-fold backtest currently uses
+    a fixed SMA20/50 crossover strategy regardless of `mode`. Per-fold
+    model training/evaluation is NOT implemented, so results describe the
+    fold machinery and that baseline strategy, not the ML models.
 
     Args:
         ticker: Ticker symbol.
         n_folds: Number of walk-forward folds.
         risk_pct: Risk per trade as percentage.
-        mode: Signal mode ("fused", "ml", "tech", "ict").
+        mode: Accepted for API compatibility but currently IGNORED.
         initial_capital: Starting capital for each fold.
 
     Returns:
@@ -234,6 +234,13 @@ def walk_forward_analysis(
     """
     import yfinance as yf
     import ta
+
+    if mode and mode != "tech":
+        logger.warning(
+            "walk_forward_analysis: mode=%r requested, but fold backtests "
+            "currently run a fixed SMA20/50 strategy; model-mode evaluation "
+            "is not implemented. Results do NOT reflect the '%s' models.",
+            mode, mode)
 
     # Fetch full data range
     logger.info("Fetching data for %s...", ticker)
@@ -425,9 +432,11 @@ def _run_fold_backtest(
 
 def print_walk_forward_report(result: WalkForwardResult) -> None:
     """Print a formatted walk-forward analysis report."""
-    sep = "═" * 72
+    # ASCII separator: Windows consoles default to cp1252 and crash on
+    # box-drawing characters.
+    sep = "=" * 72
     print(f"\n{sep}")
-    print(f"  WALK-FORWARD ANALYSIS  ·  {result.ticker}  ·  {result.n_folds} folds")
+    print(f"  WALK-FORWARD ANALYSIS  |  {result.ticker}  |  {result.n_folds} folds")
     print(sep)
     print(f"  {'Fold':<6} {'Train':<22} {'Test':<22} {'Return%':>8} {'Sharpe':>8} {'MaxDD%':>7} {'Win%':>7} {'Trades':>7}")
     print("  " + "─" * 70)
@@ -455,7 +464,7 @@ def plot_walk_forward(
 ) -> None:
     """Plot walk-forward fold returns and risk metrics."""
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle(f"{result.ticker} – Walk-Forward Analysis ({result.n_folds} folds)",
+    fig.suptitle(f"{result.ticker} - Walk-Forward Analysis ({result.n_folds} folds)",
                  fontsize=13, fontweight="bold")
 
     folds_n = range(1, len(result.folds) + 1)

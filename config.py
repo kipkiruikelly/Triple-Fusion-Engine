@@ -110,6 +110,10 @@ class Settings(BaseSettings):
     MAX_LOG_ENTRIES: int = 200
     WARMUP_BARS: int = 100
     TRADING_MODE: Literal["paper", "metaapi", "mt5linux"] = "paper"
+    # Hard safety gate: real order execution (MetaApi or MT5 bridge) is
+    # refused unless the operator explicitly sets ENABLE_LIVE_TRADING=true
+    # in the environment. Paper trading is always available.
+    ENABLE_LIVE_TRADING: bool = False
 
     # ── Phase 3: Risk Management ────────────────────────────────────────────
     KELLY_ENABLED: bool = True
@@ -200,6 +204,10 @@ def apply_env_overrides() -> None:
         settings.RF_N_ESTIMATORS = 100
         settings.LSTM_EPOCHS = 20
         settings.MAX_PARALLEL_FETCHES = 3
+        # Presets mutate the singleton in place, so every branch must set
+        # the values other branches touch or a previous preset leaks through.
+        settings.RISK_PCT = 1.0
+        settings.MAX_POSITIONS = 3
         settings.SECRET_KEY = os.environ.get("SECRET_KEY", "smp-dev-key-2025")
 
     elif env == "staging":
@@ -208,6 +216,8 @@ def apply_env_overrides() -> None:
         settings.START_DATE = "2022-01-01"
         settings.END_DATE = "2026-06-01"
         settings.LSTM_EPOCHS = 50
+        settings.RISK_PCT = 1.0
+        settings.MAX_POSITIONS = 3
 
     elif env == "production":
         settings.DEBUG = False

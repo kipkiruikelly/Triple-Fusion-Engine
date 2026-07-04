@@ -1,6 +1,6 @@
 """
 model_training.py
-ML-based Quantitative Trading System — Enhanced with Stacking Ensemble & LSTM.
+ML-based Quantitative Trading System - Enhanced with Stacking Ensemble & LSTM.
 
 Trains the full model suite for the Triple-Fusion-Engine:
   - Linear Regression (baseline, predicts next close price)
@@ -310,7 +310,7 @@ def save_charts(
         ax.plot(x, data["y_test_close"], color="#1F4E79", lw=1.5, label="Actual")
         ax.plot(x, pred, color=color, lw=1.5, linestyle="--", label=name)
         ax.fill_between(x, data["y_test_close"], pred, alpha=0.08, color=color)
-        ax.set_title(f"{ticker} – {name}: Actual vs Predicted", fontweight="bold")
+        ax.set_title(f"{ticker} - {name}: Actual vs Predicted", fontweight="bold")
         ax.set_ylabel("Price (USD)")
         ax.legend(fontsize=9)
 

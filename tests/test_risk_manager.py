@@ -497,16 +497,17 @@ class TestCheckGuardrails:
     def test_guardrails_underwater_account(
         self, rm: RiskManager, account_underwater: dict
     ) -> None:
-        """An underwater account ($8.5k equity) triggers drawdown multiplier,
-        but doesn't necessarily halt unless drawdown >= 20%.
-        Here: (10000 - 8500) / 10000 = 0.15 = 15% → tier 3 (0.25 mult),
-        but guardrail passes because 15% < 20% halt and no daily loss.
+        """An account 15% below the daily start must be blocked.
+
+        (10000 - 8500) / 10000 = 15%: below the 20% drawdown halt but far
+        beyond the 5% daily loss limit, so the daily-loss breaker fires.
+        A risk module that blocks a 6% down-day must also block a 15% one.
         """
         allowed, reason = rm.check_guardrails(
             account_underwater, [], daily_start_equity=10_000.0
         )
-        assert allowed is True
-        assert reason == "OK"
+        assert allowed is False
+        assert "Daily loss limit" in reason
 
 
 # ── Position Sizing (compute_position) ────────────────────────────────────────────
@@ -627,7 +628,7 @@ class TestPerformanceMetrics:
     def test_win_rate_bullish(self, rm_with_trades: RiskManager) -> None:
         """Bullish history (70% target) should be approximately 70%."""
         wr = rm_with_trades.win_rate()
-        # With 50 trades and 70% target, expect roughly 0.6–0.8
+        # With 50 trades and 70% target, expect roughly 0.6-0.8
         assert 0.5 <= wr <= 0.9, f"Unexpected win_rate {wr}"
 
     def test_profit_factor_no_trades(self, rm: RiskManager) -> None:
@@ -669,7 +670,7 @@ class TestResetDaily:
         rm.check_guardrails(account, [], daily_start_equity=10_000.0)
         assert rm._daily_loss_hit is True
 
-        # Reset — this sets _loss_hit_date to today, and reset_daily only
+        # Reset - this sets _loss_hit_date to today, and reset_daily only
         # clears if _loss_hit_date < date.today().  Since both are today,
         # the flag stays set.  We simulate a past date by patching.
         from datetime import date as dt_date

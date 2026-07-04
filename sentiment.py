@@ -229,7 +229,9 @@ def get_sentiment(ticker: str, use_cache: bool = True) -> dict:
         news_score = 0.0
         news_magnitude = 0.0
 
-    # 2. Reddit sentiment
+    # 2. Reddit sentiment - SIMULATED (no Reddit API integration; see
+    #    _reddit_mention_count). Flagged so consumers cannot mistake it
+    #    for a live signal.
     reddit_score = _reddit_sentiment(ticker)
     reddit_mentions = _reddit_mention_count(ticker)
     if reddit_mentions > 0:
@@ -237,6 +239,7 @@ def get_sentiment(ticker: str, use_cache: bool = True) -> dict:
             "score": round(reddit_score, 3),
             "mentions": reddit_mentions,
             "magnitude": round(min(1.0, reddit_mentions / 50), 2),
+            "simulated": True,
         }
         sources += 1
 
@@ -266,6 +269,15 @@ def get_sentiment(ticker: str, use_cache: bool = True) -> dict:
         "components": components,
         "timestamp": datetime.now().isoformat(),
     }
+    # Honesty flags: reddit is simulated; if it is the ONLY source (no
+    # NEWSAPI_KEY configured), the composite itself is simulated.
+    if "reddit" in components:
+        result["simulated_sources"] = ["reddit"]
+        if not headlines:
+            result["simulated"] = True
+            result["warning"] = ("Sentiment is simulated: no live news source "
+                                 "configured (set NEWSAPI_KEY) and the Reddit "
+                                 "component is a placeholder model.")
 
     # Store in cache
     with _cache_lock:
@@ -293,7 +305,7 @@ def get_sentiment_signal(ticker: str) -> dict:
 
     strength = "strong" if mag > 0.6 else ("moderate" if mag > 0.3 else "weak")
 
-    return {
+    signal = {
         "ticker": ticker,
         "bias": bias,
         "strength": strength,
@@ -301,6 +313,10 @@ def get_sentiment_signal(ticker: str) -> dict:
         "magnitude": mag,
         "sources": sent["sources"],
     }
+    if sent.get("simulated"):
+        signal["simulated"] = True
+        signal["warning"] = sent.get("warning")
+    return signal
 
 
 def batch_sentiment(tickers: List[str]) -> Dict[str, dict]:

@@ -299,7 +299,7 @@ def plot_training_history(history: dict, ticker: str) -> None:
     # Loss
     axes[0].plot(history["loss"], label="Train Loss", color="#2E75B6", lw=1.5)
     axes[0].plot(history["val_loss"], label="Val Loss", color="#E74C3C", lw=1.5)
-    axes[0].set_title(f"{ticker} – LSTM Training Loss", fontweight="bold")
+    axes[0].set_title(f"{ticker} - LSTM Training Loss", fontweight="bold")
     axes[0].set_xlabel("Epoch")
     axes[0].set_ylabel("Huber Loss")
     axes[0].legend()
@@ -309,7 +309,7 @@ def plot_training_history(history: dict, ticker: str) -> None:
     if "mae" in history and "val_mae" in history:
         axes[1].plot(history["mae"], label="Train MAE", color="#2E75B6", lw=1.5)
         axes[1].plot(history["val_mae"], label="Val MAE", color="#E74C3C", lw=1.5)
-    axes[1].set_title(f"{ticker} – LSTM Training MAE", fontweight="bold")
+    axes[1].set_title(f"{ticker} - LSTM Training MAE", fontweight="bold")
     axes[1].set_xlabel("Epoch")
     axes[1].set_ylabel("MAE")
     axes[1].legend()
@@ -331,7 +331,7 @@ def plot_predictions(
     ax.plot(x, y_true, color="#1F4E79", lw=1.5, label="Actual Price")
     ax.plot(x, y_pred, color="#E74C3C", lw=1.5, linestyle="--", label="LSTM Prediction")
     ax.fill_between(x, y_true, y_pred, alpha=0.08, color="#E74C3C")
-    ax.set_title(f"{ticker} – LSTM: Actual vs Predicted", fontweight="bold")
+    ax.set_title(f"{ticker} - LSTM: Actual vs Predicted", fontweight="bold")
     ax.set_ylabel("Price (USD)")
     ax.set_xlabel("Trading Days (Test Set)")
     ax.legend(fontsize=9)

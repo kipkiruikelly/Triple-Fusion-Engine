@@ -19,6 +19,7 @@ Triple-fusion signal (ICT primary, ML + tech as confirmation):
 """
 
 import asyncio
+import os
 import time
 import threading
 import logging
@@ -51,6 +52,22 @@ except ImportError:
 # MetaApi timeframe mapping (MT5 name → MetaApi name)
 _METAAPI_TF = {"M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m",
                "H1": "1h", "H4": "4h", "D1": "1d"}
+
+_LIVE_DISABLED_MSG = (
+    "Live trading is disabled on this server. Paper mode (account=0) is "
+    "available. To enable real order execution an operator must set "
+    "ENABLE_LIVE_TRADING=true in the environment."
+)
+
+
+def live_trading_enabled() -> bool:
+    """Explicit opt-in for any real order execution (MetaApi or MT5 bridge).
+
+    Defaults to OFF. Read at call time (not import time) so the flag can
+    never be baked in by import order and tests can assert both states.
+    """
+    return os.environ.get("ENABLE_LIVE_TRADING", "").strip().lower() in (
+        "1", "true", "yes", "on")
 
 
 class MetaApiBackend:
@@ -402,6 +419,9 @@ class MT5Trader:
 
         # ── MetaApi mode ─────────────────────────────────────────────────────
         if metaapi_token and metaapi_account_id:
+            if not live_trading_enabled():
+                self._log("BLOCKED", "MetaApi connect refused: ENABLE_LIVE_TRADING is off")
+                return {"ok": False, "error": _LIVE_DISABLED_MSG}
             try:
                 mapi = MetaApiBackend()
                 mapi.start()
@@ -440,6 +460,9 @@ class MT5Trader:
             return {"ok": True, "account": self.account, "mode": "paper"}
 
         # Live MT5 bridge
+        if not live_trading_enabled():
+            self._log("BLOCKED", "Live MT5 connect refused: ENABLE_LIVE_TRADING is off")
+            return {"ok": False, "error": _LIVE_DISABLED_MSG}
         if self.mt5 is None:
             return {"ok": False, "error": (
                 "MT5 bridge unavailable. Either use paper mode (account=0) or "
@@ -883,6 +906,11 @@ class MT5Trader:
             self._log("PAPER TRADE", f"{action} {lot} {symbol} @ {price:.5f}  SL={sl:.5f}  TP={tp:.5f}")
             return {"ok": True, "trade": trade}
 
+        # Any path past this point is REAL order execution.
+        if not live_trading_enabled():
+            self._log("BLOCKED", f"Live {action} {symbol} refused: ENABLE_LIVE_TRADING is off")
+            return {"ok": False, "error": _LIVE_DISABLED_MSG}
+
         # MetaApi live order
         if self.is_metaapi:
             try:
@@ -965,6 +993,9 @@ class MT5Trader:
     def close_all(self, symbol: str) -> int:
         if self.is_paper:
             return self._paper.close_all(symbol)
+        if not live_trading_enabled():
+            self._log("BLOCKED", f"Live close_all {symbol} refused: ENABLE_LIVE_TRADING is off")
+            return 0
         if self.is_metaapi:
             try:
                 return self._mapi.close_all(symbol)

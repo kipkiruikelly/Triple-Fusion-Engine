@@ -1,4 +1,4 @@
-# API Documentation — Triple-Fusion-Engine
+# BullLogic API Documentation
 
 Base URL: `https://your-domain.com/api`
 
@@ -222,8 +222,8 @@ All errors follow this format:
 ```
 
 HTTP status codes:
-- `400` — Bad request (missing parameters)
-- `401` — Unauthorized (login required)
-- `403` — Forbidden (insufficient permissions)
-- `429` — Rate limited
-- `500` — Internal server error
+- `400` - Bad request (missing parameters)
+- `401` - Unauthorized (login required)
+- `403` - Forbidden (insufficient permissions)
+- `429` - Rate limited
+- `500` - Internal server error

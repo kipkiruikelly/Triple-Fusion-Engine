@@ -1,4 +1,4 @@
-"""Tests for config.py — centralized Pydantic settings."""
+"""Tests for config.py - centralized Pydantic settings."""
 import os
 import sys
 from pathlib import Path
@@ -8,17 +8,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _restore_settings():
+    """Snapshot and restore the settings singleton around every test.
+
+    apply_env_overrides() mutates the singleton in place, so without this
+    the tests are order-dependent (a production preset leaks into later
+    tests)."""
+    from config import settings
+    snapshot = settings.model_dump()
+    yield
+    for key, value in snapshot.items():
+        setattr(settings, key, value)
+
+
 class TestSettings:
     """Test the config.Settings singleton and environment-specific overrides."""
 
     def test_settings_singleton_exists(self):
         """settings singleton should be importable with defaults."""
         from config import settings
-        assert settings.ENV == "development"
+        # ENV comes from .env / the environment, so only assert validity,
+        # not a specific value (a production .env is a legal test host).
+        assert settings.ENV in ("development", "staging", "production")
         assert settings.DEFAULT_TICKER == "QQQ"
         assert settings.TRAIN_RATIO == 0.80
-        assert settings.MAX_POSITIONS == 3
-        assert settings.RISK_PCT == 1.0
+        # These two are tuned per-environment by apply_env_overrides()
+        # (already applied when conftest imports the app), so assert sane
+        # bounds rather than raw defaults.
+        assert 1 <= settings.MAX_POSITIONS <= 10
+        assert 0 < settings.RISK_PCT <= 2.0
 
     def test_settings_paths_are_paths(self):
         """DATA_DIR, MODELS_DIR, LOGS_DIR should be Path objects."""

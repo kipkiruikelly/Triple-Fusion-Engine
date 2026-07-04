@@ -1,4 +1,4 @@
-"""Tests for data_quality.py — DataFrame validation and monitoring."""
+"""Tests for data_quality.py - DataFrame validation and monitoring."""
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path

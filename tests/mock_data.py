@@ -98,7 +98,7 @@ def sample_trades(n_trades: int = 50, win_rate: float = 0.55,
         is_win = rng.random() < win_rate
         pnl = rng.normal(avg_win, 15) if is_win else rng.normal(avg_loss, 15)
         entry_date = base_date + timedelta(days=i * 2)
-        exit_date = entry_date + timedelta(days=rng.integers(1, 10))
+        exit_date = entry_date + timedelta(days=int(rng.integers(1, 10)))
 
         trades.append({
             "entry_date": str(entry_date),

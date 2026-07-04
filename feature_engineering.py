@@ -15,7 +15,7 @@ professional-grade concepts used by institutional traders:
 
 All functions are pure: they accept a pd.DataFrame with OHLCV columns
 and return a pd.DataFrame with new feature columns. No forward-looking
-bias — every feature at time t uses only data available at or before t.
+bias - every feature at time t uses only data available at or before t.
 
 Usage:
     from feature_engineering import add_enhanced_ict_features
@@ -115,11 +115,13 @@ def detect_bos_choch(df: pd.DataFrame, swing_lookback: int = 20) -> pd.DataFrame
     df["CHoCH_Bull"] = choch_bull
     df["CHoCH_Bear"] = choch_bear
 
-    # Rolling aggregations
-    df["BOS_Bull_Count"]  = pd.Series(bos_bull).rolling(20, min_periods=1).sum()
-    df["BOS_Bear_Count"]  = pd.Series(bos_bear).rolling(20, min_periods=1).sum()
+    # Rolling aggregations. The Series must share df's index: a bare
+    # pd.Series gets a RangeIndex, which aligns to nothing on a
+    # DatetimeIndex frame and silently assigns all-NaN columns.
+    df["BOS_Bull_Count"]  = pd.Series(bos_bull, index=df.index).rolling(20, min_periods=1).sum()
+    df["BOS_Bear_Count"]  = pd.Series(bos_bear, index=df.index).rolling(20, min_periods=1).sum()
     df["CHoCH_Signal"]     = (
-        pd.Series(choch_bull - choch_bear).rolling(20, min_periods=1).mean()
+        pd.Series(choch_bull - choch_bear, index=df.index).rolling(20, min_periods=1).mean()
     ).fillna(0).clip(-1, 1)
 
     return df
@@ -201,7 +203,9 @@ def detect_enhanced_fvg(
     df["FVG_Bull_4bar"] = fvg_bull_4
     df["FVG_Bear_4bar"] = fvg_bear_4
     df["FVG_Filled"]    = fvg_filled
-    df["FVG_Mitigated"] = pd.Series(fvg_filled).rolling(20, min_periods=1).sum()
+    # index= keeps alignment with df's DatetimeIndex (a bare Series would
+    # align to nothing and assign all-NaN).
+    df["FVG_Mitigated"] = pd.Series(fvg_filled, index=df.index).rolling(20, min_periods=1).sum()
 
     return df
 

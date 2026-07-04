@@ -1,5 +1,67 @@
 # Changelog
 
+## 2026-07-05, Verification audit: MT5 safety gate, truth map, stabilization
+
+No new features. This session proved what is real, gated what is
+dangerous, and stabilized the core. Deliverables: FEATURE_TRUTH_MAP.md,
+ENSEMBLE_REPORT.md, corrected README.
+
+### Safety (Part 1)
+- Live trading now requires an explicit ENABLE_LIVE_TRADING=true env
+  flag (default OFF). MetaApi connect, direct MT5 connect, place_order
+  and close_all all refuse real execution without it; refusals are
+  logged as BLOCKED. Paper trading unaffected. No broker credentials
+  were found wired or committed. New tests/test_mt5_safety.py (8 tests)
+  asserts paper is the only active execution path.
+
+### Truth map (Part 2)
+- FEATURE_TRUTH_MAP.md classifies all 13 Phase modules and every
+  /api endpoint as WORKING / PARTIAL / SCAFFOLD with execution
+  evidence. Key findings: no stacking/XGB/LGB artifacts were ever
+  deployed (live predictions are LR+RF voting, plus LSTM on AAPL
+  daily); the Reddit sentiment component is simulated; gamification
+  and several dashboard APIs return demonstration data; walk-forward's
+  per-fold backtest ignores its mode argument.
+
+### Stabilization (Part 3)
+- Real bugs fixed, all exposed by making the shipped tests run:
+  - risk_manager: Kelly fraction/percent unit bug (profitable histories
+    collapsed to the 0.25% floor), trailing stop tightening the initial
+    stop at entry, drawdown halt masked by the daily-loss message.
+  - data_quality: weekends counted as data gaps on daily bars; empty
+    DataFrame results not logged into the summary report.
+  - config: env presets not idempotent (production RISK_PCT leaked into
+    later presets); tests assumed a development .env host.
+  - tests/mock_data.py: numpy int rejected by timedelta (broke 24 tests).
+  - stacking_ensemble: OOF/close-price shape mismatch and a swapped
+    scaler/meta-learner unpacking; the trainer had never completed a
+    real run before.
+  - walk_forward report printer crashed on Windows consoles.
+- Fail-safing: every API endpoint serving demonstration data now
+  returns simulated: true with a note (new tests/test_honesty_flags.py);
+  sentiment payloads carry simulated flags and a warning when no live
+  source is configured; walk_forward logs a warning that model modes
+  are not evaluated; the shadowed mock /api/notifications endpoint was
+  removed (the real one in routes/notifications.py serves it).
+
+### Ensemble result (Part 4)
+- Stacking ensemble trained and evaluated for AAPL and QQQ on
+  chronological holdouts: it does NOT beat the best single base model
+  (XGBoost on direction, LR on price error) on either ticker. Details
+  and the deployment blocker (feature-pipeline mismatch) in
+  ENSEMBLE_REPORT.md. Production models were restored after evaluation;
+  QQQ daily models retrained through the live 82-feature pipeline.
+
+### Hygiene (Part 5)
+- Secrets scan of the full git history and tree: clean. .env was never
+  committed; no key material found. Nothing requires rotation.
+- Project name unified to BullLogic across README/API/DEPLOYMENT/test
+  docs (Triple Fusion remains the engine's name).
+- README rewritten: headline lists only verified-working features;
+  experimental/scaffold work moved to a clearly labeled section.
+- Removed all em and en dashes from tracked text/code (68 across 24
+  files; 0 remain).
+
 ## 2026-07-04, Account-backed dark/light theme across every page
 
 ### Persistence
