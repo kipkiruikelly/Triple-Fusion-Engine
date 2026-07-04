@@ -1,124 +1,320 @@
-{% extends "_base.html" %}
-{% set active_page = "watchlist" %}
-{% block title %}Watchlist{% endblock %}
+<!DOCTYPE html>
+<html lang="en"{{ theme_attr }}>
+<head>
+  {% include "_theme.html" %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watchlist, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
-{% block page_styles %}
-<style>
-  .watch-add { display: flex; gap: var(--space-3); align-items: flex-end; flex-wrap: wrap; }
-  .watch-add .form-group { margin-bottom: 0; }
-  .signal-cell { font-weight: var(--weight-semibold); }
-</style>
-{% endblock %}
+    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+    .topbar-left { display: flex; align-items: center; gap: 32px; }
+    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
+    .logo span { color: var(--accent); }
+    .nav-links { display: flex; gap: 4px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; padding: 6px 12px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
+    .nav-links a:hover { color: var(--text); background: var(--surface2); }
+    .nav-links a.active { color: var(--white); background: var(--surface2); }
+    .topbar-right { display: flex; align-items: center; gap: 12px; font-size: 10pt; color: var(--muted); }
+    .topbar-right a { color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s; }
+    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
+    .btn-upgrade { background: var(--accent) !important; color: var(--white) !important; border-color: var(--accent) !important; font-weight: 600; }
 
-{% block content %}
+    .ticker-strip { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 36px; display: flex; align-items: center; gap: 32px; overflow: hidden; }
+    .ticker-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 9.5pt; }
+    .ticker-item .name { color: var(--muted); font-weight: 500; }
+    .ticker-item .price { color: var(--text); font-weight: 600; }
+    .ticker-item .change.up { color: var(--green); font-weight: 600; }
+    .ticker-item .change.down { color: var(--red); font-weight: 600; }
 
-  <div class="card" style="margin-bottom:var(--space-5)">
-    <div class="card-header"><h3>Add to Watchlist</h3></div>
-    <div class="card-body">
-      <div class="watch-add">
-        <div class="form-group">
-          <label class="form-label" for="watch-ticker">Ticker</label>
-          <input class="form-input" id="watch-ticker" placeholder="e.g. NVDA" maxlength="10" autocomplete="off" />
-        </div>
-        <button class="btn btn-primary" id="watch-add-btn">Add</button>
+    .layout { display: flex; flex: 1; }
+    .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 20px 0; flex-shrink: 0; }
+    .sidebar-section { padding: 0 16px; margin-bottom: 24px; }
+    .sidebar-label { font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+    .sidebar-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 10pt; color: var(--muted); font-weight: 500; transition: all 0.15s; margin-bottom: 2px; text-decoration: none; }
+    .sidebar-item:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-item.active { background: var(--surface2); color: var(--white); }
+    .sidebar-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+    .sidebar-item.active .dot { background: var(--accent); }
+
+    .content { flex: 1; padding: 28px 32px; overflow-y: auto; }
+    .page-title { font-size: 16pt; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .page-subtitle { font-size: 10pt; color: var(--muted); margin-bottom: 28px; }
+
+    /* Add ticker bar */
+    .add-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+    .add-bar input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 9px 14px; font-size: 10.5pt; font-family: inherit; outline: none; transition: border-color 0.15s; text-transform: uppercase; }
+    .add-bar input::placeholder { color: var(--muted); text-transform: none; }
+    .add-bar input:focus { border-color: var(--accent); }
+    .btn-add { background: var(--accent); color: var(--white); border: none; border-radius: 6px; padding: 9px 20px; font-size: 10pt; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity 0.15s; }
+    .btn-add:hover { opacity: 0.85; }
+    .add-msg { font-size: 9.5pt; margin-left: 4px; }
+    .add-msg.err { color: var(--red); }
+    .add-msg.ok { color: var(--green); }
+
+    /* Summary stats */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+    .stat-label { font-size: 8.5pt; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .stat-value { font-size: 18pt; font-weight: 700; color: var(--white); }
+    .stat-sub { font-size: 9pt; color: var(--muted); margin-top: 2px; }
+
+    /* Watchlist table */
+    .wl-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .wl-header { display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1.2fr 1.2fr 1fr 1fr; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    .wl-header span { font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .wl-row { display: grid; grid-template-columns: 2fr 1.2fr 1.2fr 1.2fr 1.2fr 1fr 1fr; padding: 14px 20px; border-bottom: 1px solid rgba(42,49,80,0.5); align-items: center; transition: background 0.12s; }
+    .wl-row:hover { background: var(--surface2); }
+    .wl-row:last-child { border-bottom: none; }
+    .ticker-sym { font-size: 11pt; font-weight: 700; color: var(--white); }
+    .ticker-co { font-size: 8.5pt; color: var(--muted); margin-top: 1px; }
+    .cell-price { font-size: 10.5pt; font-weight: 600; color: var(--text); }
+    .cell-chg { font-size: 10pt; font-weight: 600; }
+    .up { color: var(--green); }
+    .dn { color: var(--red); }
+    .signal-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 8.5pt; font-weight: 700; }
+    .signal-buy { background: rgba(0,192,118,0.15); color: var(--green); }
+    .signal-sell { background: rgba(255,77,77,0.15); color: var(--red); }
+    .signal-hold { background: rgba(122,132,153,0.15); color: var(--muted); }
+    .cell-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .btn-predict-sm { background: var(--accent); color: var(--white); border: none; border-radius: 5px; padding: 5px 12px; font-size: 8.5pt; font-weight: 600; cursor: pointer; transition: opacity 0.15s; text-decoration: none; }
+    .btn-predict-sm:hover { opacity: 0.8; }
+    .btn-remove { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 5px 10px; font-size: 8.5pt; cursor: pointer; transition: all 0.15s; }
+    .btn-remove:hover { color: var(--red); border-color: var(--red); }
+
+    /* Empty state */
+    .empty-state { text-align: center; padding: 64px 32px; color: var(--muted); }
+    .empty-icon { font-size: 36pt; margin-bottom: 16px; }
+    .empty-title { font-size: 14pt; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+    .empty-sub { font-size: 10pt; }
+
+    /* Quick-add suggestions */
+    .suggestions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .sugg-label { font-size: 9pt; color: var(--muted); align-self: center; }
+    .sugg-tag { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 4px 12px; font-size: 9pt; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .sugg-tag:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<!-- Topbar -->
+<nav class="topbar">
+  <div class="topbar-left">
+    <a href="/" class="logo">Market<span>Predict</span></a>
+    <div class="nav-links">
+      <a href="/">Predictor</a>
+      <a href="/market">Markets</a>
+      <a href="/watchlist" class="active">Watchlist</a>
+      <a href="/history">History</a>
+      <a href="/pricing">Pricing</a>
+    </div>
+  </div>
+  <div class="topbar-right">
+      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
+    <span>{{ current_user.username }}</span>
+    {% if not current_user.is_pro %}
+      <a href="/pricing" class="btn-upgrade">Upgrade</a>
+    {% endif %}
+    <a href="/profile">Profile</a>
+    <a href="/logout">Logout</a>
+  </div>
+</nav>
+
+<!-- Ticker strip -->
+<div class="ticker-strip">
+  <div class="ticker-item"><span class="name">S&P 500</span><span class="price">5,308.15</span><span class="change up">+0.51%</span></div>
+  <div class="ticker-item"><span class="name">NASDAQ</span><span class="price">16,742.39</span><span class="change up">+0.78%</span></div>
+  <div class="ticker-item"><span class="name">DOW</span><span class="price">38,996.39</span><span class="change down">-0.12%</span></div>
+  <div class="ticker-item"><span class="name">AAPL</span><span class="price">189.30</span><span class="change up">+1.24%</span></div>
+  <div class="ticker-item"><span class="name">TSLA</span><span class="price">177.46</span><span class="change down">-2.31%</span></div>
+  <div class="ticker-item"><span class="name">NVDA</span><span class="price">875.40</span><span class="change up">+3.12%</span></div>
+  <div class="ticker-item"><span class="name">MSFT</span><span class="price">415.32</span><span class="change up">+0.64%</span></div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navigation</div>
+      <a class="sidebar-item" href="/"><div class="dot"></div>Price Predictor</a>
+      <a class="sidebar-item" href="/market"><div class="dot"></div>Market Overview</a>
+      <a class="sidebar-item active" href="/watchlist"><div class="dot"></div>Watchlist</a>
+      <a class="sidebar-item" href="/history"><div class="dot"></div>Prediction History</a>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Popular</div>
+      {% for t in ['AAPL','TSLA','MSFT','GOOGL','NVDA','META','AMZN','NDX','QQQ'] %}
+      <div class="sidebar-item" onclick="quickAdd('{{ t }}')"><div class="dot"></div>{{ t }}</div>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main class="content">
+    <div class="page-title">My Watchlist</div>
+    <div class="page-subtitle">Track your favourite instruments and get ML signals at a glance</div>
+
+    <!-- Add bar -->
+    <div class="add-bar">
+      <input type="text" id="addInput" placeholder="Enter ticker symbol (e.g. AAPL)" maxlength="10" onkeydown="if(event.key==='Enter')addTicker()" />
+      <button class="btn-add" onclick="addTicker()">+ Add</button>
+      <span id="addMsg" class="add-msg"></span>
+    </div>
+    <div class="suggestions">
+      <span class="sugg-label">Quick add:</span>
+      {% for t in ['AAPL','TSLA','MSFT','GOOGL','NVDA','META','AMZN','NDX','QQQ'] %}
+      <span class="sugg-tag" onclick="quickAdd('{{ t }}')">{{ t }}</span>
+      {% endfor %}
+    </div>
+
+    <!-- Stats -->
+    {% set wl_count = watchlist|length %}
+    <div class="stats-row" style="margin-top:24px;">
+      <div class="stat-card">
+        <div class="stat-label">Watching</div>
+        <div class="stat-value">{{ wl_count }}</div>
+        <div class="stat-sub">Instruments</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Bullish Signals</div>
+        <div class="stat-value" style="color:var(--green)" id="bullCount">-</div>
+        <div class="stat-sub">ML consensus</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Bearish Signals</div>
+        <div class="stat-value" style="color:var(--red)" id="bearCount">-</div>
+        <div class="stat-sub">ML consensus</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Plan</div>
+        <div class="stat-value">{{ 'Pro' if current_user.is_pro else 'Free' }}</div>
+        <div class="stat-sub">{{ 'Unlimited predictions' if current_user.is_pro else (current_user.predictions_remaining|string + ' left today') }}</div>
       </div>
     </div>
-  </div>
 
-  <div class="card">
-    <div class="card-header">
-      <h3>Your Watchlist</h3>
-      <button class="btn btn-sm btn-ghost" id="watch-refresh">Refresh Signals</button>
+    <!-- Watchlist table -->
+    {% if watchlist %}
+    <div class="wl-table-wrap">
+      <div class="wl-header">
+        <span>Symbol</span><span>Price</span><span>Change</span><span>ML Signal</span><span>Confidence</span><span></span><span></span>
+      </div>
+      <div id="wlBody">
+        {% for ticker in watchlist %}
+        <div class="wl-row" id="row-{{ ticker }}">
+          <div><div class="ticker-sym">{{ ticker }}</div><div class="ticker-co" id="co-{{ ticker }}">Loading…</div></div>
+          <div class="cell-price" id="price-{{ ticker }}">-</div>
+          <div class="cell-chg" id="chg-{{ ticker }}">-</div>
+          <div id="sig-{{ ticker }}"><span class="signal-pill signal-hold">-</span></div>
+          <div id="conf-{{ ticker }}" style="color:var(--muted)">-</div>
+          <div class="cell-actions">
+            <a class="btn-predict-sm" href="/predict" onclick="return submitPredict('{{ ticker }}')">Predict</a>
+          </div>
+          <div class="cell-actions">
+            <button class="btn-remove" onclick="removeTicker('{{ ticker }}')">✕</button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
-    <div class="card-body table-container">
-      <table class="table">
-        <thead>
-          <tr><th>Ticker</th><th>Price</th><th>Predicted Move</th><th>Signal</th><th>Confidence</th><th></th></tr>
-        </thead>
-        <tbody id="watch-tbody">
-          {% if watchlist %}
-            {% for t in watchlist %}
-            <tr data-ticker="{{ t }}">
-              <td><strong>{{ t }}</strong></td>
-              <td class="price-cell text-muted">—</td>
-              <td class="move-cell text-muted">—</td>
-              <td class="signal-cell text-muted">—</td>
-              <td class="conf-cell text-muted">—</td>
-              <td>
-                <a class="btn btn-sm btn-ghost" href="/predictions?ticker={{ t }}">Predict</a>
-                <button class="btn btn-sm btn-danger watch-remove" data-ticker="{{ t }}">Remove</button>
-              </td>
-            </tr>
-            {% endfor %}
-          {% else %}
-            <tr id="watch-empty"><td colspan="6" class="text-center text-muted">
-              Your watchlist is empty — add a ticker above to start tracking signals.
-            </td></tr>
-          {% endif %}
-        </tbody>
-      </table>
+    {% else %}
+    <div class="wl-table-wrap">
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">Your watchlist is empty</div>
+        <div class="empty-sub">Add ticker symbols above to start tracking instruments</div>
+      </div>
     </div>
-  </div>
+    {% endif %}
+  </main>
+</div>
 
-{% endblock %}
+<!-- Hidden predict form -->
+<form id="predictForm" action="/predict" method="POST" style="display:none">
+  <input type="hidden" name="ticker" id="pfTicker" />
+  <input type="hidden" name="interval" value="1d" />
+</form>
 
-{% block page_scripts %}
 <script>
-(function () {
-  var $ = BullLogic.$, notify = BullLogic.notify;
+const watchlist = {{ watchlist | tojson }};
 
-  function loadSignals() {
-    var rows = document.querySelectorAll('#watch-tbody tr[data-ticker]');
-    if (!rows.length) return;
-    fetch('/api/watchlist/signals')
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        rows.forEach(function (row) {
-          var sig = data[row.dataset.ticker];
-          if (!sig) return;
-          row.querySelector('.price-cell').textContent = BullLogic.formatCurrency(sig.price);
-          var move = row.querySelector('.move-cell');
-          move.textContent = (sig.chg >= 0 ? '+' : '') + sig.chg + '%';
-          move.className = 'move-cell ' + (sig.chg >= 0 ? 'text-success' : 'text-danger');
-          var cell = row.querySelector('.signal-cell');
-          var dir = (sig.dir || 'HOLD').toUpperCase();
-          cell.textContent = dir;
-          cell.className = 'signal-cell ' +
-            (dir === 'BUY' ? 'text-success' : dir === 'SELL' ? 'text-danger' : 'text-muted');
-          row.querySelector('.conf-cell').textContent = BullLogic.formatPercent(sig.conf || 0, 0);
-        });
-      })
-      .catch(function () { notify('Could not load live signals', 'warning'); });
-  }
+function quickAdd(ticker) {
+  document.getElementById('addInput').value = ticker;
+  addTicker();
+}
 
-  function addTicker() {
-    var ticker = ($('#watch-ticker').value || '').trim().toUpperCase();
-    if (!ticker) return;
-    BullLogic.apiPost('/watchlist/add', { ticker: ticker })
-      .then(function (d) {
-        if (d.ok === false) { notify(d.error || 'Could not add ' + ticker, 'error'); return; }
-        location.reload();
-      })
-      .catch(function () { notify('Could not add ' + ticker, 'error'); });
-  }
-
-  $('#watch-add-btn').addEventListener('click', addTicker);
-  $('#watch-ticker').addEventListener('keydown', function (e) { if (e.key === 'Enter') addTicker(); });
-  $('#watch-refresh').addEventListener('click', loadSignals);
-
-  document.addEventListener('click', function (e) {
-    var btn = e.target.closest('.watch-remove');
-    if (!btn) return;
-    BullLogic.apiPost('/watchlist/remove', { ticker: btn.dataset.ticker })
-      .then(function () {
-        var row = btn.closest('tr');
-        if (row) row.remove();
-        if (!document.querySelectorAll('#watch-tbody tr[data-ticker]').length) location.reload();
-      })
-      .catch(function () { notify('Remove failed', 'error'); });
+function addTicker() {
+  const input = document.getElementById('addInput');
+  const ticker = input.value.trim().toUpperCase();
+  const msg = document.getElementById('addMsg');
+  if (!ticker) return;
+  fetch('/api/watchlist/add', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ticker})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { msg.textContent = ticker + ' added!'; msg.className = 'add-msg ok'; setTimeout(() => location.reload(), 800); }
+    else { msg.textContent = d.error || 'Error'; msg.className = 'add-msg err'; }
   });
+  input.value = '';
+}
 
-  loadSignals();
-})();
+function removeTicker(ticker) {
+  fetch('/api/watchlist/remove', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ticker})
+  }).then(() => { document.getElementById('row-' + ticker)?.remove(); });
+}
+
+function submitPredict(ticker) {
+  document.getElementById('pfTicker').value = ticker;
+  document.getElementById('predictForm').submit();
+  return false;
+}
+
+// Company names map
+const names = {AAPL:'Apple Inc.',TSLA:'Tesla Inc.',MSFT:'Microsoft Corp.',GOOGL:'Alphabet Inc.',
+  NVDA:'NVIDIA Corp.',META:'Meta Platforms',AMZN:'Amazon.com Inc.',NDX:'NASDAQ-100 Index',
+  QQQ:'Invesco QQQ ETF'};
+
+// Populate company names
+watchlist.forEach(t => {
+  const el = document.getElementById('co-' + t);
+  if (el) el.textContent = names[t] || t;
+});
+
+function applySignals(data) {
+  let bulls = 0, bears = 0;
+  watchlist.forEach(t => {
+    const d = data[t];
+    if (!d) return;
+    const pp = document.getElementById('price-' + t);
+    const pc = document.getElementById('chg-' + t);
+    const ps = document.getElementById('sig-' + t);
+    const pf = document.getElementById('conf-' + t);
+    if (pp) pp.textContent = '$' + Number(d.price).toLocaleString(undefined, {minimumFractionDigits:2,maximumFractionDigits:2});
+    if (pc) { pc.textContent = (d.chg > 0 ? '+' : '') + d.chg + '%'; pc.className = 'cell-chg ' + (d.chg >= 0 ? 'up' : 'dn'); }
+    if (ps) {
+      const cls = d.dir === 'BUY' ? 'signal-buy' : d.dir === 'SELL' ? 'signal-sell' : 'signal-hold';
+      ps.innerHTML = `<span class="signal-pill ${cls}">${d.dir}</span>`;
+      if (d.dir === 'BUY') bulls++; else if (d.dir === 'SELL') bears++;
+    }
+    if (pf) { pf.textContent = Number(d.conf).toFixed(1) + '%'; pf.style.color = d.conf >= 65 ? 'var(--green)' : 'var(--muted)'; }
+  });
+  const bc = document.getElementById('bullCount');
+  const br = document.getElementById('bearCount');
+  if (bc) bc.textContent = bulls;
+  if (br) br.textContent = bears;
+}
+
+if (watchlist.length) {
+  fetch('/api/watchlist/signals')
+    .then(r => r.json())
+    .then(applySignals)
+    .catch(() => {});
+}
 </script>
-{% endblock %}
+</body>
+</html>

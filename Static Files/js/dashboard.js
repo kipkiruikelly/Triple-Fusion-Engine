@@ -136,7 +136,7 @@
         <td><span class="badge badge-${p.direction === 'Up' ? 'success' : 'danger'}">${p.direction === 'Up' ? 'BUY' : 'SELL'}</span></td>
         <td>
           <div class="progress" style="height:6px">
-            <div class="progress-bar" style="width:${p.confidence || 50}%;background:${p.direction === 'Up' ? 'var(--accent-green)' : 'var(--accent-red)'}"></div>
+            <div class="progress-fill" style="width:${p.confidence || 50}%;background:${p.direction === 'Up' ? 'var(--success)' : 'var(--danger)'}"></div>
           </div>
           <small>${formatPercent(p.confidence || 50, 0)}</small>
         </td>
