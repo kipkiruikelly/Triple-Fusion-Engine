@@ -65,6 +65,9 @@ const BullLogic = (() => {
 
   function setTheme(theme) {
     _theme = theme;
+    // The account-backed theme system (_theme.html / blTheme) owns the
+    // data-theme attribute when present; delegate instead of overwriting.
+    if (window.blTheme) { window.blTheme.set(theme); return; }
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(CONFIG.themeKey, theme);
   }
@@ -189,7 +192,9 @@ const BullLogic = (() => {
   // ── Init ──────────────────────────────────────────────────────────────────────
 
   function init() {
-    setTheme(_theme);
+    // Only apply the standalone theme when the account theme system
+    // (_theme.html) is not on the page — it resolves light/dark itself.
+    if (!window.blTheme) setTheme(_theme);
     document.addEventListener('DOMContentLoaded', () => {
       document.body.classList.add('bull-logic-app');
     });

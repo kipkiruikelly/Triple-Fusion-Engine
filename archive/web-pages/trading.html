@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html lang="en"{{ theme_attr }}>
+<head>
+  {% include "_theme.html" %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trading Terminal, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --text-success: #00D4AA;
+      --text-danger:  #FF3366;
+      --text-info:    #00A3FF;
+      --text-purple:  #7B61FF;
+      --bg-card:      #131820;
+      --bg-main:      #0A0E17;
+      --sidebar-w:    240px;
+      --header-h:     60px;
+      --radius-sm:    6px;
+      --radius-md:    10px;
+      --radius-lg:    14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 11pt;
+      background: var(--bg-main);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo {
+      padding: 22px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-logo .logo-text {
+      font-size: 17pt;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      background: linear-gradient(135deg, #00D4AA 0%, #00A3FF 50%, #FF6B35 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sidebar-logo .logo-sub {
+      font-size: 7.5pt;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 12px 10px;
+      overflow-y: auto;
+    }
+
+    .nav-section-label {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 16px 12px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-size: 9.5pt;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s;
+      cursor: pointer;
+      margin-bottom: 1px;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .nav-item.active {
+      color: #00D4AA;
+      background: rgba(0,212,170,0.08);
+    }
+
+    .nav-item .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nav-item .nav-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .nav-item .nav-badge {
+      margin-left: auto;
+      background: var(--text-danger);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 99px;
+    }
+
+    .sidebar-footer {
+      padding: 16px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sidebar-footer .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00D4AA, #00A3FF);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11pt;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .sidebar-footer .user-name {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-footer .user-plan {
+      font-size: 7.5pt;
+      color: var(--muted);
+    }
+
+    .sidebar-footer .pro-badge {
+      background: linear-gradient(135deg, #FF6B35, #FF3366);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── MAIN WRAPPER ── */
+    .main-wrapper {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      height: var(--header-h);
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .header-title {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .header-title span {
+      color: var(--text-success);
+    }
+
+    .header-sub {
+      font-size: 8pt;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .account-badge {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 6px 14px 6px 16px;
+    }
+
+    .account-item {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .account-item .label {
+      font-size: 7pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .account-item .value {
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .account-item .value.green { color: var(--text-success); }
+    .account-item .value.blue { color: var(--text-info); }
+
+    .account-divider {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+    }
+
+    .header-icon-btn {
+      position: relative;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header-icon-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .header-icon-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: var(--text-danger);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 99px;
+      padding: 0 4px;
+      border: 2px solid var(--bg-card);
+    }
+
+    /* ── CONTENT ── */
+    .content {
+      padding: 24px 28px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* ── PAGE TOOLBAR ── */
+    .page-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .page-toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .page-title {
+      font-size: 15pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .page-title-sub {
+      font-size: 8.5pt;
+      color: var(--muted);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 9.5pt;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .btn-primary {
+      background: var(--text-success);
+      color: #0A0E17;
+    }
+
+    .btn-primary:hover {
+      background: #00e8ba;
+      box-shadow: 0 0 20px rgba(0,212,170,0.25);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--text);
+      color: var(--text);
+    }
+
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid rgba(255,51,102,0.3);
+      color: var(--text-danger);
+    }
+
+    .btn-danger-outline:hover {
+      background: rgba(255,51,102,0.1);
+      border-color: var(--text-danger);
+    }
+
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 8pt;
+    }
+
+    /* ── TRADING PANELS ── */
+    .trading-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 10pt;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--text-info);
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .card-action {
+      font-size: 8.5pt;
+      font-weight: 500;
+      color: var(--text-info);
+      cursor: pointer;
+      background: none;
+      border: none;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+
+    .card-action:hover {
+      color: #5cbfff;
+    }
+
+    /* ── QUICK STATS ── */
+    .quick-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .qs-item {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+
+    .qs-item .qs-label {
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .qs-item .qs-value {
+      font-size: 14pt;
+      font-weight: 700;
+      color: var(--text);
+      margin-top: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .qs-item .qs-value.green { color: var(--text-success); }
+    .qs-item .qs-value.red { color: var(--text-danger); }
+    .qs-item .qs-value.blue { color: var(--text-info); }
+
+    .qs-item .qs-sub {
+      font-size: 7.5pt;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── TABLE ── */
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .data-table th {
+      padding: 10px 8px;
+      text-align: left;
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .data-table td {
+      padding: 12px 8px;
+      font-size: 9.5pt;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      vertical-align: middle;
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .data-table tbody tr {
+      transition: background 0.12s;
+    }
+
+    .data-table tbody tr:hover {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .data-table .symbol-cell {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* ── BADGES ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 99px;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      white-space: nowrap;
+    }
+
+    .badge-long {
+      background: rgba(0,212,170,0.12);
+      color: var(--text-success);
+    }
+
+    .badge-short {
+      background: rgba(255,51,102,0.12);
+      color: var(--text-danger);
+    }
+
+    .badge-filled {
+      background: rgba(0,212,170,0.1);
+      color: var(--text-success);
+    }
+
+    .badge-partial {
+      background: rgba(255,107,53,0.12);
+      color: #FF6B35;
+    }
+
+    .badge-cancelled {
+      background: rgba(255,51,102,0.08);
+      color: var(--muted);
+    }
+
+    .badge-buy {
+      background: rgba(0,212,170,0.12);
+      color: var(--text-success);
+    }
+
+    .badge-sell {
+      background: rgba(255,51,102,0.12);
+      color: var(--text-danger);
+    }
+
+    /* P&L */
+    .pnl-positive { color: var(--text-success); font-weight: 600; }
+    .pnl-negative { color: var(--text-danger); font-weight: 600; }
+    .pnl-neutral  { color: var(--muted); font-weight: 600; }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      width: 480px;
+      max-width: 94vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s;
+      display: flex;
+    }
+
+    .modal-close:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .modal-close svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .modal-body {
+      padding: 20px 24px;
+    }
+
+    .modal-footer {
+      padding: 0 24px 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 10.5pt;
+      font-family: inherit;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    .form-input:focus {
+      border-color: var(--text-success);
+    }
+
+    .form-input::placeholder {
+      color: var(--muted);
+      opacity: 0.6;
+    }
+
+    /* Toggle Buttons */
+    .toggle-group {
+      display: flex;
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      padding: 9px 16px;
+      font-size: 9.5pt;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .toggle-btn.buy.active {
+      background: rgba(0,212,170,0.15);
+      color: var(--text-success);
+    }
+
+    .toggle-btn.sell.active {
+      background: rgba(255,51,102,0.15);
+      color: var(--text-danger);
+    }
+
+    .toggle-btn:not(.active):hover {
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* Range Slider */
+    .range-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .range-input {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 99px;
+      outline: none;
+    }
+
+    .range-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--text-success);
+      cursor: pointer;
+      border: 2px solid var(--bg-card);
+    }
+
+    .range-input::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--text-success);
+      cursor: pointer;
+      border: 2px solid var(--bg-card);
+    }
+
+    .range-value {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--text);
+      min-width: 48px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* SL/TP Display */
+    .sl-tp-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .sl-tp-box {
+      padding: 12px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+    }
+
+    .sl-tp-box.stop-loss {
+      background: rgba(255,51,102,0.08);
+      border: 1px solid rgba(255,51,102,0.15);
+    }
+
+    .sl-tp-box.take-profit {
+      background: rgba(0,212,170,0.08);
+      border: 1px solid rgba(0,212,170,0.15);
+    }
+
+    .sl-tp-box .sl-tp-label {
+      font-size: 7pt;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .sl-tp-box.stop-loss .sl-tp-label { color: var(--text-danger); }
+    .sl-tp-box.take-profit .sl-tp-label { color: var(--text-success); }
+
+    .sl-tp-box .sl-tp-price {
+      font-size: 14pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .sl-tp-box .sl-tp-pct {
+      font-size: 8pt;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .btn-cancel {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .btn-cancel:hover {
+      border-color: var(--muted);
+      color: var(--text);
+    }
+
+    .btn-confirm {
+      background: var(--text-success);
+      color: #0A0E17;
+    }
+
+    .btn-confirm:hover {
+      background: #00e8ba;
+      box-shadow: 0 0 20px rgba(0,212,170,0.25);
+    }
+
+    /* ── SECTION SPACER ── */
+    .section-spacer {
+      margin-top: 24px;
+    }
+
+    .section-spacer-small {
+      margin-top: 14px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 1200px) {
+      .trading-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar { transform: translateX(-100%); }
+      .sidebar.open { transform: translateX(0); }
+      .main-wrapper { margin-left: 0; }
+      .content { padding: 16px; }
+      .header { padding: 0 16px; }
+      .account-badge { display: none; }
+      .page-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .quick-stats { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .quick-stats { grid-template-columns: 1fr; }
+      .modal { width: 100%; max-width: 100vw; border-radius: 0; }
+      .sl-tp-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">BULLLOGIC</div>
+      <div class="logo-sub">Triple-Fusion Engine</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+      <a class="nav-item" href="/dashboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </span>
+        Dashboard
+      </a>
+      <a class="nav-item" href="/predictions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </span>
+        Predictions
+        <span class="nav-badge">12</span>
+      </a>
+      <a class="nav-item active" href="/trading">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        </span>
+        Trading
+      </a>
+      <a class="nav-item" href="/portfolio">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </span>
+        Portfolio
+      </a>
+      <a class="nav-item" href="/watchlist">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        Watchlist
+      </a>
+      <a class="nav-item" href="/positions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        Positions
+      </a>
+
+      <div class="nav-section-label">Community</div>
+      <a class="nav-item" href="/leaderboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 19.06 7 20h10c0-.94-.85-1.25-2.03-1.79-.5-.23-.97-.66-.97-1.21v-2.34"/><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+        </span>
+        Leaderboard
+      </a>
+      <a class="nav-item" href="/competitions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </span>
+        Competitions
+      </a>
+      <a class="nav-item" href="/achievements">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+        </span>
+        Achievements
+      </a>
+
+      <div class="nav-section-label">System</div>
+      <a class="nav-item" href="/settings">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        Settings
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="avatar">{{ user.username[0] if user.username is defined else 'U' }}</div>
+      <div class="user-info">
+        <div class="user-name">{{ user.username if user.username is defined else 'User' }}</div>
+        <div class="user-plan">{{ user.plan if user.plan is defined else 'Free' }}</div>
+      </div>
+      {% if user.plan is defined and user.plan == 'Pro' %}
+      <span class="pro-badge">PRO</span>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- ─── MAIN WRAPPER ─── -->
+  <div class="main-wrapper">
+
+    <!-- ─── HEADER ─── -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-title">Trading <span>Terminal</span></div>
+        <div class="header-sub">Live account &bull; Real-time execution</div>
+      </div>
+      <div class="header-right">
+        <div class="account-badge">
+          <div class="account-item">
+            <span class="label">Balance</span>
+            <span class="value green">{{ "${:,.2f}".format(account.balance) if account.balance is defined else "$25,430.80" }}</span>
+          </div>
+          <div class="account-divider"></div>
+          <div class="account-item">
+            <span class="label">Equity</span>
+            <span class="value blue">{{ "${:,.2f}".format(account.equity) if account.equity is defined else "$26,112.35" }}</span>
+          </div>
+        </div>
+        <button class="header-icon-btn" onclick="toggleTheme()" id="themeToggle" data-theme-toggle title="Toggle theme">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button class="header-icon-btn" onclick="window.location.href='/notifications'">
+          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notification-badge">3</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ─── CONTENT ─── -->
+    <div class="content">
+
+      <!-- Page Toolbar -->
+      <div class="page-toolbar">
+        <div>
+          <div class="page-title">Open Positions</div>
+          <div class="page-title-sub">Manage your active trades</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="window.location.href='/positions'">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            History
+          </button>
+          <button class="btn btn-primary" onclick="document.getElementById('tradeModal').classList.add('open')">
+            <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Trade
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="quick-stats">
+        <div class="qs-item">
+          <div class="qs-label">Total P&L</div>
+          <div class="qs-value green">+$3,842.50</div>
+          <div class="qs-sub">+17.8% all time</div>
+        </div>
+        <div class="qs-item">
+          <div class="qs-label">Win Rate (7d)</div>
+          <div class="qs-value">72.4%</div>
+          <div class="qs-sub">Last 29 trades</div>
+        </div>
+        <div class="qs-item">
+          <div class="qs-label">Total Volume</div>
+          <div class="qs-value blue">48.2K</div>
+          <div class="qs-sub">152 trades executed</div>
+        </div>
+        <div class="qs-item">
+          <div class="qs-label">Risk Exposure</div>
+          <div class="qs-value">$12,400</div>
+          <div class="qs-sub">3.2% of equity</div>
+        </div>
+      </div>
+
+      <!-- Positions Table -->
+      <div class="card section-spacer-small">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Active Positions
+          </span>
+          <span class="card-action" onclick="document.querySelector('.data-table tbody tr').scrollIntoView({behavior:'smooth'})">Scroll to Top &uarr;</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Direction</th>
+                <th>Entry Price</th>
+                <th>Current Price</th>
+                <th>Volume</th>
+                <th>Unrealized P&L</th>
+                <th>P&L %</th>
+                <th>SL</th>
+                <th>TP</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="symbol-cell">AAPL</td>
+                <td><span class="badge badge-long">LONG</span></td>
+                <td>$178.40</td>
+                <td>$182.63</td>
+                <td>150</td>
+                <td class="pnl-positive">+$634.50</td>
+                <td class="pnl-positive">+2.37%</td>
+                <td>$172.05</td>
+                <td>$188.00</td>
+                <td><button class="btn btn-danger-outline btn-sm">Close</button></td>
+              </tr>
+              <tr>
+                <td class="symbol-cell">TSLA</td>
+                <td><span class="badge badge-short">SHORT</span></td>
+                <td>$245.30</td>
+                <td>$238.70</td>
+                <td>80</td>
+                <td class="pnl-positive">+$528.00</td>
+                <td class="pnl-positive">+2.69%</td>
+                <td>$252.00</td>
+                <td>$231.00</td>
+                <td><button class="btn btn-danger-outline btn-sm">Close</button></td>
+              </tr>
+              <tr>
+                <td class="symbol-cell">NVDA</td>
+                <td><span class="badge badge-long">LONG</span></td>
+                <td>$920.50</td>
+                <td>$895.20</td>
+                <td>25</td>
+                <td class="pnl-negative">-$632.50</td>
+                <td class="pnl-negative">-2.75%</td>
+                <td>$875.00</td>
+                <td>$970.00</td>
+                <td><button class="btn btn-danger-outline btn-sm">Close</button></td>
+              </tr>
+              <tr>
+                <td class="symbol-cell">MSFT</td>
+                <td><span class="badge badge-short">SHORT</span></td>
+                <td>$415.00</td>
+                <td>$418.32</td>
+                <td>60</td>
+                <td class="pnl-negative">-$199.20</td>
+                <td class="pnl-negative">-0.80%</td>
+                <td>$425.00</td>
+                <td>$402.00</td>
+                <td><button class="btn btn-danger-outline btn-sm">Close</button></td>
+              </tr>
+              <tr>
+                <td class="symbol-cell">AMD</td>
+                <td><span class="badge badge-long">LONG</span></td>
+                <td>$162.80</td>
+                <td>$167.45</td>
+                <td>120</td>
+                <td class="pnl-positive">+$558.00</td>
+                <td class="pnl-positive">+2.86%</td>
+                <td>$155.00</td>
+                <td>$175.00</td>
+                <td><button class="btn btn-danger-outline btn-sm">Close</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Order History -->
+      <div class="card section-spacer">
+        <div class="card-header">
+          <span class="card-title">
+            <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Order History
+          </span>
+          <span class="card-action">Last 30 days &triangleright;</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Action</th>
+                <th>Price</th>
+                <th>Volume</th>
+                <th>Status</th>
+                <th>Slippage</th>
+                <th>Fill Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-18 09:32</td>
+                <td class="symbol-cell">AAPL</td>
+                <td><span class="badge badge-buy">BUY</span></td>
+                <td>$178.40</td>
+                <td>150</td>
+                <td><span class="badge badge-filled">Filled</span></td>
+                <td style="color:var(--text-success)">+0.02</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-18 09:15</td>
+                <td class="symbol-cell">TSLA</td>
+                <td><span class="badge badge-sell">SELL</span></td>
+                <td>$245.30</td>
+                <td>80</td>
+                <td><span class="badge badge-filled">Filled</span></td>
+                <td style="color:var(--text-success)">+0.01</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-18 08:50</td>
+                <td class="symbol-cell">NVDA</td>
+                <td><span class="badge badge-buy">BUY</span></td>
+                <td>$920.50</td>
+                <td>25</td>
+                <td><span class="badge badge-filled">Filled</span></td>
+                <td style="color:var(--text-success)">+0.05</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-17 15:45</td>
+                <td class="symbol-cell">AMD</td>
+                <td><span class="badge badge-buy">BUY</span></td>
+                <td>$162.80</td>
+                <td>120</td>
+                <td><span class="badge badge-partial">Partial</span></td>
+                <td style="color:var(--text-danger)">-0.08</td>
+                <td>65%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-17 14:20</td>
+                <td class="symbol-cell">MSFT</td>
+                <td><span class="badge badge-sell">SELL</span></td>
+                <td>$415.00</td>
+                <td>120</td>
+                <td><span class="badge badge-cancelled">Cancelled</span></td>
+                <td style="color:var(--muted)">N/A</td>
+                <td>0%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-17 11:05</td>
+                <td class="symbol-cell">GOOGL</td>
+                <td><span class="badge badge-buy">BUY</span></td>
+                <td>$175.20</td>
+                <td>100</td>
+                <td><span class="badge badge-filled">Filled</span></td>
+                <td style="color:var(--text-success)">+0.01</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-17 10:30</td>
+                <td class="symbol-cell">AMZN</td>
+                <td><span class="badge badge-sell">SELL</span></td>
+                <td>$197.80</td>
+                <td>90</td>
+                <td><span class="badge badge-filled">Filled</span></td>
+                <td style="color:var(--text-success)">+0.03</td>
+                <td>100%</td>
+              </tr>
+              <tr>
+                <td style="color:var(--muted);font-size:8.5pt">2025-02-16 16:00</td>
+                <td class="symbol-cell">AAPL</td>
+                <td><span class="badge badge-sell">SELL</span></td>
+                <td>$176.90</td>
+                <td>50</td>
+                <td><span class="badge badge-partial">Partial</span></td>
+                <td style="color:var(--text-danger)">-0.12</td>
+                <td>42%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ─── TRADE EXECUTION MODAL ─── -->
+  <div class="modal-overlay" id="tradeModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Execute Trade</div>
+        <button class="modal-close" onclick="document.getElementById('tradeModal').classList.remove('open')">
+          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <!-- Ticker -->
+        <div class="form-group">
+          <label class="form-label" for="tickerInput">Ticker Symbol</label>
+          <input class="form-input" id="tickerInput" type="text" placeholder="e.g. AAPL, TSLA, NVDA" autocomplete="off" />
+        </div>
+
+        <!-- BUY/SELL Toggle -->
+        <div class="form-group">
+          <label class="form-label">Direction</label>
+          <div class="toggle-group" id="directionToggle">
+            <button class="toggle-btn buy active" data-direction="BUY" onclick="setDirection(this, 'BUY')">BUY (LONG)</button>
+            <button class="toggle-btn sell" data-direction="SELL" onclick="setDirection(this, 'SELL')">SELL (SHORT)</button>
+          </div>
+        </div>
+
+        <!-- Volume -->
+        <div class="form-group">
+          <label class="form-label" for="volumeInput">Volume (Shares)</label>
+          <input class="form-input" id="volumeInput" type="number" placeholder="100" min="1" step="1" value="100" />
+        </div>
+
+        <!-- Risk % Slider -->
+        <div class="form-group">
+          <label class="form-label">Risk per Trade</label>
+          <div class="range-wrap">
+            <input class="range-input" id="riskSlider" type="range" min="0.25" max="5" step="0.25" value="1.5" oninput="updateRiskDisplay(this.value)" />
+            <span class="range-value" id="riskDisplay">1.50%</span>
+          </div>
+        </div>
+
+        <!-- Auto-calculated SL/TP -->
+        <div class="form-group">
+          <label class="form-label">Auto Risk / Reward</label>
+          <div class="sl-tp-grid">
+            <div class="sl-tp-box stop-loss">
+              <div class="sl-tp-label">Stop Loss</div>
+              <div class="sl-tp-price" id="slPrice">$172.05</div>
+              <div class="sl-tp-pct" id="slPct">-3.56%</div>
+            </div>
+            <div class="sl-tp-box take-profit">
+              <div class="sl-tp-label">Take Profit</div>
+              <div class="sl-tp-price" id="tpPrice">$188.00</div>
+              <div class="sl-tp-pct" id="tpPct">+5.38%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-cancel" onclick="document.getElementById('tradeModal').classList.remove('open')">Cancel</button>
+        <button class="btn btn-confirm" onclick="document.getElementById('tradeModal').classList.remove('open')">Confirm Trade</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── JAVASCRIPT ─── -->
+  <script>
+    /* Direction toggle */
+    function setDirection(el, dir) {
+      var parent = document.getElementById('directionToggle');
+      var btns = parent.querySelectorAll('.toggle-btn');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.remove('active');
+      }
+      el.classList.add('active');
+      /* Update SL/TP labels */
+      var slLabel = document.querySelector('.sl-tp-box.stop-loss .sl-tp-label');
+      var tpLabel = document.querySelector('.sl-tp-box.take-profit .sl-tp-label');
+      if (dir === 'BUY') {
+        slLabel.textContent = 'Stop Loss';
+        tpLabel.textContent = 'Take Profit';
+      } else {
+        slLabel.textContent = 'Stop Loss';
+        tpLabel.textContent = 'Take Profit';
+      }
+    }
+
+    /* Risk slider display */
+    function updateRiskDisplay(val) {
+      document.getElementById('riskDisplay').textContent = parseFloat(val).toFixed(2) + '%';
+      var basePrice = 180.00;
+      var slPct = (parseFloat(val) * 1.5).toFixed(2);
+      var tpPct = (parseFloat(val) * 3.0).toFixed(2);
+      var dir = document.querySelector('#directionToggle .toggle-btn.active');
+      var isBuy = dir && dir.getAttribute('data-direction') === 'BUY';
+      if (isBuy) {
+        var sl = basePrice * (1 - slPct / 100);
+        var tp = basePrice * (1 + tpPct / 100);
+        document.getElementById('slPrice').textContent = '$' + sl.toFixed(2);
+        document.getElementById('tpPrice').textContent = '$' + tp.toFixed(2);
+        document.getElementById('slPct').textContent = '-' + slPct + '%';
+        document.getElementById('tpPct').textContent = '+' + tpPct + '%';
+      } else {
+        var sl = basePrice * (1 + slPct / 100);
+        var tp = basePrice * (1 - tpPct / 100);
+        document.getElementById('slPrice').textContent = '$' + sl.toFixed(2);
+        document.getElementById('tpPrice').textContent = '$' + tp.toFixed(2);
+        document.getElementById('slPct').textContent = '+' + slPct + '%';
+        document.getElementById('tpPct').textContent = '-' + tpPct + '%';
+      }
+    }
+
+    /* Close modal on overlay click */
+    document.addEventListener('DOMContentLoaded', function () {
+      var overlay = document.getElementById('tradeModal');
+      overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) {
+          overlay.classList.remove('open');
+        }
+      });
+    });
+  </script>
+  <script src="/static/js/trading.js"></script>
+</body>
+</html>

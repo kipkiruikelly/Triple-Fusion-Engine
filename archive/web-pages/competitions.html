@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en"{{ theme_attr }}>
+<head>
+  {% include "_theme.html" %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Competitions — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --text-success: #00D4AA;
+      --text-danger:  #FF3366;
+      --text-info:    #00A3FF;
+      --text-purple:  #7B61FF;
+      --bg-card:      #131820;
+      --bg-main:      #0A0E17;
+      --sidebar-w:    240px;
+      --header-h:     60px;
+      --radius-sm:    6px;
+      --radius-md:    10px;
+      --radius-lg:    14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 11pt;
+      background: var(--bg-main);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo {
+      padding: 22px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-logo .logo-text {
+      font-size: 17pt;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      background: linear-gradient(135deg, #00D4AA 0%, #00A3FF 50%, #FF6B35 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sidebar-logo .logo-sub {
+      font-size: 7.5pt;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 12px 10px;
+      overflow-y: auto;
+    }
+
+    .nav-section-label {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 16px 12px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-size: 9.5pt;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s;
+      cursor: pointer;
+      margin-bottom: 1px;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .nav-item.active {
+      color: #00D4AA;
+      background: rgba(0,212,170,0.08);
+    }
+
+    .nav-item .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nav-item .nav-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .nav-item .nav-badge {
+      margin-left: auto;
+      background: var(--text-danger);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 99px;
+    }
+
+    .sidebar-footer {
+      padding: 16px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sidebar-footer .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00D4AA, #00A3FF);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11pt;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .sidebar-footer .user-name {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-footer .user-plan {
+      font-size: 7.5pt;
+      color: var(--muted);
+    }
+
+    .sidebar-footer .pro-badge {
+      background: linear-gradient(135deg, #FF6B35, #FF3366);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── MAIN WRAPPER ── */
+    .main-wrapper {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      height: var(--header-h);
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .header-greeting {
+      font-size: 11pt;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .header-greeting span {
+      color: var(--text-success);
+    }
+
+    .header-date {
+      font-size: 8pt;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .header-icon-btn {
+      position: relative;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header-icon-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .header-icon-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: var(--text-danger);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 99px;
+      padding: 0 4px;
+      border: 2px solid var(--bg-card);
+    }
+
+    /* ── CONTENT ── */
+    .content {
+      padding: 24px 28px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .page-header h1 {
+      font-size: 20pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .page-header h1 span {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 11pt;
+      margin-left: 8px;
+    }
+
+    .page-header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 9.5pt;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00D4AA, #00A3FF);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(0,212,170,0.25);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--muted);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .btn-sm {
+      padding: 5px 14px;
+      font-size: 8pt;
+    }
+
+    .btn-success {
+      background: rgba(0,212,170,0.15);
+      color: var(--text-success);
+      border: 1px solid rgba(0,212,170,0.25);
+    }
+
+    .btn-success:hover {
+      background: rgba(0,212,170,0.25);
+    }
+
+    .btn-purple {
+      background: linear-gradient(135deg, #7B61FF, #00A3FF);
+      color: #fff;
+    }
+
+    .btn-purple:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(123,97,255,0.25);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--muted);
+      color: var(--text);
+    }
+
+    .btn-danger-outline {
+      background: transparent;
+      border: 1px solid rgba(255,51,102,0.3);
+      color: var(--text-danger);
+    }
+
+    .btn-danger-outline:hover {
+      background: rgba(255,51,102,0.1);
+    }
+
+    /* ── STATUS TABS ── */
+    .status-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 24px;
+    }
+
+    .status-tab {
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      font-size: 9pt;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .status-tab:hover {
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .status-tab.active {
+      color: var(--text-purple);
+      border-color: rgba(123,97,255,0.3);
+      background: rgba(123,97,255,0.06);
+    }
+
+    /* ── COMPETITION CARDS ── */
+    .comp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .comp-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      transition: all 0.2s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .comp-card:hover {
+      border-color: rgba(255,255,255,0.08);
+      transform: translateY(-1px);
+    }
+
+    .comp-card.active-now {
+      border-left: 3px solid var(--text-success);
+    }
+
+    .comp-card.upcoming-card {
+      border-left: 3px solid var(--text-info);
+    }
+
+    .comp-card.completed-card {
+      border-left: 3px solid var(--muted);
+      opacity: 0.75;
+    }
+
+    .comp-card.completed-card:hover {
+      opacity: 1;
+    }
+
+    .comp-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .comp-card-title {
+      font-size: 12pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .comp-card-status {
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .comp-card-status.live {
+      background: rgba(0,212,170,0.12);
+      color: var(--text-success);
+    }
+
+    .comp-card-status.upcoming {
+      background: rgba(0,163,255,0.12);
+      color: var(--text-info);
+    }
+
+    .comp-card-status.ended {
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+    }
+
+    .comp-card-meta {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .comp-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 8.5pt;
+      color: var(--muted);
+    }
+
+    .comp-meta-item svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      flex-shrink: 0;
+    }
+
+    .comp-card-desc {
+      font-size: 9pt;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 14px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .comp-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .comp-card-leader {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 8.5pt;
+      color: var(--muted);
+    }
+
+    .comp-card-leader .leader-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .comp-card-prize {
+      font-size: 8.5pt;
+      font-weight: 600;
+      color: #FFD700;
+    }
+
+    /* ── EXPANDED DETAIL ── */
+    .comp-detail {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      margin-bottom: 24px;
+      padding: 24px;
+      display: none;
+    }
+
+    .comp-detail.open {
+      display: block;
+    }
+
+    .comp-detail-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .comp-detail-title {
+      font-size: 16pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .comp-detail-info {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .comp-detail-stat {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+    }
+
+    .comp-detail-stat-label {
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 4px;
+    }
+
+    .comp-detail-stat-value {
+      font-size: 13pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .comp-detail-stat-value.time-remaining {
+      color: var(--text-success);
+    }
+
+    .comp-detail-stat-value.your-rank {
+      color: var(--text-purple);
+    }
+
+    /* Detail Leaderboard */
+    .detail-lb-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+
+    .detail-lb-table th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .detail-lb-table td {
+      padding: 10px 12px;
+      font-size: 9pt;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      vertical-align: middle;
+    }
+
+    .detail-lb-table tbody tr:hover {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .detail-lb-table tbody tr.current-user {
+      background: rgba(0,212,170,0.06);
+    }
+
+    .detail-lb-rank {
+      font-weight: 700;
+      color: var(--muted);
+      width: 36px;
+    }
+
+    .detail-lb-user {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .detail-lb-user .lb-avatar-sm {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 7.5pt;
+      color: #fff;
+      background: linear-gradient(135deg, var(--text-info), var(--text-purple));
+      flex-shrink: 0;
+    }
+
+    .detail-lb-return.pos { color: var(--text-success); font-weight: 600; }
+    .detail-lb-return.neg { color: var(--text-danger); font-weight: 600; }
+
+    .comp-detail-rules {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+    }
+
+    .comp-detail-rules h4 {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .comp-detail-rules ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .comp-detail-rules ul li {
+      font-size: 8.5pt;
+      color: var(--muted);
+      padding: 4px 0;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .comp-detail-rules ul li::before {
+      content: '•';
+      position: absolute;
+      left: 4px;
+      color: var(--text-purple);
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      stroke: var(--muted);
+      stroke-width: 1.2;
+      fill: none;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 12pt;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .empty-state p {
+      font-size: 9.5pt;
+      color: var(--muted);
+      opacity: 0.7;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.25s;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main-wrapper { margin-left: 0; }
+      .comp-grid { grid-template-columns: 1fr; }
+      .comp-detail-info { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">BULLLOGIC</div>
+      <div class="logo-sub">Triple-Fusion Engine</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+      <a class="nav-item" href="/dashboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </span>
+        Dashboard
+      </a>
+      <a class="nav-item" href="/predictions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </span>
+        Predictions
+        <span class="nav-badge">12</span>
+      </a>
+      <a class="nav-item" href="/trading">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        </span>
+        Trading
+      </a>
+      <a class="nav-item" href="/portfolio">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </span>
+        Portfolio
+      </a>
+      <a class="nav-item" href="/watchlist">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        Watchlist
+      </a>
+      <a class="nav-item" href="/positions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        Positions
+      </a>
+
+      <div class="nav-section-label">Community</div>
+      <a class="nav-item" href="/leaderboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 19.06 7 20h10c0-.94-.85-1.25-2.03-1.79-.5-.23-.97-.66-.97-1.21v-2.34"/><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+        </span>
+        Leaderboard
+      </a>
+      <a class="nav-item active" href="/competitions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </span>
+        Competitions
+      </a>
+      <a class="nav-item" href="/achievements">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+        </span>
+        Achievements
+      </a>
+
+      <div class="nav-section-label">System</div>
+      <a class="nav-item" href="/settings">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        Settings
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="avatar">{{ (user.username[:1]|upper) if user else 'U' }}</div>
+      <div class="user-info">
+        <div class="user-name">{{ user.username if user else 'User' }}</div>
+        <div class="user-plan">{{ user.plan if user else 'Free Plan' }}</div>
+      </div>
+      <div class="pro-badge">PRO</div>
+    </div>
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <div class="main-wrapper">
+
+    <!-- ─── HEADER ─── -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-greeting">
+          🎯 Competitions
+        </div>
+        <div class="header-date">Compete and climb the ranks</div>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" onclick="window.location.href='/notifications'" title="Notifications">
+          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notification-badge">3</span>
+        </button>
+        <button class="header-icon-btn" onclick="window.location.href='/settings'" title="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ─── CONTENT ─── -->
+    <main class="content">
+
+      <div class="page-header">
+        <h1>Competitions <span>{{ user.username if user else 'Trader' }}</span></h1>
+        <div class="page-header-right">
+          {% if user.role == 'admin' %}
+          <button class="btn btn-primary" onclick="createCompetition()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create Competition
+          </button>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Status Tabs -->
+      <div class="status-tabs">
+        <button class="status-tab active" data-status="active" onclick="switchStatus(this, 'active')">🟢 Active</button>
+        <button class="status-tab" data-status="upcoming" onclick="switchStatus(this, 'upcoming')">🔵 Upcoming</button>
+        <button class="status-tab" data-status="completed" onclick="switchStatus(this, 'completed')">⚪ Completed</button>
+      </div>
+
+      <!-- Active Competitions -->
+      <div id="comp-active" class="comp-section">
+        <div class="comp-grid">
+          <!-- Competition Card 1 -->
+          <div class="comp-card active-now" onclick="toggleDetail('comp1')">
+            <div class="comp-card-header">
+              <div class="comp-card-title">🚀 Triple-Fusion Challenge</div>
+              <span class="comp-card-status live">LIVE</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Jan 15 – Feb 15, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                342 participants
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                $5,000 prize
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              Our flagship competition using BullLogic's Triple-Fusion Engine predictions. Trade any asset class and compete for the highest risk-adjusted returns.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                👑 Leading: <span class="leader-name">QuantumMaster</span>
+                <span class="return-positive" style="font-weight:600;margin-left:4px;">+68.4%</span>
+              </div>
+              <button class="btn btn-sm btn-success" onclick="event.stopPropagation();joinCompetition('comp1')">Join</button>
+            </div>
+          </div>
+
+          <!-- Competition Card 2 -->
+          <div class="comp-card active-now" onclick="toggleDetail('comp2')">
+            <div class="comp-card-header">
+              <div class="comp-card-title">💎 Crypto Kings</div>
+              <span class="comp-card-status live">LIVE</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Feb 1 – Feb 28, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                218 participants
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                $2,500 prize
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              Crypto-only trading competition. Trade BTC, ETH, SOL and more. Highest portfolio return wins.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                👑 Leading: <span class="leader-name">CryptoElite</span>
+                <span class="return-positive" style="font-weight:600;margin-left:4px;">+42.7%</span>
+              </div>
+              <button class="btn btn-sm btn-success" onclick="event.stopPropagation();joinCompetition('comp2')">Join</button>
+            </div>
+          </div>
+
+          <!-- Competition Card 3 -->
+          <div class="comp-card active-now" onclick="toggleDetail('comp3')">
+            <div class="comp-card-header">
+              <div class="comp-card-title">📊 Quant Cup</div>
+              <span class="comp-card-status live">LIVE</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Jan 20 – Feb 20, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                156 participants
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                $3,000 prize
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              Algorithmic trading competition. Demonstrate your quantitative strategies with the highest Sharpe ratio.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                👑 Leading: <span class="leader-name">AlphaReturns</span>
+                <span class="return-positive" style="font-weight:600;margin-left:4px;">+31.2%</span>
+              </div>
+              <button class="btn btn-sm btn-success" onclick="event.stopPropagation();joinCompetition('comp3')">Join</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upcoming Competitions -->
+      <div id="comp-upcoming" class="comp-section" style="display:none;">
+        <div class="comp-grid">
+          <div class="comp-card upcoming-card">
+            <div class="comp-card-header">
+              <div class="comp-card-title">🌙 Night Owl Invitational</div>
+              <span class="comp-card-status upcoming">UPCOMING</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Mar 1 – Mar 31, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                0 participants
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                $10,000 prize
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              Premium invitational competition. By invitation only. Highest stakes of the season.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                📅 Starts in 14 days
+              </div>
+              <button class="btn btn-sm btn-info" onclick="event.stopPropagation();alert('Notify me when this competition starts.')">Notify Me</button>
+            </div>
+          </div>
+
+          <div class="comp-card upcoming-card">
+            <div class="comp-card-header">
+              <div class="comp-card-title">🌐 Global Macro Cup</div>
+              <span class="comp-card-status upcoming">UPCOMING</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Mar 15 – Apr 15, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                0 participants
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                $7,500 prize
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              Trade across all global markets — equities, forex, commodities, and crypto.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                📅 Starts in 28 days
+              </div>
+              <button class="btn btn-sm btn-info" onclick="event.stopPropagation();alert('Notify me when this competition starts.')">Notify Me</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completed Competitions -->
+      <div id="comp-completed" class="comp-section" style="display:none;">
+        <div class="comp-grid">
+          <div class="comp-card completed-card">
+            <div class="comp-card-header">
+              <div class="comp-card-title">🏆 January Showdown</div>
+              <span class="comp-card-status ended">ENDED</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Jan 1 – Jan 31, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                512 participants
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              The first major competition of 2025. QuantumMaster took the crown with an incredible +89.2% return.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                🏅 Winner: <span class="leader-name">QuantumMaster</span>
+                <span class="return-positive" style="font-weight:600;margin-left:4px;">+89.2%</span>
+              </div>
+              <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();toggleDetail('comp-jan')">View Results</button>
+            </div>
+          </div>
+
+          <div class="comp-card completed-card">
+            <div class="comp-card-header">
+              <div class="comp-card-title">🎄 Holiday Special</div>
+              <span class="comp-card-status ended">ENDED</span>
+            </div>
+            <div class="comp-card-meta">
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                Dec 15 – Jan 5, 2025
+              </span>
+              <span class="comp-meta-item">
+                <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                387 participants
+              </span>
+            </div>
+            <div class="comp-card-desc">
+              Holiday-themed trading competition. CryptoElite claimed victory with a stellar performance.
+            </div>
+            <div class="comp-card-footer">
+              <div class="comp-card-leader">
+                🏅 Winner: <span class="leader-name">CryptoElite</span>
+                <span class="return-positive" style="font-weight:600;margin-left:4px;">+76.1%</span>
+              </div>
+              <button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();toggleDetail('comp-holiday')">View Results</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Expanded Competition Detail (hidden by default) -->
+      <div class="comp-detail" id="detail-comp1">
+        <div class="comp-detail-header">
+          <div class="comp-detail-title">🚀 Triple-Fusion Challenge</div>
+          <div>
+            <button class="btn btn-sm btn-success" onclick="joinCompetition('comp1')">Join Competition</button>
+            <button class="btn btn-sm btn-ghost" onclick="toggleDetail('comp1')" style="margin-left:6px;">Close</button>
+          </div>
+        </div>
+
+        <div class="comp-detail-info">
+          <div class="comp-detail-stat">
+            <div class="comp-detail-stat-label">Time Remaining</div>
+            <div class="comp-detail-stat-value time-remaining">12d 7h 34m</div>
+          </div>
+          <div class="comp-detail-stat">
+            <div class="comp-detail-stat-label">Participants</div>
+            <div class="comp-detail-stat-value">342</div>
+          </div>
+          <div class="comp-detail-stat">
+            <div class="comp-detail-stat-label">Your Rank</div>
+            <div class="comp-detail-stat-value your-rank">#42</div>
+          </div>
+          <div class="comp-detail-stat">
+            <div class="comp-detail-stat-label">Prize Pool</div>
+            <div class="comp-detail-stat-value" style="color:#FFD700;">$5,000</div>
+          </div>
+        </div>
+
+        <h4 style="font-size:10pt;font-weight:600;color:var(--text);margin-bottom:12px;">🏅 Leaderboard</h4>
+        <table class="detail-lb-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Trader</th>
+              <th>Return %</th>
+              <th>Trades</th>
+              <th>Win Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="detail-lb-rank" style="color:#FFD700;">#1</td>
+              <td><div class="detail-lb-user"><span class="lb-avatar-sm">QM</span>QuantumMaster</div></td>
+              <td class="detail-lb-return pos">+68.4%</td>
+              <td>187</td>
+              <td>76.5%</td>
+            </tr>
+            <tr>
+              <td class="detail-lb-rank" style="color:#C0C0C0;">#2</td>
+              <td><div class="detail-lb-user"><span class="lb-avatar-sm">CE</span>CryptoElite</div></td>
+              <td class="detail-lb-return pos">+62.1%</td>
+              <td>154</td>
+              <td>73.2%</td>
+            </tr>
+            <tr>
+              <td class="detail-lb-rank" style="color:#CD7F32;">#3</td>
+              <td><div class="detail-lb-user"><span class="lb-avatar-sm">AR</span>AlphaReturns</div></td>
+              <td class="detail-lb-return pos">+55.8%</td>
+              <td>142</td>
+              <td>71.4%</td>
+            </tr>
+            <tr class="current-user">
+              <td class="detail-lb-rank">#42</td>
+              <td><div class="detail-lb-user"><span class="lb-avatar-sm">{{ (user.username[:1]|upper) if user else 'U' }}</span>{{ user.username if user else 'You' }}</div></td>
+              <td class="detail-lb-return pos">+12.4%</td>
+              <td>47</td>
+              <td>58.3%</td>
+            </tr>
+            <tr>
+              <td class="detail-lb-rank">#43</td>
+              <td><div class="detail-lb-user"><span class="lb-avatar-sm">BT</span>BullTrader</div></td>
+              <td class="detail-lb-return pos">+11.9%</td>
+              <td>52</td>
+              <td>57.1%</td>
+            </tr>
+            <tr>
+              <td class="detail-lb-rank">#44</td>
+              <td><div class="detail-lb-user"><span class="lb-avatar-sm">SW</span>SwingWizard</div></td>
+              <td class="detail-lb-return pos">+10.5%</td>
+              <td>38</td>
+              <td>55.6%</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="comp-detail-rules">
+          <h4>📜 Rules</h4>
+          <ul>
+            <li>Start with $100,000 virtual paper trading capital.</li>
+            <li>Trade any asset class available on BullLogic.</li>
+            <li>Leverage up to 5x is permitted.</li>
+            <li>No limit on number of trades.</li>
+            <li>Winner is determined by highest portfolio return at competition end.</li>
+            <li>Risk management rules apply — max 20% drawdown threshold.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Empty state (hidden by default, shown when no active/upcoming/completed) -->
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <h3>No active competitions</h3>
+        <p>Check back soon or create one!</p>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/static/js/competitions.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+      // ── Notification badge dynamic update ──
+      function updateBadge() {
+        fetch('/api/notifications/count')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.ok && d.count !== undefined) {
+              var badge = document.querySelector('.notification-badge');
+              if (badge) badge.textContent = d.count > 99 ? '99+' : d.count;
+            }
+          })
+          .catch(function() {});
+      }
+      setTimeout(updateBadge, 3000);
+
+    });
+
+    // ── Status Tab Switching ──
+    function switchStatus(btn, status) {
+      document.querySelectorAll('.status-tab').forEach(function (t) {
+        t.classList.remove('active');
+      });
+      btn.classList.add('active');
+
+      document.getElementById('comp-active').style.display = 'none';
+      document.getElementById('comp-upcoming').style.display = 'none';
+      document.getElementById('comp-completed').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'none';
+
+      if (status === 'active') {
+        document.getElementById('comp-active').style.display = '';
+      } else if (status === 'upcoming') {
+        document.getElementById('comp-upcoming').style.display = '';
+      } else if (status === 'completed') {
+        document.getElementById('comp-completed').style.display = '';
+      }
+    }
+
+    // ── Toggle Competition Detail ──
+    function toggleDetail(id) {
+      var detail = document.getElementById('detail-' + id);
+      if (detail) {
+        detail.classList.toggle('open');
+        // Scroll into view
+        if (detail.classList.contains('open')) {
+          setTimeout(function () {
+            detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 100);
+        }
+      }
+    }
+
+    // ── Join Competition ──
+    function joinCompetition(id) {
+      alert('You have joined the competition! Good luck, {{ user.username if user else 'Trader' }}.');
+    }
+
+    // ── Create Competition (Admin only) ──
+    function createCompetition() {
+      var name = prompt('Enter competition name:');
+      if (name && name.trim()) {
+        var prize = prompt('Enter prize description:');
+        var dateRange = prompt('Enter date range (e.g. Mar 1 – Mar 31, 2025):');
+        if (prize && dateRange) {
+          // Add a new active competition card
+          var grid = document.querySelector('#comp-active .comp-grid');
+          var card = document.createElement('div');
+          card.className = 'comp-card active-now';
+          card.setAttribute('onclick', 'toggleDetail("comp-new")');
+          var slug = name.trim().toLowerCase().replace(/\s+/g, '-');
+          card.innerHTML =
+            '<div class="comp-card-header">' +
+              '<div class="comp-card-title">🏆 ' + name.trim() + '</div>' +
+              '<span class="comp-card-status live">LIVE</span>' +
+            '</div>' +
+            '<div class="comp-card-meta">' +
+              '<span class="comp-meta-item"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ' + dateRange + '</span>' +
+              '<span class="comp-meta-item"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> 0 participants</span>' +
+              '<span class="comp-meta-item"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> ' + prize + '</span>' +
+            '</div>' +
+            '<div class="comp-card-desc">Competition created by {{ user.username if user else 'Admin' }}.</div>' +
+            '<div class="comp-card-footer">' +
+              '<div class="comp-card-leader">👑 Leading: <span class="leader-name">—</span></div>' +
+              '<button class="btn btn-sm btn-success" onclick="event.stopPropagation();joinCompetition(\'comp-new\')">Join</button>' +
+            '</div>';
+          grid.appendChild(card);
+          alert('Competition "' + name.trim() + '" created successfully!');
+        }
+      }
+    }
+  </script>
+</body>
+</html>

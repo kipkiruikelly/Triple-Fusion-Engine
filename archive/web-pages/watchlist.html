@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en"{{ theme_attr }}>
+<head>
+  {% include "_theme.html" %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Watchlist — BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/watchlist.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --text-success: #00D4AA;
+      --text-danger:  #FF3366;
+      --text-info:    #00A3FF;
+      --text-purple:  #7B61FF;
+      --bg-card:      #131820;
+      --bg-main:      #0A0E17;
+      --sidebar-w:    240px;
+      --header-h:     60px;
+      --radius-sm:    6px;
+      --radius-md:    10px;
+      --radius-lg:    14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      font-size: 11pt;
+      background: var(--bg-main);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo {
+      padding: 22px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-logo .logo-text {
+      font-size: 17pt;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      background: linear-gradient(135deg, #00D4AA 0%, #00A3FF 50%, #FF6B35 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .sidebar-logo .logo-sub {
+      font-size: 7.5pt;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 12px 10px;
+      overflow-y: auto;
+    }
+
+    .nav-section-label {
+      font-size: 7.5pt;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 16px 12px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
+      color: var(--muted);
+      font-size: 9.5pt;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.15s;
+      cursor: pointer;
+      margin-bottom: 1px;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .nav-item.active {
+      color: #00D4AA;
+      background: rgba(0,212,170,0.08);
+    }
+
+    .nav-item .nav-icon {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nav-item .nav-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .nav-item .nav-badge {
+      margin-left: auto;
+      background: var(--text-danger);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 99px;
+    }
+
+    .sidebar-footer {
+      padding: 16px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sidebar-footer .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #00D4AA, #00A3FF);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 11pt;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer .user-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .sidebar-footer .user-name {
+      font-size: 9.5pt;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sidebar-footer .user-plan {
+      font-size: 7.5pt;
+      color: var(--muted);
+    }
+
+    .sidebar-footer .pro-badge {
+      background: linear-gradient(135deg, #FF6B35, #FF3366);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── MAIN WRAPPER ── */
+    .main-wrapper {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      height: var(--header-h);
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .header-greeting {
+      font-size: 11pt;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .header-greeting span {
+      color: var(--text-success);
+    }
+
+    .header-date {
+      font-size: 8pt;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .header-icon-btn {
+      position: relative;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 6px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .header-icon-btn:hover {
+      color: var(--text);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .header-icon-btn svg {
+      width: 20px;
+      height: 20px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+    }
+
+    .notification-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: var(--text-danger);
+      color: #fff;
+      font-size: 7pt;
+      font-weight: 700;
+      min-width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 99px;
+      padding: 0 4px;
+      border: 2px solid var(--bg-card);
+    }
+
+    /* ── CONTENT ── */
+    .content {
+      padding: 24px 28px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .page-header h1 {
+      font-size: 20pt;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .page-header h1 span {
+      color: var(--muted);
+      font-weight: 400;
+      font-size: 11pt;
+      margin-left: 8px;
+    }
+
+    .btn {
+      padding: 8px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 9.5pt;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00D4AA, #00A3FF);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(0,212,170,0.25);
+    }
+
+    .btn-sm {
+      padding: 5px 12px;
+      font-size: 8pt;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--muted);
+      background: rgba(255,255,255,0.04);
+    }
+
+    .btn-success {
+      background: rgba(0,212,170,0.15);
+      color: var(--text-success);
+      border: 1px solid rgba(0,212,170,0.25);
+    }
+
+    .btn-success:hover {
+      background: rgba(0,212,170,0.25);
+    }
+
+    .btn-info {
+      background: rgba(0,163,255,0.15);
+      color: var(--text-info);
+      border: 1px solid rgba(0,163,255,0.25);
+    }
+
+    .btn-info:hover {
+      background: rgba(0,163,255,0.25);
+    }
+
+    /* ── WATCHLIST TABS ── */
+    .watchlist-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .watchlist-tab {
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      font-size: 9pt;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+      font-family: inherit;
+    }
+
+    .watchlist-tab:hover {
+      color: var(--text);
+      border-color: var(--border);
+    }
+
+    .watchlist-tab.active {
+      color: var(--text-success);
+      border-color: rgba(0,212,170,0.3);
+      background: rgba(0,212,170,0.06);
+    }
+
+    /* ── ADD TICKER ROW ── */
+    .add-ticker-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .add-ticker-input {
+      flex: 1;
+      max-width: 320px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 14px;
+      font-size: 9.5pt;
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .add-ticker-input:focus {
+      border-color: var(--text-info);
+    }
+
+    .add-ticker-input::placeholder {
+      color: var(--muted);
+    }
+
+    .btn-add-ticker {
+      padding: 9px 18px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, #00D4AA, #00A3FF);
+      color: #fff;
+      font-size: 9pt;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+    }
+
+    .btn-add-ticker:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .autocomplete-wrap {
+      position: relative;
+      flex: 1;
+      max-width: 320px;
+    }
+
+    .autocomplete-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      z-index: 50;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .autocomplete-dropdown.open {
+      display: block;
+    }
+
+    .autocomplete-item {
+      padding: 8px 14px;
+      cursor: pointer;
+      font-size: 9pt;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: background 0.1s;
+    }
+
+    .autocomplete-item:hover {
+      background: rgba(0,163,255,0.08);
+    }
+
+    .autocomplete-item .ac-symbol {
+      font-weight: 600;
+      color: var(--text-info);
+    }
+
+    .autocomplete-item .ac-name {
+      color: var(--muted);
+      font-size: 8pt;
+    }
+
+    /* ── TICKERS TABLE ── */
+    .tickers-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .tickers-table th {
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 7.5pt;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .tickers-table td {
+      padding: 12px;
+      font-size: 9.5pt;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      vertical-align: middle;
+    }
+
+    .tickers-table tr {
+      transition: background 0.15s;
+    }
+
+    .tickers-table tbody tr:hover {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .ticker-symbol {
+      font-weight: 700;
+      font-size: 10pt;
+      color: var(--text);
+    }
+
+    .ticker-company {
+      font-size: 8pt;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .ticker-price {
+      font-weight: 600;
+      font-size: 11pt;
+      color: var(--text);
+    }
+
+    .ticker-change {
+      font-weight: 600;
+      font-size: 9.5pt;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ticker-change.up {
+      color: var(--text-success);
+    }
+
+    .ticker-change.down {
+      color: var(--text-danger);
+    }
+
+    .ticker-change svg {
+      width: 12px;
+      height: 12px;
+      stroke: currentColor;
+      stroke-width: 2.5;
+      fill: none;
+    }
+
+    .ticker-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .ticker-remove {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,51,102,0.1);
+      color: var(--text-danger);
+      font-size: 13pt;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+
+    .ticker-remove:hover {
+      background: rgba(255,51,102,0.2);
+      transform: scale(1.1);
+    }
+
+    /* ── FLASH ANIMATIONS ── */
+    @keyframes flash-green {
+      0%   { background: rgba(0,212,170,0.15); }
+      100% { background: transparent; }
+    }
+
+    @keyframes flash-red {
+      0%   { background: rgba(255,51,102,0.15); }
+      100% { background: transparent; }
+    }
+
+    .flash-up {
+      animation: flash-green 0.8s ease-out;
+    }
+
+    .flash-down {
+      animation: flash-red 0.8s ease-out;
+    }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-md);
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+      stroke: var(--muted);
+      stroke-width: 1.2;
+      fill: none;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state h3 {
+      font-size: 12pt;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .empty-state p {
+      font-size: 9.5pt;
+      color: var(--muted);
+      opacity: 0.7;
+    }
+
+    /* ── REAL-TIME INDICATOR ── */
+    .live-dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-success);
+      margin-right: 6px;
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .live-label {
+      font-size: 8pt;
+      color: var(--text-success);
+      font-weight: 500;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.25s;
+      }
+      .sidebar.open { transform: translateX(0); }
+      .main-wrapper { margin-left: 0; }
+      .tickers-table { font-size: 8.5pt; }
+      .tickers-table th, .tickers-table td { padding: 8px 6px; }
+      .ticker-actions { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─── SIDEBAR ─── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">BULLLOGIC</div>
+      <div class="logo-sub">Triple-Fusion Engine</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Main</div>
+      <a class="nav-item" href="/dashboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </span>
+        Dashboard
+      </a>
+      <a class="nav-item" href="/predictions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </span>
+        Predictions
+        <span class="nav-badge">12</span>
+      </a>
+      <a class="nav-item" href="/trading">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        </span>
+        Trading
+      </a>
+      <a class="nav-item" href="/portfolio">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+        </span>
+        Portfolio
+      </a>
+      <a class="nav-item active" href="/watchlist">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </span>
+        Watchlist
+      </a>
+      <a class="nav-item" href="/positions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        Positions
+      </a>
+
+      <div class="nav-section-label">Community</div>
+      <a class="nav-item" href="/leaderboard">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 19.06 7 20h10c0-.94-.85-1.25-2.03-1.79-.5-.23-.97-.66-.97-1.21v-2.34"/><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+        </span>
+        Leaderboard
+      </a>
+      <a class="nav-item" href="/competitions">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        </span>
+        Competitions
+      </a>
+      <a class="nav-item" href="/achievements">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+        </span>
+        Achievements
+      </a>
+
+      <div class="nav-section-label">System</div>
+      <a class="nav-item" href="/settings">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </span>
+        Settings
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="avatar">{{ (user.username[:1]|upper) if user else 'U' }}</div>
+      <div class="user-info">
+        <div class="user-name">{{ user.username if user else 'User' }}</div>
+        <div class="user-plan">{{ user.plan if user else 'Free Plan' }}</div>
+      </div>
+      <div class="pro-badge">PRO</div>
+    </div>
+  </aside>
+
+  <!-- ─── MAIN ─── -->
+  <div class="main-wrapper">
+
+    <!-- ─── HEADER ─── -->
+    <header class="header">
+      <div class="header-left">
+        <div class="header-greeting">
+          <span class="live-dot"></span><span class="live-label">LIVE</span> Watchlist
+        </div>
+        <div class="header-date">Real-time prices • {{ now.strftime("%A, %B %d, %Y") if now else "" }}</div>
+      </div>
+      <div class="header-right">
+        <button class="header-icon-btn" onclick="window.location.href='/notifications'" title="Notifications">
+          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="notification-badge">3</span>
+        </button>
+        <button class="header-icon-btn" onclick="window.location.href='/settings'" title="Settings">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0-.33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- ─── CONTENT ─── -->
+    <main class="content">
+
+      <div class="page-header">
+        <h1>My Watchlists <span>{{ user.username if user else 'Trader' }}</span></h1>
+        <button class="btn btn-primary" onclick="createWatchlist()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Watchlist
+        </button>
+      </div>
+
+      <!-- Watchlist Tabs -->
+      <div class="watchlist-tabs">
+        <button class="watchlist-tab active" data-watchlist="default" onclick="switchWatchlist(this, 'default')">📋 Default</button>
+        <button class="watchlist-tab" data-watchlist="tech" onclick="switchWatchlist(this, 'tech')">💻 Tech</button>
+        <button class="watchlist-tab" data-watchlist="crypto" onclick="switchWatchlist(this, 'crypto')">₿ Crypto</button>
+        <button class="watchlist-tab" data-watchlist="energy" onclick="switchWatchlist(this, 'energy')">⚡ Energy</button>
+        <button class="watchlist-tab" data-watchlist="forex" onclick="switchWatchlist(this, 'forex')">💱 Forex</button>
+      </div>
+
+      <!-- Add Ticker Row -->
+      <div class="add-ticker-row">
+        <div class="autocomplete-wrap">
+          <input type="text" class="add-ticker-input" id="tickerInput" placeholder="Search symbol (e.g. AAPL, BTC-USD)..." oninput="onTickerInput(this.value)" onkeydown="if(event.key==='Enter') addTicker()" autocomplete="off" />
+          <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
+        </div>
+        <button class="btn-add-ticker" onclick="addTicker()">+ Add Ticker</button>
+      </div>
+
+      <!-- Tickers Table -->
+      <div id="watchlistContent">
+        <table class="tickers-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Company</th>
+              <th>Price</th>
+              <th>Change</th>
+              <th>Actions</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tickersBody">
+            <!-- Default Watchlist Tickers -->
+            <tr data-symbol="AAPL" class="ticker-row">
+              <td>
+                <div class="ticker-symbol">AAPL</div>
+                <div class="ticker-company">Apple Inc.</div>
+              </td>
+              <td>
+                <div class="ticker-price" id="price-AAPL">$189.47</div>
+              </td>
+              <td>
+                <div class="ticker-change up" id="change-AAPL">
+                  <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+                  +1.23%
+                </div>
+              </td>
+              <td>
+                <div class="ticker-actions">
+                  <button class="btn btn-sm btn-success" onclick="predictTicker('AAPL')">Predict</button>
+                  <button class="btn btn-sm btn-info" onclick="tradeTicker('AAPL')">Trade</button>
+                </div>
+              </td>
+              <td>
+                <button class="ticker-remove" onclick="removeTicker('AAPL')" title="Remove ticker">×</button>
+              </td>
+            </tr>
+            <tr data-symbol="MSFT" class="ticker-row">
+              <td>
+                <div class="ticker-symbol">MSFT</div>
+                <div class="ticker-company">Microsoft Corporation</div>
+              </td>
+              <td>
+                <div class="ticker-price" id="price-MSFT">$425.32</div>
+              </td>
+              <td>
+                <div class="ticker-change up" id="change-MSFT">
+                  <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+                  +0.87%
+                </div>
+              </td>
+              <td>
+                <div class="ticker-actions">
+                  <button class="btn btn-sm btn-success" onclick="predictTicker('MSFT')">Predict</button>
+                  <button class="btn btn-sm btn-info" onclick="tradeTicker('MSFT')">Trade</button>
+                </div>
+              </td>
+              <td>
+                <button class="ticker-remove" onclick="removeTicker('MSFT')" title="Remove ticker">×</button>
+              </td>
+            </tr>
+            <tr data-symbol="GOOGL" class="ticker-row">
+              <td>
+                <div class="ticker-symbol">GOOGL</div>
+                <div class="ticker-company">Alphabet Inc.</div>
+              </td>
+              <td>
+                <div class="ticker-price" id="price-GOOGL">$176.84</div>
+              </td>
+              <td>
+                <div class="ticker-change down" id="change-GOOGL">
+                  <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+                  -0.42%
+                </div>
+              </td>
+              <td>
+                <div class="ticker-actions">
+                  <button class="btn btn-sm btn-success" onclick="predictTicker('GOOGL')">Predict</button>
+                  <button class="btn btn-sm btn-info" onclick="tradeTicker('GOOGL')">Trade</button>
+                </div>
+              </td>
+              <td>
+                <button class="ticker-remove" onclick="removeTicker('GOOGL')" title="Remove ticker">×</button>
+              </td>
+            </tr>
+            <tr data-symbol="TSLA" class="ticker-row">
+              <td>
+                <div class="ticker-symbol">TSLA</div>
+                <div class="ticker-company">Tesla, Inc.</div>
+              </td>
+              <td>
+                <div class="ticker-price" id="price-TSLA">$248.92</div>
+              </td>
+              <td>
+                <div class="ticker-change up" id="change-TSLA">
+                  <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+                  +3.14%
+                </div>
+              </td>
+              <td>
+                <div class="ticker-actions">
+                  <button class="btn btn-sm btn-success" onclick="predictTicker('TSLA')">Predict</button>
+                  <button class="btn btn-sm btn-info" onclick="tradeTicker('TSLA')">Trade</button>
+                </div>
+              </td>
+              <td>
+                <button class="ticker-remove" onclick="removeTicker('TSLA')" title="Remove ticker">×</button>
+              </td>
+            </tr>
+            <tr data-symbol="AMZN" class="ticker-row">
+              <td>
+                <div class="ticker-symbol">AMZN</div>
+                <div class="ticker-company">Amazon.com Inc.</div>
+              </td>
+              <td>
+                <div class="ticker-price" id="price-AMZN">$201.15</div>
+              </td>
+              <td>
+                <div class="ticker-change up" id="change-AMZN">
+                  <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+                  +0.56%
+                </div>
+              </td>
+              <td>
+                <div class="ticker-actions">
+                  <button class="btn btn-sm btn-success" onclick="predictTicker('AMZN')">Predict</button>
+                  <button class="btn btn-sm btn-info" onclick="tradeTicker('AMZN')">Trade</button>
+                </div>
+              </td>
+              <td>
+                <button class="ticker-remove" onclick="removeTicker('AMZN')" title="Remove ticker">×</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Empty State (hidden by default) -->
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <h3>No tickers in this watchlist</h3>
+        <p>Add your first symbol above.</p>
+      </div>
+
+      <!-- Tech Watchlist Tickers (hidden) -->
+      <div id="watchlist-tech" style="display:none;">
+        <table class="tickers-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Company</th>
+              <th>Price</th>
+              <th>Change</th>
+              <th>Actions</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-symbol="NVDA">
+              <td><div class="ticker-symbol">NVDA</div><div class="ticker-company">NVIDIA Corporation</div></td>
+              <td><div class="ticker-price">$873.52</div></td>
+              <td><div class="ticker-change up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+2.41%</div></td>
+              <td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker('NVDA')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker('NVDA')">Trade</button></div></td>
+              <td><button class="ticker-remove" onclick="removeTicker('NVDA')">×</button></td>
+            </tr>
+            <tr data-symbol="AMD">
+              <td><div class="ticker-symbol">AMD</div><div class="ticker-company">Advanced Micro Devices</div></td>
+              <td><div class="ticker-price">$172.38</div></td>
+              <td><div class="ticker-change down"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>-0.89%</div></td>
+              <td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker('AMD')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker('AMD')">Trade</button></div></td>
+              <td><button class="ticker-remove" onclick="removeTicker('AMD')">×</button></td>
+            </tr>
+            <tr data-symbol="META">
+              <td><div class="ticker-symbol">META</div><div class="ticker-company">Meta Platforms Inc.</div></td>
+              <td><div class="ticker-price">$512.65</div></td>
+              <td><div class="ticker-change up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+1.78%</div></td>
+              <td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker('META')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker('META')">Trade</button></div></td>
+              <td><button class="ticker-remove" onclick="removeTicker('META')">×</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Crypto Watchlist Tickers (hidden) -->
+      <div id="watchlist-crypto" style="display:none;">
+        <table class="tickers-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Company</th>
+              <th>Price</th>
+              <th>Change</th>
+              <th>Actions</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-symbol="BTC-USD">
+              <td><div class="ticker-symbol">BTC-USD</div><div class="ticker-company">Bitcoin</div></td>
+              <td><div class="ticker-price">$72,458</div></td>
+              <td><div class="ticker-change up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+4.12%</div></td>
+              <td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker('BTC-USD')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker('BTC-USD')">Trade</button></div></td>
+              <td><button class="ticker-remove" onclick="removeTicker('BTC-USD')">×</button></td>
+            </tr>
+            <tr data-symbol="ETH-USD">
+              <td><div class="ticker-symbol">ETH-USD</div><div class="ticker-company">Ethereum</div></td>
+              <td><div class="ticker-price">$3,842</div></td>
+              <td><div class="ticker-change up"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+2.67%</div></td>
+              <td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker('ETH-USD')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker('ETH-USD')">Trade</button></div></td>
+              <td><button class="ticker-remove" onclick="removeTicker('ETH-USD')">×</button></td>
+            </tr>
+            <tr data-symbol="SOL-USD">
+              <td><div class="ticker-symbol">SOL-USD</div><div class="ticker-company">Solana</div></td>
+              <td><div class="ticker-price">$186.52</div></td>
+              <td><div class="ticker-change down"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>-1.34%</div></td>
+              <td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker('SOL-USD')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker('SOL-USD')">Trade</button></div></td>
+              <td><button class="ticker-remove" onclick="removeTicker('SOL-USD')">×</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="/static/js/watchlist.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+
+      // ── Simulated Real-Time Price Updates ──
+      function simulatePriceUpdate() {
+        var rows = document.querySelectorAll('.ticker-row');
+        rows.forEach(function (row) {
+          var symbol = row.getAttribute('data-symbol');
+          if (!symbol) return;
+          var priceEl = document.getElementById('price-' + symbol);
+          var changeEl = document.getElementById('change-' + symbol);
+          if (!priceEl || !changeEl) return;
+
+          var currentPrice = parseFloat(priceEl.textContent.replace(/[$,]/g, ''));
+          if (isNaN(currentPrice)) return;
+
+          var changePercent = (Math.random() - 0.48) * 0.8;
+          var newPrice = currentPrice * (1 + changePercent / 100);
+          var isUp = changePercent >= 0;
+
+          priceEl.textContent = (newPrice >= 1000 ? '$' + newPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '$' + newPrice.toFixed(2));
+
+          changeEl.className = 'ticker-change ' + (isUp ? 'up' : 'down');
+          changeEl.innerHTML = (isUp
+            ? '<svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+'
+            : '<svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>')
+            + Math.abs(changePercent).toFixed(2) + '%';
+
+          // Flash effect
+          row.classList.remove('flash-up', 'flash-down');
+          void row.offsetWidth;
+          row.classList.add(isUp ? 'flash-up' : 'flash-down');
+        });
+      }
+
+      setInterval(simulatePriceUpdate, 5000);
+
+      // ── Notification badge dynamic update ──
+      function updateBadge() {
+        fetch('/api/notifications/count')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d.ok && d.count !== undefined) {
+              var badge = document.querySelector('.notification-badge');
+              if (badge) badge.textContent = d.count > 99 ? '99+' : d.count;
+            }
+          })
+          .catch(function() {});
+      }
+      setTimeout(updateBadge, 3000);
+
+    });
+
+    // ── Watchlist Switching ──
+    function switchWatchlist(btn, name) {
+      // Update tab active state
+      document.querySelectorAll('.watchlist-tab').forEach(function (t) {
+        t.classList.remove('active');
+      });
+      btn.classList.add('active');
+
+      // Show corresponding watchlist content
+      var content = document.getElementById('watchlistContent');
+      var tech = document.getElementById('watchlist-tech');
+      var crypto = document.getElementById('watchlist-crypto');
+      var empty = document.getElementById('emptyState');
+
+      content.style.display = 'none';
+      tech.style.display = 'none';
+      crypto.style.display = 'none';
+      empty.style.display = 'none';
+
+      if (name === 'default') {
+        content.style.display = '';
+      } else if (name === 'tech') {
+        tech.style.display = '';
+      } else if (name === 'crypto') {
+        crypto.style.display = '';
+      } else {
+        empty.style.display = '';
+        document.querySelector('#emptyState p').textContent = 'No tickers in this watchlist. Add your first symbol above.';
+      }
+    }
+
+    // ── Autocomplete ──
+    var tickerSuggestions = [
+      { symbol: 'AAPL', name: 'Apple Inc.' },
+      { symbol: 'MSFT', name: 'Microsoft Corporation' },
+      { symbol: 'GOOGL', name: 'Alphabet Inc.' },
+      { symbol: 'TSLA', name: 'Tesla, Inc.' },
+      { symbol: 'AMZN', name: 'Amazon.com Inc.' },
+      { symbol: 'NVDA', name: 'NVIDIA Corporation' },
+      { symbol: 'META', name: 'Meta Platforms Inc.' },
+      { symbol: 'AMD', name: 'Advanced Micro Devices' },
+      { symbol: 'BTC-USD', name: 'Bitcoin' },
+      { symbol: 'ETH-USD', name: 'Ethereum' },
+      { symbol: 'SOL-USD', name: 'Solana' },
+      { symbol: 'XRP-USD', name: 'Ripple' },
+      { symbol: 'AAPL', name: 'Apple Inc.' },
+      { symbol: 'JPM', name: 'JPMorgan Chase' },
+      { symbol: 'V', name: 'Visa Inc.' },
+      { symbol: 'SPY', name: 'SPDR S&P 500 ETF' },
+      { symbol: 'QQQ', name: 'Invesco QQQ Trust' },
+    ];
+
+    function onTickerInput(value) {
+      var dropdown = document.getElementById('autocompleteDropdown');
+      if (!value || value.length < 1) {
+        dropdown.classList.remove('open');
+        return;
+      }
+      var q = value.toUpperCase();
+      var matches = tickerSuggestions.filter(function (t) {
+        return t.symbol.indexOf(q) !== -1 || t.name.toUpperCase().indexOf(q) !== -1;
+      }).slice(0, 6);
+
+      if (matches.length === 0) {
+        dropdown.classList.remove('open');
+        return;
+      }
+
+      dropdown.innerHTML = matches.map(function (t) {
+        return '<div class="autocomplete-item" onclick="selectSuggestion(\'' + t.symbol + '\')">' +
+          '<span class="ac-symbol">' + t.symbol + '</span>' +
+          '<span class="ac-name">' + t.name + '</span>' +
+          '</div>';
+      }).join('');
+      dropdown.classList.add('open');
+    }
+
+    function selectSuggestion(symbol) {
+      document.getElementById('tickerInput').value = symbol;
+      document.getElementById('autocompleteDropdown').classList.remove('open');
+    }
+
+    // Close autocomplete on outside click
+    document.addEventListener('click', function (e) {
+      var wrap = document.querySelector('.autocomplete-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        document.getElementById('autocompleteDropdown').classList.remove('open');
+      }
+    });
+
+    // ── Add Ticker ──
+    function addTicker() {
+      var input = document.getElementById('tickerInput');
+      var symbol = input.value.trim().toUpperCase();
+      if (!symbol) return;
+
+      // Check if ticker already exists in current visible list
+      var existing = document.querySelector('#tickersBody tr[data-symbol="' + symbol + '"]');
+      if (existing) {
+        input.value = '';
+        return;
+      }
+
+      // Add to default watchlist
+      var tbody = document.getElementById('tickersBody');
+      var row = document.createElement('tr');
+      row.setAttribute('data-symbol', symbol);
+      row.className = 'ticker-row';
+      row.innerHTML = '<td><div class="ticker-symbol">' + symbol + '</div><div class="ticker-company">' + symbol + '</div></td>' +
+        '<td><div class="ticker-price" id="price-' + symbol + '">$0.00</div></td>' +
+        '<td><div class="ticker-change up" id="change-' + symbol + '"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>+0.00%</div></td>' +
+        '<td><div class="ticker-actions"><button class="btn btn-sm btn-success" onclick="predictTicker(\'' + symbol + '\')">Predict</button><button class="btn btn-sm btn-info" onclick="tradeTicker(\'' + symbol + '\')">Trade</button></div></td>' +
+        '<td><button class="ticker-remove" onclick="removeTicker(\'' + symbol + '\')">×</button></td>';
+
+      tbody.appendChild(row);
+
+      // Show the default watchlist if hidden
+      var content = document.getElementById('watchlistContent');
+      content.style.display = '';
+      document.getElementById('emptyState').style.display = 'none';
+
+      // Activate default tab
+      document.querySelectorAll('.watchlist-tab').forEach(function (t) {
+        t.classList.remove('active');
+        if (t.getAttribute('data-watchlist') === 'default') t.classList.add('active');
+      });
+      document.getElementById('watchlist-tech').style.display = 'none';
+      document.getElementById('watchlist-crypto').style.display = 'none';
+
+      input.value = '';
+    }
+
+    // ── Remove Ticker ──
+    function removeTicker(symbol) {
+      var row = document.querySelector('tr[data-symbol="' + symbol + '"]');
+      if (row) {
+        row.remove();
+      }
+      // Show empty state if no tickers left in default
+      var remaining = document.querySelectorAll('#tickersBody tr');
+      if (remaining.length === 0) {
+        document.getElementById('watchlistContent').style.display = 'none';
+        document.getElementById('emptyState').style.display = '';
+      }
+    }
+
+    // ── Create Watchlist ──
+    function createWatchlist() {
+      var name = prompt('Enter a name for the new watchlist:');
+      if (name && name.trim()) {
+        var tabs = document.querySelector('.watchlist-tabs');
+        var btn = document.createElement('button');
+        btn.className = 'watchlist-tab';
+        btn.setAttribute('data-watchlist', name.trim().toLowerCase().replace(/\\s+/g, '-'));
+        btn.textContent = '📁 ' + name.trim();
+        btn.onclick = function () {
+          switchWatchlist(this, this.getAttribute('data-watchlist'));
+        };
+        tabs.appendChild(btn);
+        btn.click();
+      }
+    }
+
+    // ── Action stubs ──
+    function predictTicker(symbol) {
+      window.location.href = '/predictions?symbol=' + symbol;
+    }
+
+    function tradeTicker(symbol) {
+      window.location.href = '/trading?symbol=' + symbol;
+    }
+  </script>
+</body>
+</html>

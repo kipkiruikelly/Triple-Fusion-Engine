@@ -1,1338 +1,170 @@
-<!DOCTYPE html>
-<html lang="en"{{ theme_attr }}>
-<head>
-  {% include "_theme.html" %}
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard, BullLogic</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/css/style.css" />
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --text-success: #00D4AA;
-      --text-danger:  #FF3366;
-      --text-info:    #00A3FF;
-      --bg-card:      #131820;
-      --bg-main:      #0A0E17;
-      --sidebar-w:    240px;
-      --header-h:     60px;
-      --radius-sm:    6px;
-      --radius-md:    10px;
-      --radius-lg:    14px;
-    }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      font-size: 11pt;
-      background: var(--bg-main);
-      color: var(--text);
-      min-height: 100vh;
-      display: flex;
-    }
-
-    /* ── SCROLLBAR ── */
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
-    ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-
-    /* ── SIDEBAR ── */
-    .sidebar {
-      width: var(--sidebar-w);
-      background: var(--bg-card);
-      border-right: 1px solid var(--border);
-      height: 100vh;
-      position: fixed;
-      top: 0;
-      left: 0;
-      z-index: 200;
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-
-    .sidebar-logo {
-      padding: 22px 20px 20px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .sidebar-logo .logo-text {
-      font-size: 17pt;
-      font-weight: 800;
-      letter-spacing: 1.5px;
-      background: linear-gradient(135deg, #00D4AA 0%, #00A3FF 50%, #FF6B35 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-
-    .sidebar-logo .logo-sub {
-      font-size: 7.5pt;
-      font-weight: 500;
-      color: var(--muted);
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-
-    .sidebar-nav {
-      flex: 1;
-      padding: 12px 10px;
-      overflow-y: auto;
-    }
-
-    .nav-section-label {
-      font-size: 7.5pt;
-      font-weight: 700;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding: 16px 12px 6px;
-    }
-
-    .nav-item {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 9px 12px;
-      border-radius: var(--radius-sm);
-      color: var(--muted);
-      font-size: 9.5pt;
-      font-weight: 500;
-      text-decoration: none;
-      transition: all 0.15s;
-      cursor: pointer;
-      margin-bottom: 1px;
-    }
-
-    .nav-item:hover {
-      color: var(--text);
-      background: rgba(255,255,255,0.04);
-    }
-
-    .nav-item.active {
-      color: #00D4AA;
-      background: rgba(0,212,170,0.08);
-    }
-
-    .nav-item .nav-icon {
-      width: 18px;
-      height: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .nav-item .nav-icon svg {
-      width: 16px;
-      height: 16px;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      fill: none;
-    }
-
-    .nav-item .nav-badge {
-      margin-left: auto;
-      background: var(--text-danger);
-      color: #fff;
-      font-size: 7pt;
-      font-weight: 700;
-      padding: 1px 6px;
-      border-radius: 99px;
-    }
-
-    .sidebar-footer {
-      padding: 16px 14px;
-      border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .sidebar-footer .avatar {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #00D4AA, #00A3FF);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      font-size: 11pt;
-      color: #fff;
-      flex-shrink: 0;
-    }
-
-    .sidebar-footer .user-info {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .sidebar-footer .user-name {
-      font-size: 9.5pt;
-      font-weight: 600;
-      color: var(--text);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sidebar-footer .user-plan {
-      font-size: 7.5pt;
-      color: var(--muted);
-    }
-
-    .sidebar-footer .pro-badge {
-      background: linear-gradient(135deg, #FF6B35, #FF3366);
-      color: #fff;
-      font-size: 7pt;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 99px;
-      letter-spacing: 0.3px;
-    }
-
-    /* ── MAIN WRAPPER ── */
-    .main-wrapper {
-      margin-left: var(--sidebar-w);
-      flex: 1;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── HEADER ── */
-    .header {
-      height: var(--header-h);
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border);
-      padding: 0 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .header-left {
-      display: flex;
-      flex-direction: column;
-      gap: 1px;
-    }
-
-    .header-greeting {
-      font-size: 11pt;
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .header-greeting span {
-      color: var(--text-success);
-    }
-
-    .header-date {
-      font-size: 8pt;
-      color: var(--muted);
-      font-weight: 400;
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 18px;
-    }
-
-    .header-icon-btn {
-      position: relative;
-      background: none;
-      border: none;
-      color: var(--muted);
-      cursor: pointer;
-      padding: 6px;
-      border-radius: var(--radius-sm);
-      transition: all 0.15s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .header-icon-btn:hover {
-      color: var(--text);
-      background: rgba(255,255,255,0.04);
-    }
-
-    .header-icon-btn svg {
-      width: 20px;
-      height: 20px;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      fill: none;
-    }
-
-    .notification-badge {
-      position: absolute;
-      top: 0;
-      right: 0;
-      background: var(--text-danger);
-      color: #fff;
-      font-size: 7pt;
-      font-weight: 700;
-      min-width: 16px;
-      height: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 99px;
-      padding: 0 4px;
-      border: 2px solid var(--bg-card);
-    }
-
-    /* ── CONTENT ── */
-    .content {
-      padding: 24px 28px;
-      flex: 1;
-      overflow-y: auto;
-    }
-
-    /* ── ROW 1: STAT CARDS ── */
-    .stat-grid {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr 1fr 1fr;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    .stat-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 20px;
-      transition: border-color 0.2s;
-    }
-
-    .stat-card:hover {
-      border-color: rgba(255,255,255,0.08);
-    }
-
-    .stat-card.portfolio-card {
-      background: linear-gradient(135deg, #131820 0%, #1a2a3f 100%);
-      border-color: rgba(0,163,255,0.2);
-    }
-
-    .stat-card.portfolio-card:hover {
-      border-color: rgba(0,163,255,0.4);
-    }
-
-    .stat-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
-    }
-
-    .stat-card-label {
-      font-size: 8.5pt;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .stat-card-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .stat-card-icon svg {
-      width: 18px;
-      height: 18px;
-      stroke: currentColor;
-      stroke-width: 1.8;
-      fill: none;
-    }
-
-    .stat-card-icon.icon-success {
-      background: rgba(0,212,170,0.12);
-      color: var(--text-success);
-    }
-
-    .stat-card-icon.icon-danger {
-      background: rgba(255,51,102,0.12);
-      color: var(--text-danger);
-    }
-
-    .stat-card-icon.icon-info {
-      background: rgba(0,163,255,0.12);
-      color: var(--text-info);
-    }
-
-    .stat-card-icon.icon-warning {
-      background: rgba(255,107,53,0.12);
-      color: #FF6B35;
-    }
-
-    .stat-card-value {
-      font-size: 22pt;
-      font-weight: 700;
-      color: var(--text);
-      line-height: 1.1;
-    }
-
-    .stat-card-sub {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 6px;
-      font-size: 9pt;
-    }
-
-    .stat-card-sub .change-up {
-      color: var(--text-success);
-      display: flex;
-      align-items: center;
-      gap: 3px;
-    }
-
-    .stat-card-sub .change-down {
-      color: var(--text-danger);
-      display: flex;
-      align-items: center;
-      gap: 3px;
-    }
-
-    .stat-card-sub .change-neutral {
-      color: var(--muted);
-    }
-
-    .stat-card-sub .change-up svg,
-    .stat-card-sub .change-down svg {
-      width: 12px;
-      height: 12px;
-      stroke: currentColor;
-      stroke-width: 2.5;
-      fill: none;
-    }
-
-    .stat-card-sub .period {
-      color: var(--muted);
-      font-weight: 400;
-    }
-
-    /* ── ROW 2: PREDICTIONS + MARKET MOVERS ── */
-    .row-2 {
-      display: grid;
-      grid-template-columns: 2fr 1fr;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 20px;
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
-
-    .card-title {
-      font-size: 10pt;
-      font-weight: 600;
-      color: var(--text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .card-title svg {
-      width: 16px;
-      height: 16px;
-      stroke: var(--text-info);
-      stroke-width: 1.8;
-      fill: none;
-    }
-
-    .card-action {
-      font-size: 8.5pt;
-      font-weight: 500;
-      color: var(--text-info);
-      cursor: pointer;
-      background: none;
-      border: none;
-      font-family: inherit;
-      transition: color 0.15s;
-    }
-
-    .card-action:hover {
-      color: #5cbfff;
-    }
-
-    /* Mini Table */
-    .mini-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    .mini-table th {
-      padding: 8px 6px;
-      text-align: left;
-      font-size: 7.5pt;
-      font-weight: 600;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-
-    .mini-table td {
-      padding: 10px 6px;
-      font-size: 9.5pt;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-      vertical-align: middle;
-    }
-
-    .mini-table tr:last-child td {
-      border-bottom: none;
-    }
-
-    .mini-table tbody tr {
-      transition: background 0.12s;
-    }
-
-    .mini-table tbody tr:hover {
-      background: rgba(255,255,255,0.02);
-    }
-
-    .mini-table .ticker-cell {
-      font-weight: 600;
-      color: var(--text);
-    }
-
-    .mini-table .ticker-cell .ticker-sub {
-      display: block;
-      font-size: 7pt;
-      font-weight: 400;
-      color: var(--muted);
-    }
-
-    .prediction-buy {
-      color: var(--text-success);
-      font-weight: 600;
-      font-size: 8.5pt;
-    }
-
-    .prediction-sell {
-      color: var(--text-danger);
-      font-weight: 600;
-      font-size: 8.5pt;
-    }
-
-    .prediction-hold {
-      color: var(--text-info);
-      font-weight: 600;
-      font-size: 8.5pt;
-    }
-
-    .confidence-bar-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .confidence-bar {
-      flex: 1;
-      height: 4px;
-      background: rgba(255,255,255,0.06);
-      border-radius: 99px;
-      overflow: hidden;
-      min-width: 50px;
-    }
-
-    .confidence-bar .fill {
-      height: 100%;
-      border-radius: 99px;
-      transition: width 0.4s ease;
-    }
-
-    .confidence-bar .fill.high {
-      background: var(--text-success);
-    }
-
-    .confidence-bar .fill.med {
-      background: #FF6B35;
-    }
-
-    .confidence-bar .fill.low {
-      background: var(--text-danger);
-    }
-
-    .confidence-pct {
-      font-size: 8.5pt;
-      font-weight: 600;
-      color: var(--muted);
-      min-width: 34px;
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .action-btn {
-      padding: 4px 12px;
-      border-radius: 4px;
-      font-size: 8pt;
-      font-weight: 600;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      transition: all 0.15s;
-      font-family: inherit;
-      white-space: nowrap;
-    }
-
-    .action-btn:hover {
-      border-color: var(--text-success);
-      color: var(--text-success);
-    }
-
-    /* Market Movers List */
-    .mover-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-    }
-
-    .mover-item:last-child {
-      border-bottom: none;
-    }
-
-    .mover-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .mover-rank {
-      width: 20px;
-      font-size: 8pt;
-      font-weight: 700;
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .mover-rank.gold { color: #FFD700; }
-    .mover-rank.silver { color: #C0C0C0; }
-    .mover-rank.bronze { color: #CD7F32; }
-
-    .mover-ticker {
-      font-weight: 600;
-      font-size: 9.5pt;
-      color: var(--text);
-    }
-
-    .mover-price {
-      font-size: 9pt;
-      color: var(--text);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .mover-change {
-      font-size: 9pt;
-      font-weight: 600;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .mover-change.pos { color: var(--text-success); }
-    .mover-change.neg { color: var(--text-danger); }
-
-    /* ── ROW 3: EQUITY CURVE + ACTIVITY ── */
-    .row-3 {
-      display: grid;
-      grid-template-columns: 1.3fr 1fr;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    .chart-wrap {
-      position: relative;
-      width: 100%;
-    }
-
-    .chart-wrap canvas {
-      width: 100% !important;
-      height: 180px !important;
-      display: block;
-    }
-
-    .chart-placeholder {
-      width: 100%;
-      height: 180px;
-      background: rgba(255,255,255,0.015);
-      border-radius: var(--radius-sm);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 8.5pt;
-    }
-
-    .chart-placeholder .mini-line {
-      width: 80%;
-      height: 60px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .chart-placeholder .mini-line svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    /* Activity Feed */
-    .activity-feed {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    .activity-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 11px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-    }
-
-    .activity-item:last-child {
-      border-bottom: none;
-    }
-
-    .activity-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-top: 5px;
-      flex-shrink: 0;
-    }
-
-    .activity-dot.dot-success { background: var(--text-success); }
-    .activity-dot.dot-info { background: var(--text-info); }
-    .activity-dot.dot-danger { background: var(--text-danger); }
-    .activity-dot.dot-warning { background: #FF6B35; }
-
-    .activity-body {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .activity-text {
-      font-size: 9.5pt;
-      color: var(--text);
-      line-height: 1.4;
-    }
-
-    .activity-text strong {
-      font-weight: 600;
-    }
-
-    .activity-time {
-      font-size: 7.5pt;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    /* ── UTILITY ── */
-    .text-success { color: var(--text-success) !important; }
-    .text-danger  { color: var(--text-danger) !important; }
-    .text-info    { color: var(--text-info) !important; }
-    .text-muted   { color: var(--muted) !important; }
-    .bg-card      { background: var(--bg-card) !important; }
-    .bg-main      { background: var(--bg-main) !important; }
-    .fw-600       { font-weight: 600; }
-    .fw-700       { font-weight: 700; }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 1200px) {
-      .stat-grid { grid-template-columns: 1fr 1fr; }
-      .row-2 { grid-template-columns: 1fr; }
-      .row-3 { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 768px) {
-      .sidebar { transform: translateX(-100%); }
-      .sidebar.open { transform: translateX(0); }
-      .main-wrapper { margin-left: 0; }
-      .stat-grid { grid-template-columns: 1fr; }
-      .content { padding: 16px; }
-      .header { padding: 0 16px; }
-    }
-
-    @media (max-width: 480px) {
-      .stat-card-value { font-size: 18pt; }
-    }
-  </style>
-</head>
-<body>
-
-  <!-- ─── SIDEBAR ─── -->
-  <aside class="sidebar" id="sidebar">
-    <div class="sidebar-logo">
-      <div class="logo-text">BULLLOGIC</div>
-      <div class="logo-sub">Triple-Fusion Engine</div>
-    </div>
-
-    <nav class="sidebar-nav">
-      <div class="nav-section-label">Main</div>
-      <a class="nav-item active" href="/dashboard">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        </span>
-        Dashboard
-      </a>
-      <a class="nav-item" href="/predictions">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-        </span>
-        Predictions
-        <span class="nav-badge">12</span>
-      </a>
-      <a class="nav-item" href="/trading">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-        </span>
-        Trading
-      </a>
-      <a class="nav-item" href="/portfolio">
-        <span class="nav-icon">
+{% extends "_base.html" %}
+{% set active_page = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block page_styles %}
+<style>
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+  .stat-card { padding: var(--space-5); }
+  .stat-card.portfolio-card {
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(0,163,255,0.10) 100%);
+    border-color: rgba(0,163,255,0.25);
+  }
+  .stat-card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: var(--space-3);
+  }
+  .stat-card-label {
+    font-size: var(--text-xs); font-weight: var(--weight-semibold);
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .stat-card-icon {
+    width: 36px; height: 36px; border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .stat-card-icon svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.8; fill: none; }
+  .stat-card-icon.icon-success { background: rgba(0,212,170,0.12); color: var(--accent-green); }
+  .stat-card-icon.icon-info    { background: rgba(0,163,255,0.12); color: var(--accent-blue); }
+  .stat-card-icon.icon-warning { background: rgba(255,107,53,0.12); color: var(--accent-orange); }
+  .stat-card-value { font-size: var(--text-2xl); font-weight: var(--weight-bold); line-height: 1.1; }
+  .stat-card-sub { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-2); }
+
+  .row-2 { display: grid; grid-template-columns: 2fr 1fr; gap: var(--space-4); margin-bottom: var(--space-5); }
+  .row-3 { display: grid; grid-template-columns: 1.3fr 1fr; gap: var(--space-4); }
+
+  .mover-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-2) 0; border-bottom: 1px solid var(--border-subtle);
+    font-size: var(--text-sm);
+  }
+  .mover-item:last-child { border-bottom: none; }
+  .mover-ticker { font-weight: var(--weight-semibold); }
+  .mover-name { font-size: var(--text-xs); margin-left: var(--space-2); }
+
+  .activity-item {
+    display: flex; gap: var(--space-3); padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--border-subtle); font-size: var(--text-sm);
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-item p { margin-bottom: 0; }
+  .activity-icon { flex-shrink: 0; }
+
+  .chart-wrap canvas { width: 100%; height: 200px; }
+
+  @media (max-width: 1200px) {
+    .stat-grid { grid-template-columns: 1fr 1fr; }
+    .row-2, .row-3 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) { .stat-grid { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+
+  <!-- Row 1: Stat cards -->
+  <div class="stat-grid">
+    <div class="card stat-card portfolio-card">
+      <div class="stat-card-header">
+        <span class="stat-card-label">Portfolio Value</span>
+        <div class="stat-card-icon icon-info">
           <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-        </span>
-        Portfolio
-      </a>
-      <a class="nav-item" href="/watchlist">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </span>
-        Watchlist
-      </a>
-      <a class="nav-item" href="/positions">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        </span>
-        Positions
-      </a>
-
-      <div class="nav-section-label">Community</div>
-      <a class="nav-item" href="/leaderboard">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 19.06 7 20h10c0-.94-.85-1.25-2.03-1.79-.5-.23-.97-.66-.97-1.21v-2.34"/><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
-        </span>
-        Leaderboard
-      </a>
-      <a class="nav-item" href="/competitions">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-        </span>
-        Competitions
-      </a>
-      <a class="nav-item" href="/achievements">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
-        </span>
-        Achievements
-      </a>
-
-      <div class="nav-section-label">System</div>
-      <a class="nav-item" href="/settings">
-        <span class="nav-icon">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </span>
-        Settings
-      </a>
-    </nav>
-
-    <div class="sidebar-footer">
-      <div class="avatar">{{ (user.username[:1]|upper) if user else 'U' }}</div>
-      <div class="user-info">
-        <div class="user-name">{{ user.username if user else 'User' }}</div>
-        <div class="user-plan">Pro Plan</div>
+        </div>
       </div>
-      <div class="pro-badge">PRO</div>
+      <div class="stat-card-value" id="portfolio-value">—</div>
+      <div class="stat-card-sub"><span id="portfolio-change">—</span> today</div>
     </div>
-  </aside>
 
-  <!-- ─── MAIN ─── -->
-  <div class="main-wrapper">
-
-    <!-- ─── HEADER ─── -->
-    <header class="header">
-      <div class="header-left">
-        <div class="header-greeting">
-          Good {{ "morning" if now.hour < 12 else "afternoon" if now.hour < 18 else "evening" }}, <span>{{ user.username if user else 'Trader' }}</span>
-        </div>
-        <div class="header-date">{{ now.strftime("%A, %B %d, %Y") if now else "" }}</div>
-      </div>
-      <div class="header-right">
-        <button class="header-icon-btn" onclick="window.location.href='/notifications'" title="Notifications">
-          <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <span class="notification-badge">{{ notification_count if notification_count is defined else 3 }}</span>
-        </button>
-        <button class="header-icon-btn" onclick="window.location.href='/settings'" title="Settings">
-          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
-      </div>
-    </header>
-
-    <!-- ─── CONTENT ─── -->
-    <main class="content">
-
-      <!-- Row 1: Stat Cards -->
-      <div class="stat-grid">
-        <!-- Portfolio Value -->
-        <div class="stat-card portfolio-card">
-          <div class="stat-card-header">
-            <span class="stat-card-label">Portfolio Value</span>
-            <div class="stat-card-icon icon-info">
-              <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-            </div>
-          </div>
-          <div class="stat-card-value">{{ "${:,.2f}".format(portfolio_value) if portfolio_value is defined else "$284,750.00" }}</div>
-          <div class="stat-card-sub">
-            <span class="change-up">
-              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-              {{ "+{:.2f}%".format(portfolio_change_pct) if portfolio_change_pct is defined else "+12.47%" }}
-            </span>
-            <span class="period">today</span>
-          </div>
-        </div>
-
-        <!-- Today's P&L -->
-        <div class="stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-label">Today's P&L</span>
-            <div class="stat-card-icon icon-success">
-              <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-            </div>
-          </div>
-          <div class="stat-card-value text-success">{{ "${:+,.2f}".format(today_pnl) if today_pnl is defined else "+$3,842.50" }}</div>
-          <div class="stat-card-sub">
-            <span class="change-up">
-              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-              {{ "+{:.2f}%".format(today_pnl_pct) if today_pnl_pct is defined else "+1.35%" }}
-            </span>
-            <span class="period">from yesterday</span>
-          </div>
-        </div>
-
-        <!-- Open Positions -->
-        <div class="stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-label">Open Positions</span>
-            <div class="stat-card-icon icon-warning">
-              <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            </div>
-          </div>
-          <div class="stat-card-value">{{ open_positions_count if open_positions_count is defined else 7 }}</div>
-          <div class="stat-card-sub">
-            <span class="change-up">
-              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-              +2
-            </span>
-            <span class="period">new today</span>
-          </div>
-        </div>
-
-        <!-- Win Rate -->
-        <div class="stat-card">
-          <div class="stat-card-header">
-            <span class="stat-card-label">Win Rate</span>
-            <div class="stat-card-icon icon-success">
-              <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            </div>
-          </div>
-          <div class="stat-card-value text-success">{{ "{:.1f}%".format(win_rate) if win_rate is defined else "68.4%" }}</div>
-          <div class="stat-card-sub">
-            <span class="change-up">
-              <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
-              +2.1%
-            </span>
-            <span class="period">this month</span>
-          </div>
+    <div class="card stat-card">
+      <div class="stat-card-header">
+        <span class="stat-card-label">Today's P&amp;L</span>
+        <div class="stat-card-icon icon-success">
+          <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
         </div>
       </div>
+      <div class="stat-card-value" id="today-pnl">—</div>
+      <div class="stat-card-sub">since market open</div>
+    </div>
 
-      <!-- Row 2: Predictions + Market Movers -->
-      <div class="row-2">
-        <!-- Recent Predictions -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">
-              <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-              Recent Predictions
-            </span>
-            <button class="card-action" onclick="window.location.href='/predictions'">View All &rarr;</button>
-          </div>
-          <table class="mini-table">
-            <thead>
-              <tr>
-                <th>Ticker</th>
-                <th>Prediction</th>
-                <th>Confidence</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <div class="ticker-cell">
-                    AAPL
-                    <span class="ticker-sub">Apple Inc.</span>
-                  </div>
-                </td>
-                <td><span class="prediction-buy">BUY</span></td>
-                <td>
-                  <div class="confidence-bar-wrap">
-                    <div class="confidence-bar">
-                      <div class="fill high" style="width:87%"></div>
-                    </div>
-                    <span class="confidence-pct">87%</span>
-                  </div>
-                </td>
-                <td><button class="action-btn">Trade</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="ticker-cell">
-                    TSLA
-                    <span class="ticker-sub">Tesla Inc.</span>
-                  </div>
-                </td>
-                <td><span class="prediction-sell">SELL</span></td>
-                <td>
-                  <div class="confidence-bar-wrap">
-                    <div class="confidence-bar">
-                      <div class="fill high" style="width:82%"></div>
-                    </div>
-                    <span class="confidence-pct">82%</span>
-                  </div>
-                </td>
-                <td><button class="action-btn">Trade</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="ticker-cell">
-                    MSFT
-                    <span class="ticker-sub">Microsoft Corp.</span>
-                  </div>
-                </td>
-                <td><span class="prediction-buy">BUY</span></td>
-                <td>
-                  <div class="confidence-bar-wrap">
-                    <div class="confidence-bar">
-                      <div class="fill high" style="width:91%"></div>
-                    </div>
-                    <span class="confidence-pct">91%</span>
-                  </div>
-                </td>
-                <td><button class="action-btn">Trade</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="ticker-cell">
-                    NVDA
-                    <span class="ticker-sub">NVIDIA Corp.</span>
-                  </div>
-                </td>
-                <td><span class="prediction-hold">HOLD</span></td>
-                <td>
-                  <div class="confidence-bar-wrap">
-                    <div class="confidence-bar">
-                      <div class="fill med" style="width:64%"></div>
-                    </div>
-                    <span class="confidence-pct">64%</span>
-                  </div>
-                </td>
-                <td><button class="action-btn">Trade</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <div class="ticker-cell">
-                    AMZN
-                    <span class="ticker-sub">Amazon.com Inc.</span>
-                  </div>
-                </td>
-                <td><span class="prediction-buy">BUY</span></td>
-                <td>
-                  <div class="confidence-bar-wrap">
-                    <div class="confidence-bar">
-                      <div class="fill high" style="width:78%"></div>
-                    </div>
-                    <span class="confidence-pct">78%</span>
-                  </div>
-                </td>
-                <td><button class="action-btn">Trade</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Market Movers -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">
-              <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-              Market Movers
-            </span>
-            <button class="card-action" onclick="window.location.href='/market'">Full Market &rarr;</button>
-          </div>
-          <div class="market-movers-list">
-            <div class="mover-item">
-              <div class="mover-info">
-                <span class="mover-rank gold">1</span>
-                <span class="mover-ticker">NVDA</span>
-              </div>
-              <span class="mover-price">$879.32</span>
-              <span class="mover-change pos">+3.82%</span>
-            </div>
-            <div class="mover-item">
-              <div class="mover-info">
-                <span class="mover-rank silver">2</span>
-                <span class="mover-ticker">META</span>
-              </div>
-              <span class="mover-price">$503.48</span>
-              <span class="mover-change pos">+2.94%</span>
-            </div>
-            <div class="mover-item">
-              <div class="mover-info">
-                <span class="mover-rank bronze">3</span>
-                <span class="mover-ticker">AMD</span>
-              </div>
-              <span class="mover-price">$162.17</span>
-              <span class="mover-change pos">+2.37%</span>
-            </div>
-            <div class="mover-item">
-              <div class="mover-info">
-                <span class="mover-rank">4</span>
-                <span class="mover-ticker">COIN</span>
-              </div>
-              <span class="mover-price">$214.60</span>
-              <span class="mover-change neg">-1.85%</span>
-            </div>
-            <div class="mover-item">
-              <div class="mover-info">
-                <span class="mover-rank">5</span>
-                <span class="mover-ticker">PLTR</span>
-              </div>
-              <span class="mover-price">$23.54</span>
-              <span class="mover-change pos">+1.72%</span>
-            </div>
-            <div class="mover-item">
-              <div class="mover-info">
-                <span class="mover-rank">6</span>
-                <span class="mover-ticker">TSLA</span>
-              </div>
-              <span class="mover-price">$178.29</span>
-              <span class="mover-change neg">-0.94%</span>
-            </div>
-          </div>
+    <div class="card stat-card">
+      <div class="stat-card-header">
+        <span class="stat-card-label">Open Positions</span>
+        <div class="stat-card-icon icon-warning">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         </div>
       </div>
+      <div class="stat-card-value" id="open-positions-count">—</div>
+      <div class="stat-card-sub"><a href="/trading">manage positions →</a></div>
+    </div>
 
-      <!-- Row 3: Equity Curve + Activity -->
-      <div class="row-3">
-        <!-- Equity Curve -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">
-              <svg viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-              Equity Curve
-            </span>
-            <button class="card-action" id="equityRangeToggle">1M</button>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="equityChart"></canvas>
-          </div>
-        </div>
-
-        <!-- Recent Activity -->
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">
-              <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-              Recent Activity
-            </span>
-            <button class="card-action" onclick="window.location.href='/history'">View All &rarr;</button>
-          </div>
-          <div class="activity-feed">
-            <div class="activity-item">
-              <span class="activity-dot dot-success"></span>
-              <div class="activity-body">
-                <div class="activity-text"><strong>Buy</strong> 50 AAPL @ $172.43 executed</div>
-                <div class="activity-time">2 minutes ago</div>
-              </div>
-            </div>
-            <div class="activity-item">
-              <span class="activity-dot dot-info"></span>
-              <div class="activity-body">
-                <div class="activity-text"><strong>Prediction</strong> for TSLA updated to SELL (82% confidence)</div>
-                <div class="activity-time">14 minutes ago</div>
-              </div>
-            </div>
-            <div class="activity-item">
-              <span class="activity-dot dot-warning"></span>
-              <div class="activity-body">
-                <div class="activity-text"><strong>Achievement</strong> Unlocked "Consistent Trader" — 10-day win streak</div>
-                <div class="activity-time">1 hour ago</div>
-              </div>
-            </div>
-            <div class="activity-item">
-              <span class="activity-dot dot-success"></span>
-              <div class="activity-body">
-                <div class="activity-text"><strong>Sell</strong> 30 NVDA @ $884.76 — profit +$3,420.00</div>
-                <div class="activity-time">2 hours ago</div>
-              </div>
-            </div>
-            <div class="activity-item">
-              <span class="activity-dot dot-danger"></span>
-              <div class="activity-body">
-                <div class="activity-text"><strong>Stop-loss</strong> triggered for MSFT @ $398.21</div>
-                <div class="activity-time">3 hours ago</div>
-              </div>
-            </div>
-            <div class="activity-item">
-              <span class="activity-dot dot-info"></span>
-              <div class="activity-body">
-                <div class="activity-text"><strong>New signal</strong> ALERT: BTC/USD approaching resistance at $72,400</div>
-                <div class="activity-time">5 hours ago</div>
-              </div>
-            </div>
-          </div>
+    <div class="card stat-card">
+      <div class="stat-card-header">
+        <span class="stat-card-label">Win Rate</span>
+        <div class="stat-card-icon icon-success">
+          <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
         </div>
       </div>
-
-    </main>
+      <div class="stat-card-value" id="win-rate">—</div>
+      <div class="stat-card-sub">closed trades</div>
+    </div>
   </div>
 
-  <script src="/static/js/dashboard.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script>
-    document.addEventListener('DOMContentLoaded', function () {
+  <!-- Row 2: Recent predictions + market movers -->
+  <div class="row-2">
+    <div class="card">
+      <div class="card-header">
+        <h3>Recent Predictions</h3>
+        <a class="btn btn-sm btn-ghost" href="/history">View All →</a>
+      </div>
+      <div class="card-body table-container">
+        <table class="table">
+          <thead>
+            <tr><th>Ticker</th><th>Signal</th><th>Confidence</th><th></th></tr>
+          </thead>
+          <tbody id="predictions-tbody">
+            <tr><td colspan="4" class="text-center text-muted">No predictions yet — <a href="/predictions">run one</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-      // ── Equity Curve Chart ──
-      var ctx = document.getElementById('equityChart');
-      if (ctx) {
-        ctx.height = 180;
-        var gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 180);
-        gradient.addColorStop(0, 'rgba(0,212,170,0.30)');
-        gradient.addColorStop(1, 'rgba(0,212,170,0.01)');
+    <div class="card">
+      <div class="card-header">
+        <h3>Market Movers</h3>
+        <a class="btn btn-sm btn-ghost" href="/market">Full Market →</a>
+      </div>
+      <div class="card-body" id="market-movers-list">
+        <div class="text-muted text-center">Loading…</div>
+      </div>
+    </div>
+  </div>
 
-        var equityChart = new Chart(ctx, {
-          type: 'line',
-          data: {
-            labels: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-            datasets: [{
-              label: 'Portfolio Value',
-              data: [242000, 248500, 253000, 247000, 261000, 258000, 264000, 271000, 268000, 276000, 280000, 284750],
-              borderColor: '#00D4AA',
-              backgroundColor: gradient,
-              borderWidth: 2,
-              fill: true,
-              tension: 0.35,
-              pointRadius: 0,
-              pointHoverRadius: 4,
-              pointHoverBackgroundColor: '#00D4AA',
-              pointHoverBorderColor: '#fff',
-              pointHoverBorderWidth: 2,
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                backgroundColor: '#131820',
-                titleColor: '#E2E8F0',
-                bodyColor: '#00D4AA',
-                borderColor: '#2A3150',
-                borderWidth: 1,
-                padding: 10,
-                cornerRadius: 6,
-                displayColors: false,
-                callbacks: {
-                  label: function(context) {
-                    return '$' + context.parsed.y.toLocaleString();
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                display: true,
-                grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
-                ticks: { color: '#7A8499', font: { size: 9, family: 'Inter' }, maxTicksLimit: 6 }
-              },
-              y: {
-                display: true,
-                grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
-                ticks: {
-                  color: '#7A8499',
-                  font: { size: 9, family: 'Inter' },
-                  callback: function(value) { return '$' + value.toLocaleString(); }
-                }
-              }
-            },
-            interaction: {
-              intersect: false,
-              mode: 'index'
-            }
-          }
-        });
-      }
+  <!-- Row 3: Equity curve + activity -->
+  <div class="row-3">
+    <div class="card">
+      <div class="card-header"><h3>Equity Curve</h3></div>
+      <div class="card-body chart-wrap">
+        <canvas id="equity-chart"></canvas>
+      </div>
+    </div>
 
-      // ── Equity Range Toggle ──
-      var rangeBtn = document.getElementById('equityRangeToggle');
-      if (rangeBtn) {
-        var ranges = ['1W', '1M', '3M', '1Y', 'ALL'];
-        var idx = 1;
-        rangeBtn.addEventListener('click', function () {
-          idx = (idx + 1) % ranges.length;
-          rangeBtn.textContent = ranges[idx];
-        });
-      }
+    <div class="card">
+      <div class="card-header">
+        <h3>Recent Activity</h3>
+        <button class="btn btn-sm btn-ghost" data-action="refresh">Refresh</button>
+      </div>
+      <div class="card-body" id="activity-feed">
+        <div class="text-muted text-center">Loading…</div>
+      </div>
+    </div>
+  </div>
 
-      // ── Notification badge dynamic update ──
-      function updateBadge() {
-        fetch('/api/notifications/count')
-          .then(function(r) { return r.json(); })
-          .then(function(d) {
-            if (d.ok && d.count !== undefined) {
-              var badge = document.querySelector('.notification-badge');
-              if (badge) badge.textContent = d.count > 99 ? '99+' : d.count;
-            }
-          })
-          .catch(function() {});
-      }
-      setTimeout(updateBadge, 3000);
+{% endblock %}
 
-    });
-  </script>
-</body>
-</html>
+{% block page_scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

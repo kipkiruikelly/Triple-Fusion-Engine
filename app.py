@@ -124,6 +124,8 @@ def create_app():
     from routes.admin         import register_admin_routes
     from routes.notifications import register_notification_routes
     from routes.paper         import register_paper_routes
+    from routes.pages         import register_page_routes
+    from routes.api           import api_bp
 
     register_auth_routes(app)
     register_payment_routes(app)
@@ -134,6 +136,8 @@ def create_app():
     register_admin_routes(app, _endpoint_stats, _APP_START)
     register_notification_routes(app)
     register_paper_routes(app)
+    register_page_routes(app)
+    app.register_blueprint(api_bp)
 
     # ── Theme (account-backed dark/light/system) ──────────────────────────────
     # Every template renders <html {{ theme_attr }}> so logged-in users get the

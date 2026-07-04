@@ -217,6 +217,10 @@
 
   // ── Real-time Updates ─────────────────────────────────────────────────────────
 
+  // The modal HTML references confirmTrade() via inline onclick, so it
+  // must be reachable on window (this module is an IIFE).
+  window.confirmTrade = confirmTrade;
+
   document.addEventListener('bullLogic:trade', (e) => {
     fetchPositions();
     notify('Trade update: ' + (e.detail.message || ''), 'info', 3000);
