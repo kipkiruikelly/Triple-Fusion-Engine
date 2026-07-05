@@ -220,6 +220,13 @@ let _allEntries = [];
 
 const MOOD_ICONS = { great:'😄', good:'🙂', neutral:'😐', bad:'🙁', terrible:'😤' };
 
+function goPredict(ticker) {
+  const form = document.createElement('form');
+  form.method = 'POST'; form.action = '/predict';
+  const t = document.createElement('input'); t.name = 'ticker'; t.value = ticker; form.appendChild(t);
+  document.body.appendChild(form); form.submit();
+}
+
 function selectMood(btn) {
   document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('selected'));
   btn.classList.add('selected');
@@ -339,7 +346,7 @@ function renderEntries(entries) {
     const mood  = e.mood ? MOOD_ICONS[e.mood] : '';
     const typeColor = {long:'var(--green)',short:'var(--red)',paper:'var(--blue)',insight:'var(--yellow)'}[e.trade_type] || 'var(--muted)';
     const typeLbl  = e.trade_type ? `<span style="color:${typeColor};font-weight:600;text-transform:uppercase;font-size:8.5pt">${e.trade_type}</span>` : '';
-    const tickerBadge = e.ticker ? `<a href="/predict?ticker=${e.ticker}" style="color:var(--accent);font-weight:700;text-decoration:none">${e.ticker}</a>` : '';
+    const tickerBadge = e.ticker ? `<a href="#" onclick="event.preventDefault();goPredict('${e.ticker}')" style="color:var(--accent);font-weight:700;text-decoration:none">${e.ticker}</a>` : '';
     const tags = (e.tags || '').split(',').filter(Boolean).map(t =>
       `<span class="entry-tag">#${t.trim()}</span>`).join('');
     const bodyPreview = (e.body || '').slice(0, 250) + ((e.body || '').length > 250 ? '...' : '');
