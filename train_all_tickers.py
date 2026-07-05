@@ -33,7 +33,7 @@ import yfinance as yf
 import joblib
 import ta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, r2_score, accuracy_score, roc_auc_score
@@ -47,6 +47,23 @@ except ImportError:
 
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
+
+# Interval -> (yfinance interval to download, yfinance period, minimum bars
+# needed to train, whether it's resampled from a shorter interval after
+# download). Intraday periods (1m/5m/15m/30m/1h/4h) are yfinance's hard
+# server-side history limits - they cannot be extended by requesting a
+# longer period. Only 1d/1w have deep history available, hence 20y there.
+INTERVAL_CONFIG = {
+    "1m":  {"yf_interval": "1m",  "yf_period": "7d",   "min_rows": 200, "resample_to": None},
+    "5m":  {"yf_interval": "5m",  "yf_period": "60d",  "min_rows": 200, "resample_to": None},
+    "15m": {"yf_interval": "15m", "yf_period": "60d",  "min_rows": 150, "resample_to": None},
+    "30m": {"yf_interval": "30m", "yf_period": "60d",  "min_rows": 100, "resample_to": None},
+    "1h":  {"yf_interval": "1h",  "yf_period": "730d", "min_rows": 100, "resample_to": None},
+    "4h":  {"yf_interval": "1h",  "yf_period": "730d", "min_rows": 80,  "resample_to": "4h"},
+    "1d":  {"yf_interval": "1d",  "yf_period": "20y",  "min_rows": 300, "resample_to": None},
+    "1w":  {"yf_interval": "1wk", "yf_period": "20y",  "min_rows": 60,  "resample_to": None},
+}
+SUPPORTED_INTERVALS = list(INTERVAL_CONFIG)
 
 DEFAULT_TICKERS = [
     # ── US Stocks ──────────────────────────────────────────────────────────────
@@ -142,9 +159,6 @@ YF_SYMBOL_MAP = {
     "COCOA":    "CC=F",
     "COFFEE":   "KC=F",
 }
-
-MAX_HISTORY_TICKERS = {"NDX", "QQQ", "SPX", "DJI", "RUT", "FTSE", "DAX", "NIKKEI", "HSI",
-                        "SPY", "IWM", "DIA", "GLD", "SLV", "TLT", "XLF", "XLE"}
 
 # ── Ticker → sector ETF mapping ───────────────────────────────────────────────
 
@@ -247,36 +261,42 @@ INTRADAY_EXTRA_COLS = [
 # ── Data fetching ──────────────────────────────────────────────────────────────
 
 def fetch_data(ticker: str, interval: str = "1d") -> pd.DataFrame:
-    yf_ticker = YF_SYMBOL_MAP.get(ticker, ticker.replace(".", "-"))
-
-    if interval == "1d":
-        period = "max" if ticker in MAX_HISTORY_TICKERS else "5y"
-    elif interval == "1h":
-        period = "730d"
-    elif interval == "15m":
-        period = "60d"
-    else:
+    if interval not in INTERVAL_CONFIG:
         raise ValueError(f"Unsupported interval: {interval}")
 
-    df = yf.download(yf_ticker, period=period, interval=interval,
+    yf_ticker = YF_SYMBOL_MAP.get(ticker, ticker.replace(".", "-"))
+    cfg = INTERVAL_CONFIG[interval]
+    period = cfg["yf_period"]
+
+    df = yf.download(yf_ticker, period=period, interval=cfg["yf_interval"],
                      auto_adjust=True, progress=False)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
+
+    if cfg["resample_to"] == "4h" and df is not None and not df.empty:
+        df = df.resample("4h", label="left", closed="left").agg({
+            "Open": "first", "High": "max", "Low": "min",
+            "Close": "last", "Volume": "sum",
+        }).dropna(subset=["Open", "Close"])
+        df = df[df["Volume"] > 0]
+
     return df
 
 
 def fetch_aux_data(ticker: str, interval: str = "1d") -> dict:
-    """Fetch VIX, sector ETF, SPY, and earnings dates for a ticker."""
-    if interval == "1d":
-        period = "max" if ticker in MAX_HISTORY_TICKERS else "5y"
-    elif interval == "1h":
-        period = "730d"
-    else:
-        period = "60d"
+    """Fetch VIX, sector ETF, SPY, and earnings dates for a ticker.
+
+    Aux series are aligned to the main df by calendar day (see
+    _add_vix_features/_add_sector_features), so it's fine to fetch them at
+    the underlying yfinance interval even for resampled intervals like 4h.
+    """
+    cfg = INTERVAL_CONFIG.get(interval, INTERVAL_CONFIG["1d"])
+    period = cfg["yf_period"]
+    yf_interval = cfg["yf_interval"]
 
     def _dl(sym):
         try:
-            df = yf.download(sym, period=period, interval=interval,
+            df = yf.download(sym, period=period, interval=yf_interval,
                              auto_adjust=True, progress=False)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
@@ -503,10 +523,13 @@ def _add_vix_features(df: pd.DataFrame, vix_df) -> pd.DataFrame:
     if vix_df is None or vix_df.empty:
         return df.assign(**_zero)
 
-    # Align VIX to ticker's trading days
+    # Align VIX to ticker's trading days. Source may itself be intraday
+    # (multiple bars per day), so collapse to one value per day before
+    # reindexing - .reindex() requires a unique source index.
     idx = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
     vix_close = vix_df["Close"].copy()
     vix_close.index = vix_close.index.normalize() if vix_close.index.tz is None else vix_close.index.tz_localize(None).normalize()
+    vix_close = vix_close[~vix_close.index.duplicated(keep="last")]
     vix = vix_close.reindex(idx, method="ffill").values
 
     vix_s = pd.Series(vix, index=df.index)
@@ -528,8 +551,11 @@ def _add_sector_features(df: pd.DataFrame, sector_df, spy_df) -> pd.DataFrame:
             return None
         s = src_df["Close"].copy()
         s.index = s.index.normalize() if s.index.tz is None else s.index.tz_localize(None).normalize()
+        s = s[~s.index.duplicated(keep="last")]
         idx = df.index.normalize() if df.index.tz is None else df.index.tz_convert(None).normalize()
-        return s.reindex(idx, method="ffill")
+        out = s.reindex(idx, method="ffill")
+        out.index = df.index      # restore df's original (possibly tz-aware) index for arithmetic
+        return out
 
     sec = _align(sector_df)
     spy = _align(spy_df)
@@ -629,9 +655,11 @@ def train_ticker(ticker: str, interval: str = "1d",
                  rf_trees: int = 100, rf_depth: int = 8) -> dict:
     t0 = time.time()
     df = fetch_data(ticker, interval)
-    min_rows = 300 if interval == "1d" else 500
-    if df.empty or len(df) < min_rows:
-        return {"ticker": ticker, "status": "skipped", "elapsed": 0}
+    min_rows = INTERVAL_CONFIG.get(interval, {}).get("min_rows", 300)
+    if df is None or df.empty or len(df) < min_rows:
+        got = 0 if df is None else len(df)
+        print(f"  SKIP {ticker} {interval}: only {got} bars (need {min_rows})")
+        return {"ticker": ticker, "status": "skipped", "elapsed": 0, "bars": got}
 
     aux  = fetch_aux_data(ticker, interval)
     df   = engineer_features(df, interval, ticker, aux)
@@ -639,12 +667,20 @@ def train_ticker(ticker: str, interval: str = "1d",
 
     suffix = model_suffix(interval)
 
+    split1 = int(len(df) * 0.8)
+    split2 = int(len(df) * 0.9)
+
+    # Drop columns that are constant over the training window (e.g. earnings-
+    # proximity or Asia-session features on a short/limited history window).
+    # MinMaxScaler divides by (max-min); a zero-variance column divides by
+    # zero and blows LR's coefficients up to nonsense (seen on 5m/30m/1w with
+    # short intraday histories or degenerate calendar features on weekly bars).
+    train_std = df[feat].iloc[:split1].std()
+    feat = [c for c in feat if train_std[c] > 1e-9]
+
     X      = df[feat].values
     y_px   = df["Next_Close"].values
     y_ret  = df["Next_Return"].values
-
-    split1 = int(len(X) * 0.8)
-    split2 = int(len(X) * 0.9)
 
     X_train, X_test = X[:split1], X[split2:]
     y_px_train      = y_px[:split1]
@@ -656,7 +692,12 @@ def train_ticker(ticker: str, interval: str = "1d",
     X_train = scaler.fit_transform(X_train)
     X_test  = scaler.transform(X_test)
 
-    lr = LinearRegression()
+    # Ridge (L2-regularized) rather than plain OLS: several features are
+    # highly collinear (Close, High, Low, SMA/EMA, Close_lag_*), which makes
+    # unregularized LinearRegression's normal equations near-singular -
+    # coefficients can blow up to absurd magnitudes (seen on BTC 5m: MAE in
+    # the tens of trillions). Ridge keeps this numerically stable.
+    lr = Ridge(alpha=1.0)
     lr.fit(X_train, y_px_train)
     lr_pred = lr.predict(X_test)
     lr_mae  = mean_absolute_error(y_px_test, lr_pred)
@@ -740,8 +781,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tickers",  nargs="+", default=DEFAULT_TICKERS)
     parser.add_argument("--interval", default="1d",
-                        choices=["1d", "1h", "15m"],
-                        help="Bar interval: 1d (default), 1h (730d history), 15m (60d history)")
+                        choices=SUPPORTED_INTERVALS,
+                        help="Bar interval: " + ", ".join(SUPPORTED_INTERVALS) + " (default: 1d)")
     parser.add_argument("--upload",   action="store_true",
                         help="Upload models to Azure after training")
     parser.add_argument("--fast",     action="store_true",
@@ -769,7 +810,7 @@ def main():
     feat_list = _feature_list(args.interval)
     mode_tag  = "fast (RF-50/d6)" if args.fast else "standard (RF-100/d8)"
 
-    history_note = {"1d": "5y/max", "1h": "730d", "15m": "60d"}[args.interval]
+    history_note = INTERVAL_CONFIG[args.interval]["yf_period"]
     print(f"Interval  : {args.interval}  ({history_note} history)")
     print(f"Mode      : {mode_tag}")
     print(f"Features  : {len(feat_list)}  (TA + ICT"

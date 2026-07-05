@@ -114,6 +114,85 @@ Three fixed guards, by design, not bugs:
 | Security: admin-only 2FA | **WORKING** | Enrollment is the existing self-service TOTP flow (`/api/2fa/setup`, `/api/2fa/enable`, on the regular `/profile` page) - there is no separate admin enrollment system. Once an `admin`-role account has 2FA enabled, both the password `/admin/login` form and the Google `/auth/google?admin=1` path stop short of completing the session and require a valid TOTP code as a second round trip; accounts without 2FA enrolled are unaffected. Tested: blocked without code, succeeds with a valid code, unaffected accounts log in directly. |
 | Security: audit log as a filterable timeline | **WORKING** (pre-existing, not new this session) | `GET /admin/api/audit` filters by free text, exact action, admin id, and date range; the existing `audit.html` renders it as a timeline. Tested (filter smoke test added this session). |
 
+## Trained model coverage (updated 2026-07-06)
+
+Prior state: LR+RF (+XGB where available) models existed for only 9 tickers
+(AAPL, MSFT, GOOGL, AMZN, META, NVDA, TSLA, NDX, QQQ) at 1d and 1h. Every
+other ticker or timeframe hit `/predict` and got either a crash or (after
+this session's chart fix) an honest "no prediction model for this
+timeframe" badge. The homepage's "210 Pro Models" stat was static marketing
+text, not a real count.
+
+`train_all_tickers.py` now supports all 7 timeframes the chart UI exposes
+(1m/5m/15m/30m/1h/4h/1d, plus 1w), reusing the same 87-153 feature ICT/TA
+pipeline for every asset class (equities, ETFs, crypto, forex, commodities,
+indices) - no separate pipeline per asset class, per the existing design.
+Two real bugs were found and fixed while extending it (not pre-existing on
+1d/1h, which never exercised these code paths until 4h/5m/30m/1w training
+was attempted):
+- `_add_vix_features`/`_add_sector_features` crashed with "cannot reindex
+  on an axis with duplicate labels" for any non-daily interval, because
+  VIX/sector aux data fetched at intraday granularity produced duplicate
+  normalized-day index entries. Fixed by deduping to one value per day
+  before reindexing.
+- Plain `LinearRegression` could blow up to nonsense coefficients (seen:
+  BTC 5m predicting a next-close MAE in the tens of trillions of dollars)
+  due to multicollinearity between Close/High/Low/SMA/EMA/lag features.
+  Switched to `Ridge(alpha=1.0)` - still linear regression, regularized.
+- Also: zero-variance columns (e.g. Asia-session features that are
+  constant when a short intraday window never crosses that session, or
+  earnings-window features with no earnings event in range) are now
+  dropped per ticker+interval before scaling, since a constant column
+  divides by zero in MinMaxScaler and had the same blow-up effect.
+
+`train_universe.py` (new) orchestrates training across the ticker x
+timeframe grid: priority order (1d, 1h, 4h, 1w, 30m, 15m, 5m, 1m opt-in),
+`--skip-existing` to resume interrupted runs, and an incremental
+`Saved Models/training_manifest.json` (gitignored along with the model
+binaries) recording status and metrics per combo.
+
+1d and 1w now train on **20 years** of history for every ticker (previously
+5y, or "max" for a hardcoded subset of index/ETF tickers - that special
+case was removed in favor of one uniform window). This does **not** apply
+to intraday timeframes: yfinance enforces hard server-side history limits
+that no period parameter can override (1m: 7d, 5m/15m/30m: 60d, 1h/4h:
+730d) - those stay at their existing maximum windows.
+
+Coverage after training (unique tickers with a model, out of 76 total that
+have at least one timeframe), from the actual files in `Saved Models/`:
+
+| Timeframe | Tickers covered |
+|-----------|------------------|
+| 1d  | 76 |
+| 1h  | 73 |
+| 4h  | 58 |
+| 1w  | 75 |
+| 30m | 73 |
+| 15m | 73 |
+| 5m  | 73 |
+| 1m  | 73 |
+
+Gaps are asset-data limits, not code bugs: a handful of tickers (e.g.
+`MATIC`, `UNI`, `XAUUSD`, `XAGUSD`) return zero rows from yfinance at some
+intraday intervals (renamed/delisted symbols or no intraday feed) and are
+skipped with a logged reason rather than crashing; 4h is lowest because it
+resamples from 1h, so any ticker without enough 1h history is skipped
+there too.
+
+**Not wired into live serving**: 1w models are trained and on disk, but
+`/api/chart/<ticker>` still serves the "1W" tab as a resample of the 1d
+model's candles/prediction (a deliberate choice made in the chart-feature
+session, not an oversight) - actually consuming the dedicated weekly model
+would need a route change not yet made.
+
+**Deliberately not implemented**: the ticket that requested this training
+pass also asked for a `predictor.py` fallback that reuses AAPL's model for
+any ticker without its own (Step 6 of that ticket). Not implemented -
+AAPL's regressor predicts an absolute price on AAPL's ~$300 scale, which is
+nonsensical for BTC (~$80k) or GOLD (~$3k) predictions. The existing "no
+prediction model for this timeframe" badge (shipped in the chart-feature
+session) is the honest alternative already in place.
+
 ### Promotion script
 
 `scripts/promote_admin.py <email> [--demote]` looks up a user by email
