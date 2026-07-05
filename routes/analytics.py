@@ -11,7 +11,8 @@ from datetime import date, datetime, timedelta
 from flask import render_template, request, jsonify, Response, stream_with_context
 from flask_login import login_required, current_user
 
-from utils import SCREENER_TICKERS, CALENDAR_TICKERS, _POSITIVE_WORDS, _NEGATIVE_WORDS, _SECTOR_ETFS
+from utils import (SCREENER_TICKERS, CALENDAR_TICKERS, _POSITIVE_WORDS, _NEGATIVE_WORDS,
+                   _SECTOR_ETFS, VALID_INTERVALS)
 
 # Quotes go through market_data, one shared cache and rate-limit circuit
 # breaker for the whole app.
@@ -381,16 +382,20 @@ def register_analytics_routes(app):
             BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             models_dir = os.path.join(BASE_DIR, "Saved Models")
             ticker     = ticker.upper()
-            rf_path    = os.path.join(models_dir, f"rf_model_{ticker}.pkl")
-            feat_path  = os.path.join(models_dir, f"feature_cols_sklearn_{ticker}.pkl")
+            interval   = request.args.get("interval", "1d")
+            if interval not in VALID_INTERVALS:
+                interval = "1d"
+            suffix     = "" if interval == "1d" else f"_{interval}"
+            rf_path    = os.path.join(models_dir, f"rf_model_{ticker}{suffix}.pkl")
+            feat_path  = os.path.join(models_dir, f"feature_cols_sklearn_{ticker}{suffix}.pkl")
             if not os.path.exists(rf_path):
                 return jsonify({"ok": False,
-                                "error": f"No model found for {ticker}. Run a prediction first."})
+                                "error": f"No {interval} model found for {ticker}."})
             rf   = joblib.load(rf_path)
             feat = joblib.load(feat_path)
             pairs = sorted(zip(feat, rf.feature_importances_.tolist()),
                            key=lambda x: x[1], reverse=True)[:15]
-            return jsonify({"ok": True, "ticker": ticker,
+            return jsonify({"ok": True, "ticker": ticker, "interval": interval,
                             "features": [{"name": n, "importance": round(v, 4)} for n, v in pairs]})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 400

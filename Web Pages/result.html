@@ -1402,7 +1402,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div>
             <h3 style="font-size:11pt;font-weight:600">Model Drivers</h3>
-            <div style="font-size:8.5pt;color:var(--muted);margin-top:2px">Random Forest feature importance</div>
+            <div id="feat-subtitle" style="font-size:8.5pt;color:var(--muted);margin-top:2px">Random Forest feature importance</div>
           </div>
           <button id="featBtn" onclick="loadFeatureImportance()" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);padding:6px 13px;border-radius:6px;font-size:9.5pt;cursor:pointer">Load</button>
         </div>
@@ -2097,13 +2097,16 @@ async function loadFeatureImportance() {
   const btn = document.getElementById('featBtn');
   btn.textContent = '...'; btn.disabled = true;
   try {
-    const r = await fetch('/api/feature-importance/{{ ticker }}');
+    const iv = currentTF === '1D' ? '1d' : currentTF;
+    const r = await fetch('/api/feature-importance/{{ ticker }}?interval=' + encodeURIComponent(iv));
     const d = await r.json();
     if (!d.ok) {
       document.getElementById('feat-bars').innerHTML = `<div style="color:var(--muted)">${d.error}</div>`;
       document.getElementById('featResult').style.display = 'block';
       btn.textContent = 'Load'; btn.disabled = false; return;
     }
+    document.getElementById('feat-subtitle').textContent =
+      'Random Forest feature importance (' + d.interval + ')';
     const maxImp = Math.max(...d.features.map(f => f.importance));
     document.getElementById('feat-bars').innerHTML = d.features.map(f => {
       const pct = (f.importance / maxImp * 100).toFixed(1);
