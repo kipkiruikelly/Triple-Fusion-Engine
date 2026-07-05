@@ -18,6 +18,7 @@ from utils import (consume_quota, refund_quota, _try_azure_download,
                    VALID_INTERVALS, PRO_TICKERS)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 
 
 def register_prediction_routes(app, metrics):
@@ -695,38 +696,59 @@ def register_prediction_routes(app, metrics):
     @app.route("/api/ai/analyze/<ticker>", methods=["POST"])
     @login_required
     def ai_analyze(ticker):
-        if not ANTHROPIC_API_KEY:
+        if not DEEPSEEK_API_KEY and not ANTHROPIC_API_KEY:
             return jsonify({"ok": False,
-                            "error": "AI analyst not configured (ANTHROPIC_API_KEY missing)."}), 503
+                            "error": "AI analyst not configured (no provider API key set)."}), 503
+        data        = request.get_json() or {}
+        interval    = data.get("interval", "1d")
+        cur_price   = data.get("current_price", 0)
+        lr_pred     = data.get("lr_pred", 0)
+        direction   = data.get("direction", "-")
+        confidence  = data.get("confidence", 0)
+        rsi         = data.get("rsi", 50)
+        macd_signal = data.get("macd_signal", "-")
+        ict_bias    = data.get("ict_bias", "-")
+        pd_zone     = data.get("pd_zone", "-")
+        prompt = (
+            f"You are a professional quantitative trader and market analyst. "
+            f"Provide a concise, actionable market commentary (3-4 short paragraphs) for "
+            f"{ticker.upper()} based on the following ML prediction data:\n\n"
+            f"- Timeframe: {interval}\n- Current Price: ${cur_price}\n"
+            f"- ML Predicted Next Price: ${lr_pred}\n"
+            f"- Direction: {direction} (Confidence: {confidence}%)\n"
+            f"- RSI(14): {rsi}\n- MACD: {macd_signal}\n"
+            f"- ICT Bias: {ict_bias}\n- PD Zone: {pd_zone}\n\n"
+            f"Cover: (1) short-term momentum, (2) key levels, (3) risk factors, "
+            f"(4) suggested approach. Be direct. No disclaimers."
+        )
+
+        deepseek_err = None
+        if DEEPSEEK_API_KEY:
+            try:
+                import openai as _openai
+                client = _openai.OpenAI(api_key=DEEPSEEK_API_KEY, base_url="https://api.deepseek.com")
+                response = client.chat.completions.create(
+                    model="deepseek-chat", max_tokens=600,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return jsonify({"ok": True, "analysis": response.choices[0].message.content,
+                                "provider": "deepseek"})
+            except Exception as e:
+                deepseek_err = str(e)
+                if not ANTHROPIC_API_KEY:
+                    return jsonify({"ok": False, "error": deepseek_err}), 500
+
         try:
             import anthropic as _anthropic
-            data        = request.get_json() or {}
-            interval    = data.get("interval", "1d")
-            cur_price   = data.get("current_price", 0)
-            lr_pred     = data.get("lr_pred", 0)
-            direction   = data.get("direction", "-")
-            confidence  = data.get("confidence", 0)
-            rsi         = data.get("rsi", 50)
-            macd_signal = data.get("macd_signal", "-")
-            ict_bias    = data.get("ict_bias", "-")
-            pd_zone     = data.get("pd_zone", "-")
-            prompt = (
-                f"You are a professional quantitative trader and market analyst. "
-                f"Provide a concise, actionable market commentary (3-4 short paragraphs) for "
-                f"{ticker.upper()} based on the following ML prediction data:\n\n"
-                f"- Timeframe: {interval}\n- Current Price: ${cur_price}\n"
-                f"- ML Predicted Next Price: ${lr_pred}\n"
-                f"- Direction: {direction} (Confidence: {confidence}%)\n"
-                f"- RSI(14): {rsi}\n- MACD: {macd_signal}\n"
-                f"- ICT Bias: {ict_bias}\n- PD Zone: {pd_zone}\n\n"
-                f"Cover: (1) short-term momentum, (2) key levels, (3) risk factors, "
-                f"(4) suggested approach. Be direct. No disclaimers."
-            )
             client   = _anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
             response = client.messages.create(
                 model="claude-haiku-4-5-20251001", max_tokens=600,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return jsonify({"ok": True, "analysis": response.content[0].text})
+            return jsonify({"ok": True, "analysis": response.content[0].text,
+                            "provider": "anthropic"})
         except Exception as e:
-            return jsonify({"ok": False, "error": str(e)}), 500
+            err = str(e)
+            if deepseek_err:
+                err = f"deepseek: {deepseek_err}; anthropic: {err}"
+            return jsonify({"ok": False, "error": err}), 500

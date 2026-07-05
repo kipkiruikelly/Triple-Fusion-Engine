@@ -16,6 +16,7 @@ plotly==5.22.0
 azure-storage-blob==12.19.0
 stripe>=15.0.0
 anthropic>=0.34.0
+openai>=1.0.0
 requests>=2.31.0
 mt5linux
 metaapi-cloud-sdk
