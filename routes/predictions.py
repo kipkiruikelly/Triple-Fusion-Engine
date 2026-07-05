@@ -2,6 +2,7 @@
 
 import csv
 import io
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -60,19 +61,21 @@ def register_prediction_routes(app, metrics):
         try:
             _try_azure_download(ticker, interval)
             result = run_prediction(ticker, interval)
+            src_source = src_conf = src_div = None
+            vq = None
+            try:
+                from market_data import get_quotes_verified
+                vq = get_quotes_verified([ticker]).get(ticker)
+            except Exception:
+                vq = None
+            result["live_quote"] = vq
             try:
                 # Capture data-quality context so accuracy can later be
                 # analyzed against source confidence and divergence.
-                src_source = src_conf = src_div = None
-                try:
-                    from market_data import get_quotes_verified
-                    vq = get_quotes_verified([ticker]).get(ticker)
-                    if vq:
-                        src_source = vq["source"]
-                        src_conf   = vq["conf_pct"]
-                        src_div    = vq["divergence_pct"]
-                except Exception:
-                    pass
+                if vq:
+                    src_source = vq["source"]
+                    src_conf   = vq["conf_pct"]
+                    src_div    = vq["divergence_pct"]
                 ph = PredictionHistory(
                     user_id=current_user.id, ticker=ticker, interval=interval,
                     current_price=result["current_price"],
@@ -254,6 +257,98 @@ def register_prediction_routes(app, metrics):
             })
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 400
+
+    def _resample_weekly(daily_candles):
+        """Group daily candles (time='YYYY-MM-DD') into ISO-week OHLCV bars."""
+        weeks = {}
+        order = []
+        for c in daily_candles:
+            d = datetime.strptime(c["time"], "%Y-%m-%d")
+            wk = d - timedelta(days=d.weekday())      # Monday of that week
+            key = wk.strftime("%Y-%m-%d")
+            if key not in weeks:
+                weeks[key] = {"time": key, "open": c["open"], "high": c["high"],
+                              "low": c["low"], "close": c["close"], "volume": c.get("volume", 0)}
+                order.append(key)
+            else:
+                bar = weeks[key]
+                bar["high"]   = max(bar["high"], c["high"])
+                bar["low"]    = min(bar["low"],  c["low"])
+                bar["close"]  = c["close"]
+                bar["volume"] = bar.get("volume", 0) + c.get("volume", 0)
+        return [weeks[k] for k in order]
+
+    @app.route("/api/chart/<ticker>", methods=["GET"])
+    @login_required
+    def api_chart(ticker):
+        ticker = ticker.upper().strip()
+        tf = (request.args.get("interval") or "1D").strip()
+        pred_interval = "1d" if tf in ("1D", "1W") else tf
+        if pred_interval not in VALID_INTERVALS:
+            return jsonify({"ok": False, "error": f'Unsupported timeframe "{tf}".'}), 400
+
+        empty_zones = {"pred": None, "tp": None, "sl": None,
+                       "ote_buy": None, "ote_sell": None, "fvg": [], "ob": [],
+                       "in_ote_buy": False, "in_ote_sell": False}
+
+        try:
+            result = run_prediction(ticker, pred_interval)
+            lw = json.loads(result["lw_chart"])
+            candles = lw["candles"]
+            zones = {"pred": lw["pred"], "tp": lw["tp"], "sl": lw["sl"],
+                     "ote_buy": lw["ote_buy"], "ote_sell": lw["ote_sell"],
+                     "fvg": lw["fvg"], "ob": lw["ob"],
+                     "in_ote_buy": lw["in_ote_buy"], "in_ote_sell": lw["in_ote_sell"]}
+            sma200 = lw["sma200"]
+            direction_label = {"Up": "BUY", "Down": "SELL"}.get(result["direction"], "HOLD")
+            prediction = {
+                "direction":     direction_label,
+                "confidence":    result["confidence"],
+                "target_price":  result["lr_pred"],
+                "current_price": result["current_price"],
+                "change_pct":    result["change_pct"],
+                "model_used":    "LR + RF",
+            }
+        except FileNotFoundError:
+            # No trained model for this ticker/timeframe combo, still show
+            # the price chart (candles only), just without a prediction.
+            from predictor import _fetch_df, lw_time
+            try:
+                df = _fetch_df(ticker, pred_interval)
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)}), 404
+            if df is None or df.empty:
+                return jsonify({"ok": False, "error": f'No market data for "{ticker}".'}), 404
+            chart_plot = df.tail(300)
+            candles = [
+                {"time": lw_time(idx, pred_interval),
+                 "open": round(float(r["Open"]), 4), "high": round(float(r["High"]), 4),
+                 "low": round(float(r["Low"]), 4), "close": round(float(r["Close"]), 4),
+                 "volume": round(float(r["Volume"]), 2) if "Volume" in r and r["Volume"] == r["Volume"] else 0}
+                for idx, r in chart_plot.iterrows()
+            ]
+            sma200 = []
+            zones = dict(empty_zones)
+            prediction = None
+        except ValueError as e:
+            return jsonify({"ok": False, "error": str(e)}), 404
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+        if tf == "1W":
+            candles = _resample_weekly(candles)
+            sma200 = []
+            zones = dict(empty_zones)
+
+        return jsonify({
+            "ok": True,
+            "ticker": ticker,
+            "interval": tf,
+            "ohlcv": candles,
+            "sma200": sma200,
+            "zones": zones,
+            "prediction": prediction,
+        })
 
     @app.route("/api/pro-signals")
     @login_required

@@ -244,6 +244,16 @@ def _resample_4h(df: pd.DataFrame) -> pd.DataFrame:
     return df[df["Volume"] > 0]
 
 
+def lw_time(ts, interval: str = "1d"):
+    """Timestamp in the format Lightweight Charts expects: 'YYYY-MM-DD' for
+    daily bars, Unix seconds for intraday."""
+    if interval == "1d":
+        return ts.strftime("%Y-%m-%d")
+    if ts.tzinfo is not None:
+        return int(ts.timestamp())
+    return int(pd.Timestamp(ts, tz="UTC").timestamp())
+
+
 def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
     yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
     if interval == "4h":
@@ -1043,29 +1053,23 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         pd_zone = "Equilibrium"
 
     # ── Lightweight Charts payload ─────────────────────────────────────────────
-    def _lw_time(ts):
-        if interval == "1d":
-            return ts.strftime("%Y-%m-%d")
-        if ts.tzinfo is not None:
-            return int(ts.timestamp())
-        return int(pd.Timestamp(ts, tz="UTC").timestamp())
-
     chart_plot = df.tail(120)
 
     candles = [
         {
-            "time":  _lw_time(idx),
-            "open":  round(float(r["Open"]),  4),
-            "high":  round(float(r["High"]),  4),
-            "low":   round(float(r["Low"]),   4),
-            "close": round(float(r["Close"]), 4),
+            "time":   lw_time(idx, interval),
+            "open":   round(float(r["Open"]),  4),
+            "high":   round(float(r["High"]),  4),
+            "low":    round(float(r["Low"]),   4),
+            "close":  round(float(r["Close"]), 4),
+            "volume": round(float(r["Volume"]), 2) if "Volume" in r and pd.notna(r["Volume"]) else 0,
         }
         for idx, r in chart_plot.iterrows()
     ]
 
     sma200_raw  = df["Close"].rolling(200, min_periods=1).mean().tail(120)
     sma200_line = [
-        {"time": _lw_time(idx), "value": round(float(v), 4)}
+        {"time": lw_time(idx, interval), "value": round(float(v), 4)}
         for idx, v in sma200_raw.items()
         if pd.notna(v)
     ]

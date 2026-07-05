@@ -310,6 +310,25 @@
       font-size: 8.5px; font-family: 'Inter', sans-serif; font-weight: 600;
     }
 
+    .chart-toolbar2 {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 8px 18px; border-bottom: 1px solid var(--border);
+    }
+    .ind-btn {
+      font-size: 8.5pt; font-weight: 600; padding: 4px 9px; border-radius: 4px;
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      cursor: pointer; transition: all .15s; font-family: inherit;
+    }
+    .ind-btn:hover  { color: var(--text); border-color: var(--text); }
+    .ind-btn.active { background: var(--accent); border-color: var(--accent); color: var(--white); }
+    .toolbar-sep    { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+    .pred-badge {
+      position: absolute; top: 10px; right: 14px; z-index: 3;
+      background: rgba(15,18,23,0.92); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 12px; font-size: 8.5pt; font-family: 'Inter', sans-serif; line-height: 1.6;
+      pointer-events: none; min-width: 128px; display: none;
+    }
+
     /* ── Data grid ── */
     .data-grid {
       display: grid;
@@ -815,7 +834,15 @@
             {{ interval|upper }}
           </span>
         </div>
-        <div class="company-label">As of {{ as_of }} &nbsp;&middot;&nbsp; {{ horizon }} Prediction</div>
+        <div class="company-label">
+          As of {{ as_of }} &nbsp;&middot;&nbsp; {{ horizon }} Prediction
+          {% if live_quote and live_quote.price %}
+          <span style="font-size:8.5pt;font-weight:600;margin-left:8px;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10B981;vertical-align:middle;">
+            &#9679; Live ${{ live_quote.price }}
+            {% if live_quote.pct is not none %}({% if live_quote.pct >= 0 %}+{% endif %}{{ live_quote.pct }}%){% endif %}
+          </span>
+          {% endif %}
+        </div>
       </div>
       <div class="stock-header-right">
         <div class="current-price">${{ current_price }}</div>
@@ -926,9 +953,18 @@
     </div>
 
     <!-- TradingView Chart -->
+    {% set current_tf = '1D' if interval == '1d' else interval %}
     <div class="chart-section">
       <div class="chart-header">
-        <div class="chart-title">{{ ticker }}, Live Chart</div>
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <div class="chart-title">{{ ticker }}, Live Chart</div>
+          <div class="chart-tabs" id="chart-tf-tabs">
+            {% for tf in ['1m','5m','15m','30m','1h','4h','1D','1W'] %}
+            <div class="chart-tab {% if tf == current_tf %}active{% endif %}"
+                 data-tf="{{ tf }}" onclick="switchTimeframe('{{ tf }}')">{{ tf }}</div>
+            {% endfor %}
+          </div>
+        </div>
         <div style="display:flex;align-items:center;gap:8px;">
           {% if current_user.is_pro %}
             <a href="/mt5" style="background:var(--accent);color:var(--white);text-decoration:none;font-size:8.5pt;font-weight:700;padding:4px 10px;border-radius:4px;letter-spacing:0.3px;">&#9654; MT5 Algo Trading</a>
@@ -937,6 +973,17 @@
           {% endif %}
           <button class="fs-btn" id="fs-btn" onclick="toggleChartFullscreen()" title="Fullscreen">⛶</button>
         </div>
+      </div>
+      <div class="chart-toolbar2" id="chart-toolbar2">
+        <button class="ind-btn active" id="btn-type-candle" onclick="setChartType('candlestick')">Candles</button>
+        <button class="ind-btn"        id="btn-type-line"   onclick="setChartType('line')">Line</button>
+        <span class="toolbar-sep"></span>
+        <button class="ind-btn" data-ind="sma20"  onclick="toggleIndicator('sma20')">SMA 20</button>
+        <button class="ind-btn" data-ind="sma50"  onclick="toggleIndicator('sma50')">SMA 50</button>
+        <button class="ind-btn" data-ind="ema12"  onclick="toggleIndicator('ema12')">EMA 12</button>
+        <button class="ind-btn" data-ind="ema26"  onclick="toggleIndicator('ema26')">EMA 26</button>
+        <button class="ind-btn" data-ind="bb"     onclick="toggleIndicator('bb')">BB</button>
+        <button class="ind-btn" data-ind="volume" onclick="toggleIndicator('volume')">Volume</button>
       </div>
       <div id="chart-wrap">
         <div id="lw-chart"></div>
@@ -947,6 +994,7 @@
           <span style="color:#FF4D4D;">&#8212; SL &amp; Bear OTE/OB/FVG</span>
           <span style="color:#FF9900;">&#8212; 200 SMA</span>
         </div>
+        <div id="pred-badge" class="pred-badge"></div>
 
         <!-- On-chart trade buttons -->
         <div id="chart-trade-bar">
@@ -1480,169 +1528,339 @@ function runAIAnalysis() {
 </script>
 
 <script>
-const D = {{ lw_chart | safe }};
+const TICKER = {{ ticker | tojson }};
 const _isPro = {{ current_user.is_pro | tojson }};
+const LS = LightweightCharts.LineStyle;
 
-(function () {
-  'use strict';
-  const LS  = LightweightCharts.LineStyle;
+let D = {{ lw_chart | safe }};
+let currentTF = {{ current_tf | tojson }};
+let latestPrediction = {
+  direction:      {{ ("BUY" if direction == "Up" else ("SELL" if direction == "Down" else "HOLD")) | tojson }},
+  confidence:     {{ confidence }},
+  target_price:   {{ lr_pred }},
+  current_price:  {{ current_price }},
+  change_pct:     {{ change_pct }},
+  model_used:     "LR + RF",
+};
 
-  const wrap = document.getElementById('lw-chart');
+let chart = null, mainSeries = null, smaLine = null, volSeries = null;
+let overlaySeries = {};                 // sma20/sma50/ema12/ema26/bbUpper/bbLower -> series
+let chartType     = 'candlestick';
+let activeInd     = { sma20:false, sma50:false, ema12:false, ema26:false, bb:false, volume:false };
 
-  function themeOpts() {
-    const c = blTheme.colors();
-    return {
-      layout: {
-        background: { color: c.surface },
-        textColor:  c.muted,
-        fontFamily: "Inter, sans-serif",
-        fontSize:   11,
-      },
-      grid: {
-        vertLines: { color: c.border },
-        horzLines: { color: c.border },
-      },
-      rightPriceScale: { borderColor: c.border },
-      timeScale: {
-        borderColor:    c.border,
-        timeVisible:    true,
-        secondsVisible: false,
-      },
-    };
+const chartWrapEl = document.getElementById('chart-wrap');
+const lwChartEl    = document.getElementById('lw-chart');
+const overlayEl    = document.getElementById('chart-overlay');
+
+/* ── Theme ────────────────────────────────────────────────────────────────── */
+function themeOpts() {
+  const c = blTheme.colors();
+  return {
+    layout: {
+      background: { color: c.surface },
+      textColor:  c.muted,
+      fontFamily: "Inter, sans-serif",
+      fontSize:   11,
+    },
+    grid: {
+      vertLines: { color: c.border },
+      horzLines: { color: c.border },
+    },
+    rightPriceScale: { borderColor: c.border },
+    timeScale: {
+      borderColor:    c.border,
+      timeVisible:    currentTF !== '1D' && currentTF !== '1W',
+      secondsVisible: false,
+    },
+  };
+}
+window.addEventListener('themechange', () => { if (chart) chart.applyOptions(themeOpts()); });
+
+/* ── Client-side indicator math ───────────────────────────────────────────── */
+function computeSMA(data, period) {
+  return data.map((bar, i) => {
+    if (i < period - 1) return null;
+    let sum = 0;
+    for (let j = i - period + 1; j <= i; j++) sum += data[j].close;
+    return { time: bar.time, value: sum / period };
+  }).filter(Boolean);
+}
+
+function computeEMA(data, period) {
+  const k = 2 / (period + 1);
+  const out = [];
+  let prev = null;
+  data.forEach((bar, i) => {
+    if (i < period - 1) return;
+    if (prev === null) {
+      let sum = 0;
+      for (let j = i - period + 1; j <= i; j++) sum += data[j].close;
+      prev = sum / period;
+    } else {
+      prev = bar.close * k + prev * (1 - k);
+    }
+    out.push({ time: bar.time, value: prev });
+  });
+  return out;
+}
+
+function computeBB(data, period, stdDev) {
+  period = period || 20; stdDev = stdDev || 2;
+  return data.map((bar, i) => {
+    if (i < period - 1) return null;
+    const slice = data.slice(i - period + 1, i + 1);
+    const mean  = slice.reduce((s, b) => s + b.close, 0) / period;
+    const variance = slice.reduce((s, b) => s + Math.pow(b.close - mean, 2), 0) / period;
+    const std = Math.sqrt(variance);
+    return { time: bar.time, upper: mean + stdDev * std, lower: mean - stdDev * std };
+  }).filter(Boolean);
+}
+
+/* ── Zone overlay boxes (ICT: OTE / FVG / OB) ─────────────────────────────── */
+function makeBox(hiPrice, loPrice, bg, border, label) {
+  const yHi = mainSeries.priceToCoordinate(hiPrice);
+  const yLo = mainSeries.priceToCoordinate(loPrice);
+  if (yHi === null || yLo === null) return;
+  const top = Math.min(yHi, yLo);
+  const hgt = Math.max(Math.abs(yLo - yHi), 2);
+  const psW = chart.priceScale('right').width();
+
+  const div = document.createElement('div');
+  div.className = 'zone-box';
+  div.style.cssText = [
+    'top:'    + top + 'px',
+    'height:' + hgt + 'px',
+    'right:'  + psW + 'px',
+    'background:' + bg,
+    'border-top:1px solid '    + border,
+    'border-bottom:1px solid ' + border,
+  ].join(';');
+
+  if (label) {
+    const span = document.createElement('span');
+    span.style.cssText = 'position:absolute;right:6px;top:1px;font-size:9px;color:' + border + ';font-weight:700;';
+    span.textContent = label;
+    div.appendChild(span);
   }
+  overlayEl.appendChild(div);
+}
 
-  const chart = LightweightCharts.createChart(wrap, Object.assign({
-    width:  wrap.offsetWidth,
-    height: 420,
+function drawZones() {
+  if (!mainSeries) return;
+  overlayEl.innerHTML = '';
+  if (!D.ote_buy) return;   // 1W (resampled) view carries no ICT zones
+
+  makeBox(D.ote_buy.high, D.ote_buy.low,
+    D.in_ote_buy ? 'rgba(0,192,118,0.10)' : 'rgba(0,192,118,0.04)',
+    D.in_ote_buy ? '#00C076'              : 'rgba(0,192,118,0.35)',
+    'OTE Buy');
+
+  makeBox(D.ote_sell.high, D.ote_sell.low,
+    D.in_ote_sell ? 'rgba(255,77,77,0.10)' : 'rgba(255,77,77,0.04)',
+    D.in_ote_sell ? '#FF4D4D'              : 'rgba(255,77,77,0.35)',
+    'OTE Sell');
+
+  D.fvg.forEach(function (z) {
+    var bull = z.type === 'bull';
+    makeBox(z.high, z.low,
+      bull ? 'rgba(59,130,246,0.08)' : 'rgba(234,179,8,0.08)',
+      bull ? 'rgba(59,130,246,0.6)'  : 'rgba(234,179,8,0.6)',
+      'FVG');
+  });
+
+  D.ob.forEach(function (z) {
+    var bull = z.type === 'bull';
+    makeBox(z.high, z.low,
+      bull ? 'rgba(139,92,246,0.08)' : 'rgba(249,115,22,0.08)',
+      bull ? 'rgba(139,92,246,0.6)'  : 'rgba(249,115,22,0.6)',
+      'OB');
+  });
+}
+
+/* ── Prediction badge (top-right of chart) ────────────────────────────────── */
+function updateBadge() {
+  const badge = document.getElementById('pred-badge');
+  const p = latestPrediction;
+  if (!p) {
+    badge.innerHTML = '<div style="color:var(--muted);">No prediction model<br>for this timeframe</div>';
+    badge.style.display = 'block';
+    return;
+  }
+  const icon  = p.direction === 'BUY' ? '&#9650;' : (p.direction === 'SELL' ? '&#9660;' : '&#8212;');
+  const color = p.direction === 'BUY' ? '#00C076' : (p.direction === 'SELL' ? '#FF4D4D' : '#7A8499');
+  badge.innerHTML =
+    '<div style="color:' + color + ';font-weight:700;">' + icon + ' ' + p.direction + '</div>' +
+    '<div style="color:var(--muted);">Confidence: ' + Number(p.confidence).toFixed(1) + '%</div>' +
+    '<div style="color:var(--muted);">Model: ' + p.model_used + '</div>';
+  badge.style.display = 'block';
+}
+
+/* ── Indicator overlays (added/removed on top of the existing chart) ─────── */
+function applyIndicatorOverlays() {
+  Object.keys(overlaySeries).forEach(k => { chart.removeSeries(overlaySeries[k]); });
+  overlaySeries = {};
+  if (volSeries) { chart.removeSeries(volSeries); volSeries = null; }
+
+  const candles = D.candles;
+
+  if (activeInd.sma20) {
+    overlaySeries.sma20 = chart.addLineSeries({ color: '#60A5FA', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'SMA 20' });
+    overlaySeries.sma20.setData(computeSMA(candles, 20));
+  }
+  if (activeInd.sma50) {
+    overlaySeries.sma50 = chart.addLineSeries({ color: '#A78BFA', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'SMA 50' });
+    overlaySeries.sma50.setData(computeSMA(candles, 50));
+  }
+  if (activeInd.ema12) {
+    overlaySeries.ema12 = chart.addLineSeries({ color: '#34D399', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'EMA 12' });
+    overlaySeries.ema12.setData(computeEMA(candles, 12));
+  }
+  if (activeInd.ema26) {
+    overlaySeries.ema26 = chart.addLineSeries({ color: '#F472B6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'EMA 26' });
+    overlaySeries.ema26.setData(computeEMA(candles, 26));
+  }
+  if (activeInd.bb) {
+    const bb = computeBB(candles, 20, 2);
+    overlaySeries.bbUpper = chart.addLineSeries({ color: 'rgba(122,132,153,0.7)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'BB Upper' });
+    overlaySeries.bbUpper.setData(bb.map(b => ({ time: b.time, value: b.upper })));
+    overlaySeries.bbLower = chart.addLineSeries({ color: 'rgba(122,132,153,0.7)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: 'BB Lower' });
+    overlaySeries.bbLower.setData(bb.map(b => ({ time: b.time, value: b.lower })));
+  }
+  if (activeInd.volume) {
+    volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    volSeries.setData(candles.map(b => ({
+      time: b.time, value: b.volume || 0,
+      color: b.close >= b.open ? 'rgba(0,192,118,0.5)' : 'rgba(255,77,77,0.5)',
+    })));
+  }
+}
+
+/* ── Chart (re)build ───────────────────────────────────────────────────────
+   Rebuilt on timeframe switch (new data) and on chart-type toggle (same
+   data, preserved zoom). Cheap: LightweightCharts instance creation is fast. */
+function buildChart(opts) {
+  opts = opts || {};
+  const preserveRange = opts.preserveRange || null;
+
+  if (chart) { chart.remove(); chart = null; }
+  overlaySeries = {}; volSeries = null;
+
+  chart = LightweightCharts.createChart(lwChartEl, Object.assign({
+    width:  lwChartEl.offsetWidth,
+    height: lwChartEl.offsetHeight || 420,
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
   }, themeOpts()));
-  window.addEventListener('themechange', () => chart.applyOptions(themeOpts()));
 
-  /* ── Candlestick series ────────────────────────────────────────────────── */
-  const cs = chart.addCandlestickSeries({
-    upColor:      '#00C076',
-    downColor:    '#FF4D4D',
-    borderVisible: false,
-    wickUpColor:   '#00C076',
-    wickDownColor: '#FF4D4D',
-  });
-  cs.setData(D.candles);
-
-  /* ── 200 SMA line ─────────────────────────────────────────────────────── */
-  const smaLine = chart.addLineSeries({
-    color:             '#FF9900',
-    lineWidth:         1,
-    priceLineVisible:  false,
-    lastValueVisible:  false,
-    title:             '200 SMA',
-  });
-  smaLine.setData(D.sma200);
-
-  /* ── Prediction / SL / TP price lines ─────────────────────────────────── */
-  cs.createPriceLine({ price: D.pred, color: '#FF6B35', lineWidth: 2, lineStyle: LS.Dashed,  axisLabelVisible: true, title: '▶ Pred $' + D.pred });
-  cs.createPriceLine({ price: D.tp,   color: '#00C076', lineWidth: 1, lineStyle: LS.Dotted,  axisLabelVisible: true, title: 'TP $' + D.tp   });
-  cs.createPriceLine({ price: D.sl,   color: '#FF4D4D', lineWidth: 1, lineStyle: LS.Dotted,  axisLabelVisible: true, title: 'SL $' + D.sl   });
-
-  chart.timeScale().fitContent();
-
-  /* ── Zone overlay boxes ────────────────────────────────────────────────── */
-  const overlay = document.getElementById('chart-overlay');
-
-  function makeBox(hiPrice, loPrice, bg, border, label) {
-    const yHi = cs.priceToCoordinate(hiPrice);
-    const yLo = cs.priceToCoordinate(loPrice);
-    if (yHi === null || yLo === null) return;
-    const top = Math.min(yHi, yLo);
-    const hgt = Math.max(Math.abs(yLo - yHi), 2);
-    const psW = chart.priceScale('right').width();
-
-    const div   = document.createElement('div');
-    div.className = 'zone-box';
-    div.style.cssText = [
-      'top:'    + top + 'px',
-      'height:' + hgt + 'px',
-      'right:'  + psW + 'px',
-      'background:' + bg,
-      'border-top:1px solid '    + border,
-      'border-bottom:1px solid ' + border,
-    ].join(';');
-
-    if (label) {
-      const span = document.createElement('span');
-      span.style.cssText = 'position:absolute;right:6px;top:1px;font-size:9px;color:' + border + ';font-weight:700;';
-      span.textContent = label;
-      div.appendChild(span);
-    }
-    overlay.appendChild(div);
+  if (chartType === 'candlestick') {
+    mainSeries = chart.addCandlestickSeries({
+      upColor: '#00C076', downColor: '#FF4D4D', borderVisible: false,
+      wickUpColor: '#00C076', wickDownColor: '#FF4D4D',
+    });
+    mainSeries.setData(D.candles);
+  } else {
+    mainSeries = chart.addAreaSeries({
+      lineColor: '#FF6B35', topColor: 'rgba(255,107,53,0.28)', bottomColor: 'rgba(255,107,53,0.02)',
+      lineWidth: 2,
+    });
+    mainSeries.setData(D.candles.map(b => ({ time: b.time, value: b.close })));
   }
 
-  function drawZones() {
-    overlay.innerHTML = '';
-
-    /* OTE buy zone */
-    makeBox(D.ote_buy.high, D.ote_buy.low,
-      D.in_ote_buy ? 'rgba(0,192,118,0.10)' : 'rgba(0,192,118,0.04)',
-      D.in_ote_buy ? '#00C076'              : 'rgba(0,192,118,0.35)',
-      'OTE Buy');
-
-    /* OTE sell zone */
-    makeBox(D.ote_sell.high, D.ote_sell.low,
-      D.in_ote_sell ? 'rgba(255,77,77,0.10)' : 'rgba(255,77,77,0.04)',
-      D.in_ote_sell ? '#FF4D4D'              : 'rgba(255,77,77,0.35)',
-      'OTE Sell');
-
-    /* FVG zones */
-    D.fvg.forEach(function (z) {
-      var bull = z.type === 'bull';
-      makeBox(z.high, z.low,
-        bull ? 'rgba(59,130,246,0.08)' : 'rgba(234,179,8,0.08)',
-        bull ? 'rgba(59,130,246,0.6)'  : 'rgba(234,179,8,0.6)',
-        'FVG');
-    });
-
-    /* OB zones */
-    D.ob.forEach(function (z) {
-      var bull = z.type === 'bull';
-      makeBox(z.high, z.low,
-        bull ? 'rgba(139,92,246,0.08)' : 'rgba(249,115,22,0.08)',
-        bull ? 'rgba(139,92,246,0.6)'  : 'rgba(249,115,22,0.6)',
-        'OB');
-    });
+  if (D.sma200 && D.sma200.length) {
+    smaLine = chart.addLineSeries({ color: '#FF9900', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, title: '200 SMA' });
+    smaLine.setData(D.sma200);
   }
 
-  /* Redraw on zoom / pan / resize */
+  if (D.pred != null) {
+    mainSeries.createPriceLine({ price: D.pred, color: '#FF6B35', lineWidth: 2, lineStyle: LS.Dashed, axisLabelVisible: true, title: '▶ Pred $' + D.pred });
+    mainSeries.createPriceLine({ price: D.tp,   color: '#00C076', lineWidth: 1, lineStyle: LS.Dotted, axisLabelVisible: true, title: 'TP $' + D.tp });
+    mainSeries.createPriceLine({ price: D.sl,   color: '#FF4D4D', lineWidth: 1, lineStyle: LS.Dotted, axisLabelVisible: true, title: 'SL $' + D.sl });
+  }
+
+  applyIndicatorOverlays();
+
+  if (preserveRange) chart.timeScale().setVisibleLogicalRange(preserveRange);
+  else               chart.timeScale().fitContent();
+
   chart.timeScale().subscribeVisibleLogicalRangeChange(drawZones);
-  wrap.addEventListener('wheel',    function () { setTimeout(drawZones, 60); }, { passive: true });
-  wrap.addEventListener('dblclick', function () { setTimeout(drawZones, 80); });
+  setTimeout(drawZones, 120);
+  updateBadge();
+}
 
-  var ro = new ResizeObserver(function () {
-    var h = document.fullscreenElement === wrap ? wrap.offsetHeight : 420;
-    chart.resize(wrap.offsetWidth, h);
+/* ── Timeframe tabs ────────────────────────────────────────────────────────── */
+async function switchTimeframe(tf) {
+  if (tf === currentTF) return;
+  const prevTF = currentTF;
+  document.querySelectorAll('.chart-tab').forEach(el => el.classList.toggle('active', el.dataset.tf === tf));
+  currentTF = tf;
+  try {
+    const res  = await fetch('/api/chart/' + encodeURIComponent(TICKER) + '?interval=' + encodeURIComponent(tf));
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Failed to load chart data');
+
+    D = {
+      candles: json.ohlcv, sma200: json.sma200 || [],
+      pred: json.zones.pred, tp: json.zones.tp, sl: json.zones.sl,
+      ote_buy: json.zones.ote_buy, ote_sell: json.zones.ote_sell,
+      fvg: json.zones.fvg || [], ob: json.zones.ob || [],
+      in_ote_buy: json.zones.in_ote_buy, in_ote_sell: json.zones.in_ote_sell,
+    };
+    latestPrediction = json.prediction;
+    buildChart();
+  } catch (err) {
+    currentTF = prevTF;
+    document.querySelectorAll('.chart-tab').forEach(el => el.classList.toggle('active', el.dataset.tf === prevTF));
+    alert('Could not load ' + tf + ' chart: ' + err.message);
+  }
+}
+
+/* ── Chart type toggle (candles / line) ───────────────────────────────────── */
+function setChartType(type) {
+  if (type === chartType) return;
+  const range = chart ? chart.timeScale().getVisibleLogicalRange() : null;
+  chartType = type;
+  document.getElementById('btn-type-candle').classList.toggle('active', type === 'candlestick');
+  document.getElementById('btn-type-line').classList.toggle('active', type === 'line');
+  buildChart({ preserveRange: range });
+}
+
+/* ── Indicator toggle buttons ──────────────────────────────────────────────── */
+function toggleIndicator(name) {
+  activeInd[name] = !activeInd[name];
+  document.querySelectorAll('.ind-btn[data-ind="' + name + '"]').forEach(b => b.classList.toggle('active', activeInd[name]));
+  applyIndicatorOverlays();
+}
+
+/* ── Resize / fullscreen ──────────────────────────────────────────────────── */
+var ro = new ResizeObserver(function () {
+  if (!chart) return;
+  var isFs = document.fullscreenElement === chartWrapEl;
+  var h = isFs ? lwChartEl.offsetHeight : Math.max(lwChartEl.offsetHeight || 420, 400);
+  chart.resize(lwChartEl.offsetWidth, h);
+  drawZones();
+});
+ro.observe(lwChartEl);
+
+document.addEventListener('fullscreenchange', function () {
+  var isFs = document.fullscreenElement === chartWrapEl;
+  document.getElementById('fs-btn').textContent = isFs ? '✕' : '⛶';
+  document.getElementById('fs-btn').title = isFs ? 'Exit fullscreen' : 'Fullscreen';
+  setTimeout(function () {
+    if (!chart) return;
+    chart.resize(lwChartEl.offsetWidth, lwChartEl.offsetHeight);
     drawZones();
-  });
-  ro.observe(wrap);
-
-  document.addEventListener('fullscreenchange', function () {
-    var isFs = document.fullscreenElement === wrap;
-    var h = isFs ? window.innerHeight : 420;
-    chart.resize(wrap.offsetWidth, h);
-    document.getElementById('fs-btn').textContent = isFs ? '✕' : '⛶';
-    document.getElementById('fs-btn').title = isFs ? 'Exit fullscreen' : 'Fullscreen';
-    setTimeout(drawZones, 60);
-  });
-
-  setTimeout(drawZones, 150);
-
-})();
+  }, 60);
+});
 
 function toggleChartFullscreen() {
-  var wrap = document.getElementById('chart-wrap');
   if (!document.fullscreenElement) {
-    (wrap.requestFullscreen || wrap.webkitRequestFullscreen).call(wrap);
+    (chartWrapEl.requestFullscreen || chartWrapEl.webkitRequestFullscreen).call(chartWrapEl);
   } else {
     (document.exitFullscreen || document.webkitExitFullscreen).call(document);
   }
 }
+
+buildChart();
 
 /* ── Quick Trade Panel ──────────────────────────────────────────────────────*/
 var _tradePanelOpen = true;
