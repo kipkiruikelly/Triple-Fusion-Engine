@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    
+    
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
     .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
     .topbar-left{display:flex;align-items:center;gap:32px}
@@ -115,7 +115,7 @@
       <a href="/predict" onclick="event.preventDefault();predictThis()" class="action-btn primary">&#9654; Run ML Prediction</a>
       <button class="action-btn" onclick="openPaperTrade()">&#128200; Paper Trade</button>
       <a href="/alerts" class="action-btn">&#128276; Set Alert</a>
-      <a href="/api/feature-importance/{{ ticker }}" target="_blank" class="action-btn">&#127919; Feature Importance</a>
+      <button class="action-btn" onclick="openFeatureImportance()">&#127919; Feature Importance</button>
       <button class="action-btn" onclick="addWatchlist()">&#10003; Watchlist</button>
     </div>
 
@@ -199,6 +199,18 @@
         <button onclick="submitPT()" style="background:var(--green);border:none;border-radius:5px;color:#fff;font-size:9pt;font-weight:700;padding:6px 16px;cursor:pointer">Log Trade</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Feature importance modal -->
+<div id="featModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:420px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h3 style="color:var(--white)">Model Drivers</h3>
+      <button onclick="document.getElementById('featModal').style.display='none'" style="background:none;border:none;color:var(--muted);font-size:16pt;line-height:1;cursor:pointer">&times;</button>
+    </div>
+    <div id="feat-subtitle" style="font-size:8.5pt;color:var(--muted);margin-bottom:14px">Random Forest feature importance</div>
+    <div id="feat-bars" style="display:flex;flex-direction:column;gap:8px;font-size:9pt;color:var(--muted);"></div>
   </div>
 </div>
 
@@ -322,6 +334,41 @@ function openPaperTrade() {
   document.getElementById('ptMsg').style.display = 'none';
   document.getElementById('ptPrice').value = _currentPrice || '';
   document.getElementById('ptModal').style.display = 'flex';
+}
+
+async function openFeatureImportance() {
+  const modal = document.getElementById('featModal');
+  const bars  = document.getElementById('feat-bars');
+  const sub   = document.getElementById('feat-subtitle');
+  sub.textContent = 'Loading...';
+  bars.innerHTML = '';
+  modal.style.display = 'flex';
+  try {
+    const r = await fetch('/api/feature-importance/' + TICKER + '?interval=1d');
+    const d = await r.json();
+    if (!d.ok) {
+      sub.textContent = 'Random Forest feature importance';
+      bars.innerHTML = `<div>${d.error}</div>`;
+      return;
+    }
+    sub.textContent = 'Random Forest feature importance (' + d.interval + ')';
+    const maxImp = Math.max(...d.features.map(f => f.importance));
+    bars.innerHTML = d.features.map(f => {
+      const pct = (f.importance / maxImp * 100).toFixed(1);
+      return `<div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:2px">
+          <span style="color:var(--text)">${f.name}</span>
+          <span style="color:var(--muted)">${(f.importance*100).toFixed(2)}%</span>
+        </div>
+        <div style="background:var(--border);border-radius:3px;height:5px">
+          <div style="width:${pct}%;height:100%;background:var(--accent);border-radius:3px"></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    sub.textContent = 'Random Forest feature importance';
+    bars.innerHTML = '<div>Could not load feature importance.</div>';
+  }
 }
 
 async function submitPT() {
