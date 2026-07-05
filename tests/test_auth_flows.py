@@ -134,3 +134,52 @@ def test_forgot_password_does_not_reveal_accounts(client):
     # Same generic response whether or not the account exists.
     assert r.status_code == 200
     assert b"registered" in r.data or b"sent" in r.data.lower()
+
+
+# ── Google OAuth for the admin console ────────────────────────────────────────
+
+def _finish_admin(app, info):
+    """Simulate /auth/google?admin=1 followed by the Google callback:
+    the admin-intent flag is in the session when the callback runs."""
+    fin = app.extensions["bulllogic"]["finish_google_login"]
+    with app.test_request_context("/auth/google/callback"):
+        from flask import session
+        session["google_admin_intent"] = True
+        resp = fin(info)
+        admin_at = session.get("admin_auth_at")
+    return resp, admin_at
+
+
+def test_google_admin_login_staff_gets_admin_session(app, db, make_user):
+    make_user("gadminstaff", role="admin", email="gadminstaff@gmail.com")
+    resp, admin_at = _finish_admin(app,
+                                   {"sub": "sub-adm-1", "email": "gadminstaff@gmail.com",
+                                    "name": "G Admin"})
+    # Redirects into the console and the admin session marker is set
+    assert resp.status_code == 302
+    assert "/admin" in resp.headers["Location"]
+    assert admin_at is not None
+
+
+def test_google_admin_login_non_staff_denied(app, db, make_user):
+    make_user("gplainuser", role="user", email="gplainuser@gmail.com")
+    resp, admin_at = _finish_admin(app,
+                                   {"sub": "sub-adm-2", "email": "gplainuser@gmail.com",
+                                    "name": "G Plain"})
+    body, status = (resp if isinstance(resp, tuple) else (resp, 200))
+    assert status == 403
+    assert admin_at is None
+
+
+def test_google_normal_login_never_grants_admin_session(app, db, make_user):
+    """Without the admin intent flag, even a staff account's Google login
+    must not create an admin console session."""
+    make_user("gadminplain", role="admin", email="gadminplain@gmail.com")
+    fin = app.extensions["bulllogic"]["finish_google_login"]
+    with app.test_request_context("/auth/google/callback"):
+        from flask import session
+        resp = fin({"sub": "sub-adm-3", "email": "gadminplain@gmail.com",
+                    "name": "G AdminPlain"})
+        assert session.get("admin_auth_at") is None
+    assert resp.status_code == 302
+    assert resp.headers["Location"] == "/"

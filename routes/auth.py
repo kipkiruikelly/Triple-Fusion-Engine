@@ -3,9 +3,11 @@
 import json as _json
 import os
 import secrets
+import time
 from datetime import date, datetime, timedelta
 
-from flask import render_template, request, jsonify, redirect, url_for, make_response
+from flask import (render_template, request, jsonify, redirect, url_for,
+                   make_response, session)
 from flask_login import login_user, logout_user, login_required, current_user
 
 from extensions import db
@@ -101,6 +103,13 @@ def register_auth_routes(app):
     def google_login():
         if not GOOGLE_OK:
             return redirect(url_for("login"))
+        # ?admin=1 (from /admin/login) asks the callback to establish an
+        # admin console session after Google verifies the identity. Access
+        # is still decided by the account's role, never by Google alone.
+        if request.args.get("admin") == "1":
+            session["google_admin_intent"] = True
+        else:
+            session.pop("google_admin_intent", None)
         oauth = app.extensions["bulllogic"]["oauth"]
         redirect_uri = request.host_url.rstrip("/") + url_for("google_callback")
         return oauth.google.authorize_redirect(redirect_uri)
@@ -121,10 +130,15 @@ def register_auth_routes(app):
     def _finish_google_login(info):
         """Shared by the real callback and tests. `info` is the verified
         OpenID payload (sub, email, name, email_verified)."""
+        # Pop immediately so a stale flag can never leak into a later,
+        # unrelated login.
+        admin_intent = bool(session.pop("google_admin_intent", False))
+        login_page = "admin/login.html" if admin_intent else "login.html"
+
         sub   = str(info.get("sub") or "")
         email = (info.get("email") or "").strip().lower()
         if not sub or not email:
-            return render_template("login.html",
+            return render_template(login_page,
                                    error="Google did not return a usable account."), 400
 
         user = User.query.filter_by(google_sub=sub).first()
@@ -145,8 +159,34 @@ def register_auth_routes(app):
             db.session.commit()
 
         if (user.status or "active") != "active":
-            return render_template("login.html",
+            return render_template(login_page,
                                    error="This account has been suspended."), 403
+
+        if admin_intent:
+            # Google verified the identity; the console still requires a
+            # staff role. Mirrors the password /admin/login flow: admin
+            # session marker, CSRF token, and audit entry.
+            from models import AdminAuditLog, ROLE_LEVELS
+            if user.role_level < ROLE_LEVELS["viewer"]:
+                db.session.add(AdminAuditLog(
+                    admin_id=user.id, action="login.google.denied",
+                    ip=request.remote_addr or "?",
+                    detail="Google sign-in without admin role"))
+                db.session.commit()
+                return render_template(
+                    "admin/login.html",
+                    error="This Google account has no admin access."), 403
+            login_user(user, remember=True)
+            session["admin_auth_at"] = time.time()
+            session["csrf_token"] = secrets.token_hex(16)
+            db.session.add(AdminAuditLog(
+                admin_id=user.id, action="login.google",
+                ip=request.remote_addr or "?",
+                detail=(request.user_agent.string or "")[:200]))
+            db.session.commit()
+            _log_activity(user.id, "login.google")
+            return redirect(url_for("admin_dashboard"))
+
         login_user(user, remember=True)
         _log_activity(user.id, "login.google")
         return redirect(url_for("home"))

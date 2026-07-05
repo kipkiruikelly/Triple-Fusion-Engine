@@ -20,6 +20,14 @@ import time
 import warnings
 warnings.filterwarnings("ignore")
 
+# Load .env into os.environ BEFORE any project import: config.py's
+# Pydantic env_file only fills the settings object, but modules like
+# routes/auth.py (GOOGLE_*), mpesa.py and emails.py read os.environ
+# directly at import time and get empty values without this.
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+            override=False)
+
 from datetime import datetime
 
 from flask import Flask, jsonify, g, redirect, url_for
