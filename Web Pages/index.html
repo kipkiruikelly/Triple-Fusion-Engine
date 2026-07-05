@@ -75,6 +75,54 @@
     .nav-links a:hover { color: var(--text); background: var(--surface2); }
     .nav-links a.active { color: var(--white); background: var(--surface2); }
 
+    /* ── "More" nav dropdown (collapses secondary links, keeps primary ones visible) ── */
+    .nav-more { position: relative; }
+
+    .nav-more-btn {
+      color: var(--muted);
+      background: none;
+      border: none;
+      font-family: inherit;
+      text-decoration: none;
+      font-size: 10pt;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .nav-more-btn:hover, .nav-more-btn.open { color: var(--text); background: var(--surface2); }
+
+    .nav-more-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      min-width: 170px;
+      z-index: 300;
+      padding: 6px;
+    }
+
+    .nav-more-panel.open { display: block; }
+
+    .nav-more-panel a {
+      display: block;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 10pt;
+      font-weight: 500;
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+
+    .nav-more-panel a:hover { color: var(--text); background: var(--surface2); }
+    .nav-more-panel a.active { color: var(--white); background: var(--surface2); }
+
     /* ── Market ticker strip ── */
     .ticker-strip {
       background: var(--surface);
@@ -588,18 +636,23 @@
     <a href="/" class="logo" style="text-decoration:none;">Bull<span>Logic</span></a>
     <nav class="nav-links">
       <a href="/" class="active">Predictor</a>
-      <a href="/market">Markets</a>
-      <a href="/screener">Screener</a>
-      <a href="/leaderboard">Leaderboard</a>
-      <a href="/pipeline">Pipeline</a>
-      <a href="/portfolio">Portfolio</a>
       <a href="/watchlist">Watchlist</a>
       <a href="/alerts">Alerts</a>
-      <a href="/scanner">Scanner</a>
-      <a href="/journal">Journal</a>
-      <a href="/history">History</a>
-      <a href="/track-record">Track Record</a>
       <a href="/pricing">Pricing</a>
+      <div class="nav-more">
+        <button type="button" class="nav-more-btn" id="navMoreBtn" onclick="toggleNavMore(event)">More &#9662;</button>
+        <div class="nav-more-panel" id="navMorePanel">
+          <a href="/market">Markets</a>
+          <a href="/screener">Screener</a>
+          <a href="/leaderboard">Leaderboard</a>
+          <a href="/pipeline">Pipeline</a>
+          <a href="/portfolio">Portfolio</a>
+          <a href="/scanner">Scanner</a>
+          <a href="/journal">Journal</a>
+          <a href="/history">History</a>
+          <a href="/track-record">Track Record</a>
+        </div>
+      </div>
     </nav>
   </div>
   <div style="display:flex;align-items:center;gap:10px;">
@@ -1460,7 +1513,21 @@ document.addEventListener('click', e => {
     _notifOpen = false;
     document.getElementById('notif-panel').style.display = 'none';
   }
+  if (_navMoreOpen && !e.target.closest('#navMorePanel') && !e.target.closest('#navMoreBtn')) {
+    _navMoreOpen = false;
+    document.getElementById('navMorePanel').classList.remove('open');
+    document.getElementById('navMoreBtn').classList.remove('open');
+  }
 });
+
+// ── Top nav: "More" dropdown for secondary links ─────────────────────────
+let _navMoreOpen = false;
+function toggleNavMore(e) {
+  e.stopPropagation();
+  _navMoreOpen = !_navMoreOpen;
+  document.getElementById('navMorePanel').classList.toggle('open', _navMoreOpen);
+  document.getElementById('navMoreBtn').classList.toggle('open', _navMoreOpen);
+}
 
 // Poll notification count every 60s
 loadNotifications();
