@@ -81,9 +81,10 @@ def register_auth_routes(app):
 
     app.jinja_env.globals["google_enabled"] = GOOGLE_OK
 
-    # expose token helpers for tests
+    # expose token helpers for tests and for the admin console's resend route
     app.extensions.setdefault("bulllogic", {})["load_verify_token"] = _load_verify_token
     app.extensions["bulllogic"]["make_verify_token"] = _make_verify_token
+    app.extensions["bulllogic"]["send_verification_email"] = _send_verification_email
 
     # ── Google OAuth 2.0 (authorization-code flow via Authlib) ────────────────
 
@@ -176,6 +177,20 @@ def register_auth_routes(app):
                 return render_template(
                     "admin/login.html",
                     error="This Google account has no admin access."), 403
+            # Admin-only 2FA applies the same way here as on the password
+            # form: Google only verifies identity, it does not satisfy the
+            # second factor. Hand off to the shared /admin/login code-entry
+            # step rather than completing the session here.
+            rec = TwoFactorAuth.query.filter_by(user_id=user.id, enabled=True).first()
+            if user.role_level >= ROLE_LEVELS["admin"] and _PYOTP_OK and rec:
+                session["admin_2fa_pending_uid"] = user.id
+                session["admin_2fa_pending_at"] = time.time()
+                db.session.add(AdminAuditLog(
+                    admin_id=user.id, action="login.google",
+                    ip=request.remote_addr or "?",
+                    detail="Google verified; awaiting 2FA code"))
+                db.session.commit()
+                return render_template("admin/login.html", need_2fa=True)
             login_user(user, remember=True)
             session["admin_auth_at"] = time.time()
             session["csrf_token"] = secrets.token_hex(16)
@@ -217,6 +232,7 @@ def register_auth_routes(app):
                              else "This account is deactivated. Contact support.")
                     return render_template("login.html", error=error)
                 login_user(user, remember=True)
+                _log_activity(user.id, "login")
                 next_page = request.args.get('next')
                 return redirect(next_page or url_for('home'))
             error = "Invalid username / email or password."

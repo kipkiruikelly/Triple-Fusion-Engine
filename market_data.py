@@ -51,8 +51,10 @@ def _is_rate_limit_error(exc):
 VERIFY_TOLERANCE_PCT = 0.5     # sources agreeing within this are "verified"
 
 _source_stats = {
-    "yfinance": {"success": 0, "fail": 0, "last_success": None},
-    "pyth":     {"success": 0, "fail": 0, "last_success": None},
+    "yfinance": {"success": 0, "fail": 0, "last_success": None,
+                "last_error": None, "last_error_at": None},
+    "pyth":     {"success": 0, "fail": 0, "last_success": None,
+                "last_error": None, "last_error_at": None},
     "failovers": 0, "divergences": 0,
 }
 _divergence_last_logged = {}   # symbol -> ts, throttle ErrorLog spam
@@ -62,13 +64,15 @@ def source_stats():
     return dict(_source_stats)
 
 
-def _mark(source, ok):
+def _mark(source, ok, err=None):
     s = _source_stats[source]
     if ok:
         s["success"] += 1
         s["last_success"] = datetime.utcnow().isoformat()
     else:
         s["fail"] += 1
+        s["last_error"] = (err or "no data returned")[:200]
+        s["last_error_at"] = datetime.utcnow().isoformat()
 
 
 def _pyth_feed_map(symbols):

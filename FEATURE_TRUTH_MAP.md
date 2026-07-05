@@ -61,3 +61,69 @@ A 200 response was not accepted as proof of anything.
 - **Nothing consumes** `smart_router`, `messaging`, `walk_forward`,
   `stacking_ensemble`, `db_utils`, or `data_quality` in the running app;
   they are libraries/CLIs with tests, not features users touch.
+
+## Admin console (audit date 2026-07-05, built and tested this session)
+
+Access control (`routes/admin.py`): every `/admin*` route runs through
+`admin_required(min_role)`, which checks authentication, role level, account
+status, a sliding session timeout, and CSRF on every write. `User.role` is
+`user|viewer|support|admin` with a safe `ALTER TABLE` migration in
+`app.py:_run_migrations` so existing databases pick it up without a manual
+step. **WORKING**, tested (`TestAdminAccessControl` walks every registered
+`/admin*` route for both anonymous and plain-user callers).
+
+Three fixed guards, by design, not bugs:
+1. `admin_audit_log` is append-only: SQLAlchemy `before_update`/`before_delete`
+   events and a `do_orm_execute` hook block per-instance and bulk ORM writes
+   (`models.py`), and the SQL console independently refuses any non-SELECT
+   statement that touches the table. **WORKING**, tested
+   (`TestAuditAppendOnly`, `TestSqlConsole::test_admin_audit_log_only_accepts_select_in_console`).
+2. `ENABLE_LIVE_TRADING` is surfaced read-only in the Feature Flags panel
+   (`routes/admin_power.py:_live_trading_state`); it is never writable from
+   the console, only from the environment. **WORKING**, tested
+   (`TestFeatureFlags::test_live_trading_is_reported_read_only`).
+3. Editing a graded prediction (`POST /admin/api/predictions/<id>/regrade`)
+   requires a non-empty `reason` and is audited with that reason attached; it
+   never silently overwrites a grade. **WORKING**, tested
+   (`TestPredictionRegradeAndFlag`).
+
+| Capability group | Status | Evidence and what is missing |
+|---|---|---|
+| SQL console | **WORKING** | SELECT runs freely; INSERT/UPDATE/DELETE preview an affected-row count and require `confirm: true` to execute; every statement is audited. Tested: role gate, SELECT, preview-then-write, audit-log guard. |
+| Table browser + row editor | **WORKING** | Lists every table with row counts, paginates, edits/inserts/deletes by primary key; `admin_audit_log` is marked append-only and refuses row writes. Tested. |
+| User field override | **WORKING** | Any editable `User` attribute (email, role, plan, verification, paper balance is not a real column, see Paper trading below) can be set with type coercion and old->new values audited. Tested. |
+| Job runner | **WORKING** | Runs the same functions the ops thread schedules (`grade`, `drift`, `reconcile`, `digest`, `pyth_sync`) in a background thread, one at a time per job, with live status. Tested (registry contents, run + audit). |
+| User management: search/activate/deactivate | **WORKING** | Pre-existing, unchanged this session. |
+| User management: ban with reason | **WORKING** | `User.ban_reason` column added; banning without a reason is refused (400); the reason is stored on the user and included in the audit detail; unbanning clears it. Tested. |
+| User management: grant/revoke Pro | **WORKING** | Pre-existing (`/admin/api/users/<id>/pro`), unchanged this session. |
+| User management: resend verification | **WORKING** | New admin route reuses the exact same `_send_verification_email` helper the self-service `/verify/resend` route uses (exposed via `app.extensions`), so behavior (including "no mailer configured" handling) is identical, not reimplemented. Refuses if already verified. Tested. |
+| User management: reset paper account | **PARTIAL** | The route runs and returns a `cleared` count, but the paper trading engine's tables (`PaperTrade`, `PaperTradeEvent`, `PaperEquitySnapshot`) have **no `user_id` column at all** - the engine is a shared/global simulation, not per-user. So this action is currently a safe no-op (`cleared: 0`) against real data; it only does real work if those tables ever gain a `user_id` column. Documented here rather than silently claimed as working. |
+| User management: force logout | **WORKING** | Rotates `User.session_token`, which `get_id()` mixes into the Flask-Login session id, invalidating every existing session at once. Tested. |
+| User management: view sessions | **PARTIAL, by design** | This app has one rotating session token per user, not a per-device session table, so there is no such thing as "list of currently active sessions" to show. The console instead shows **login history** (time, IP, device) from `ActivityLog`, and the API response says so explicitly. Regular `/login` now also writes an `ActivityLog("login")` row (it previously only did on Google login), so this history is populated for password logins too. Tested. |
+| Impersonation | **WORKING** | Read-only flag set in session, refuses to impersonate another admin, start/stop both audited. Tested. |
+| Predictions: view all / trigger grading / annotate | **WORKING** | `GET /admin/api/predictions` (existing) lists and filters by ticker/interval/date; the Job Runner's `grade` job runs the real grading function; `/flag` annotates. **Caveat carried over from the module-level audit above**: only `lr_pred`/`rf_pred` exist in the schema, there is no xgb/lstm to break accuracy out by, so "per model" analytics (below) means LR vs RF only. |
+| Predictions: edit a graded result | **WORKING** | Guard 3 above. |
+| Paper trading: view all / force close | **WORKING** | `GET /admin/api/paper/positions?status=all|open|closed` (previously hardcoded to `open` only, fixed this session); force-close requires a reason and is audited. Tested. |
+| Payments: view + refund with notes + reconcile | **WORKING** | `Payment.notes` column added; refund persists an admin note (previously the note only existed transiently in the audit-log string, never stored on the row); reconcile moves a payment to the correct user. Tested. |
+| Promo codes | **WORKING** | Generates N codes for D days with a note, usage (`used`, `used_by`, `used_at`) tracked on `GiftCode`. Tested. |
+| Analytics | **WORKING, narrower than the literal spec** | Signups/DAU/MAU, Pro conversion funnel, weekly retention, revenue by period (separate `/admin/api/payments/summary` route) all real and queried from the database. "Prediction performance per asset and model": per-asset exists (`top_tickers`, `/admin/api/data-quality` confidence-band accuracy); per-model is LR vs RF only, because (as documented in the module table above) no xgb/lstm model has ever been trained for a deployed ticker. Tested (shape smoke test). |
+| Feature flags | **WORKING** | DB-stored toggles (sentiment/gamification/ICT) and a per-ticker active-model override, both take effect immediately. `ENABLE_LIVE_TRADING` is shown but refuses writes (Guard 2). Tested. |
+| Maintenance mode | **WORKING** (pre-existing, not new this session) | `app.py` `before_request` gates every route except `/admin`, `/login`, `/static`, etc. behind the `maintenance_mode` `AppSetting`; any authenticated staff role is exempt. No test existed before this session; added one. |
+| System health | **WORKING** | Row counts and last-fetch/last-error per data source (`market_data.py` `_source_stats` gained `last_error`/`last_error_at` this session, previously only tracked success), the real 5-job registry now shown alongside the 2 pre-existing pseudo-jobs (was previously hardcoded and did not reflect the real jobs at all), log viewer with severity/endpoint/date filters. Tested (job registry visible). |
+| Security: failed logins / IP lockouts | **WORKING** | Reads the in-memory rate limiter state and recent `login.failed` audit rows. Tested (shape smoke test). |
+| Security: admin-only 2FA | **WORKING** | Enrollment is the existing self-service TOTP flow (`/api/2fa/setup`, `/api/2fa/enable`, on the regular `/profile` page) - there is no separate admin enrollment system. Once an `admin`-role account has 2FA enabled, both the password `/admin/login` form and the Google `/auth/google?admin=1` path stop short of completing the session and require a valid TOTP code as a second round trip; accounts without 2FA enrolled are unaffected. Tested: blocked without code, succeeds with a valid code, unaffected accounts log in directly. |
+| Security: audit log as a filterable timeline | **WORKING** (pre-existing, not new this session) | `GET /admin/api/audit` filters by free text, exact action, admin id, and date range; the existing `audit.html` renders it as a timeline. Tested (filter smoke test added this session). |
+
+### Promotion script
+
+`scripts/promote_admin.py <email> [--demote]` looks up a user by email
+(case-insensitive), never creates one, sets `role` to `admin` (or back to
+`user` with `--demote`), commits, and logs to `admin_audit_log` (the actor
+recorded is the target account itself, since this is meant to bootstrap the
+very first admin before any admin session exists to attribute the action
+to). Loads the database URL exactly the way `app.py` does (`.env` then
+`DATABASE_URL`, same sqlite fallback path), so the same command works
+unchanged on a local checkout or inside the Docker container. **WORKING**,
+smoke-tested manually against a throwaway sqlite database (promote, re-run
+is a no-op, demote, missing-user exits 1) and covered by
+`TestPromoteAdminScript`.

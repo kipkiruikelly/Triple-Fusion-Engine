@@ -14,7 +14,12 @@
 
 <div class="grid g2" style="margin-bottom:16px">
   <div class="card" style="margin:0">
-    <h2>Background jobs</h2>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0">Background jobs</h2>
+      {% if current_user.role == 'admin' %}
+      <a class="btn small" href="/admin/jobs">Run a job</a>
+      {% endif %}
+    </div>
     <table><thead><tr><th>Job</th><th>Status</th><th>Detail</th></tr></thead><tbody id="jobBody"></tbody></table>
   </div>
   <div class="card" style="margin:0;max-height:340px;overflow:auto">
@@ -129,7 +134,9 @@ async function loadDataQuality() {
   const card = (name, st) => `<div class="card" style="margin:0">
     <div class="stat-label">${name}</div>
     <div class="stat-val" style="font-size:12pt">${fmtNum(st.success)} ok / ${fmtNum(st.fail)} fail</div>
-    <div class="stat-sub">last ok: ${st.last_success ? fmtDate(st.last_success) : 'never'}</div></div>`;
+    <div class="stat-sub">last ok: ${st.last_success ? fmtDate(st.last_success) : 'never'}</div>
+    ${st.last_error ? `<div class="stat-sub red" style="margin-top:2px" title="${esc(st.last_error)}">
+      last error ${fmtDate(st.last_error_at)}: ${esc(st.last_error)}</div>` : ''}</div>`;
   document.getElementById('srcCards').innerHTML =
     card('yfinance', s.yfinance) + card('Pyth oracle', s.pyth) +
     `<div class="card" style="margin:0"><div class="stat-label">Failovers / divergences</div>

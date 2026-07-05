@@ -1,0 +1,64 @@
+{% extends "admin/base.html" %}
+{% block title %}Job Runner{% endblock %}
+{% block crumbs %}<span class="sep">/</span><span class="here">Job Runner</span>{% endblock %}
+{% block content %}
+<h1>Job Runner</h1>
+<div class="subtitle">Manually run a background job now. Each job runs the same function the scheduler calls.</div>
+
+<div class="grid g2" id="jobCards"></div>
+{% endblock %}
+
+{% block script %}
+<script>
+let jobs = [];
+let poll = null;
+
+async function loadJobs() {
+  const d = await api('/admin/api/jobs');
+  jobs = d.jobs;
+  render();
+  refreshStatus();
+}
+
+function render() {
+  document.getElementById('jobCards').innerHTML = jobs.map(j => `
+    <div class="card" style="margin:0" id="job-${j.key}">
+      <h2 style="margin-bottom:6px">${esc(j.label)}</h2>
+      <div class="stat-sub" style="margin-bottom:10px">${esc(j.desc)}</div>
+      <div class="stat-sub" id="st-${j.key}">-</div>
+      <pre id="out-${j.key}" class="muted" style="font-size:8pt;white-space:pre-wrap;max-height:140px;overflow:auto;margin:8px 0;display:none"></pre>
+      <button class="btn small primary" id="run-${j.key}">Run now</button>
+    </div>`).join('');
+  jobs.forEach(j => {
+    document.getElementById(`run-${j.key}`).onclick = () => runJob(j.key);
+  });
+}
+
+async function runJob(key) {
+  try {
+    await api(`/admin/api/jobs/${key}/run`, {method: 'POST'});
+    toast('Started');
+    refreshStatus();
+  } catch (e) {}
+}
+
+async function refreshStatus() {
+  const d = await api('/admin/api/jobs/status');
+  jobs.forEach(j => {
+    const st = d.status[j.key] || {};
+    const badge = st.running ? '<span class="badge b-green">running</span>'
+      : st.last_ok === true ? '<span class="badge b-blue">ok</span>'
+      : st.last_ok === false ? '<span class="badge b-red">failed</span>'
+      : '<span class="badge b-muted">never run</span>';
+    document.getElementById(`st-${j.key}`).innerHTML =
+      badge + (st.last_run ? ` &middot; last run ${fmtDate(st.last_run)} (${st.last_ms ?? '?'}ms)` : '');
+    const out = document.getElementById(`out-${j.key}`);
+    if (st.output) { out.style.display = ''; out.textContent = st.output; }
+    document.getElementById(`run-${j.key}`).disabled = !!st.running;
+  });
+}
+
+loadJobs();
+poll = setInterval(refreshStatus, 3000);
+</script>
+{% endblock %}

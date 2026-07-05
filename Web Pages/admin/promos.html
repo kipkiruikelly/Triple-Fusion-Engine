@@ -1,0 +1,54 @@
+{% extends "admin/base.html" %}
+{% block title %}Promo Codes{% endblock %}
+{% block crumbs %}<span class="sep">/</span><span class="here">Promo Codes</span>{% endblock %}
+{% block content %}
+<h1>Promo Codes</h1>
+<div class="subtitle">Grant Pro for N days, with usage tracking.</div>
+
+<div class="card">
+  <h2>Create codes</h2>
+  <div class="toolbar">
+    <input type="number" id="days" placeholder="Days" value="30" style="width:90px">
+    <input type="number" id="count" placeholder="How many" value="1" style="width:100px">
+    <input type="text" id="note" placeholder="Note (optional)" style="min-width:200px">
+    <button class="btn primary small" id="createBtn">Create</button>
+  </div>
+  <div id="createdOut" style="margin-top:10px;font-size:8.5pt;color:var(--muted);word-break:break-all"></div>
+</div>
+
+<div class="card">
+  <h2>All codes</h2>
+  <table><thead><tr><th>Code</th><th>Days</th><th>Status</th><th>Used by</th><th>Note</th><th>Created</th></tr></thead>
+  <tbody id="tbody"></tbody></table>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+async function load() {
+  const tb = document.getElementById('tbody');
+  skelRows(tb, 6);
+  const d = await api('/admin/api/promos');
+  tb.innerHTML = d.codes.length ? d.codes.map(c => `<tr>
+    <td><code>${esc(c.code)}</code></td>
+    <td>${c.days}</td>
+    <td><span class="badge ${c.used ? 'b-muted' : 'b-green'}">${c.used ? 'used' : 'available'}</span></td>
+    <td class="muted">${esc(c.used_by || '')}</td>
+    <td class="muted">${esc(c.note || '')}</td>
+    <td class="muted">${fmtDate(c.created_at)}</td></tr>`).join('') : '';
+  if (!d.codes.length) emptyRow(tb, 6, 'No promo codes yet');
+}
+
+document.getElementById('createBtn').onclick = async () => {
+  const days = parseInt(document.getElementById('days').value || '30', 10);
+  const count = parseInt(document.getElementById('count').value || '1', 10);
+  const note = document.getElementById('note').value.trim();
+  const d = await api('/admin/api/promos', {method: 'POST', body: {days, count, note}});
+  document.getElementById('createdOut').textContent = 'Created: ' + d.codes.join(', ');
+  toast(`${d.codes.length} code(s) created`);
+  load();
+};
+
+load();
+</script>
+{% endblock %}

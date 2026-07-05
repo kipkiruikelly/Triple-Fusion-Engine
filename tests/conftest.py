@@ -64,15 +64,20 @@ def make_user(app, db):
     yield _make
 
     with app.app_context():
+        from sqlalchemy import text
         from models import (User, PredictionHistory, PredictionAccuracy,
-                            Payment, Notification, AdminAuditLog)
+                            Payment, Notification, TwoFactorAuth)
         for uid in created:
             for ph in PredictionHistory.query.filter_by(user_id=uid).all():
                 PredictionAccuracy.query.filter_by(prediction_id=ph.id).delete()
             PredictionHistory.query.filter_by(user_id=uid).delete()
             Payment.query.filter_by(user_id=uid).delete()
             Notification.query.filter_by(user_id=uid).delete()
-            AdminAuditLog.query.filter_by(admin_id=uid).delete()
+            TwoFactorAuth.query.filter_by(user_id=uid).delete()
+            # admin_audit_log is append-only at the ORM layer (by design);
+            # test cleanup of the throwaway DB goes through raw SQL instead.
+            db.session.execute(text(
+                "DELETE FROM admin_audit_log WHERE admin_id = :uid"), {"uid": uid})
             u = db.session.get(User, uid)
             if u:
                 db.session.delete(u)

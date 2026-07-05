@@ -25,6 +25,7 @@ class User(UserMixin, db.Model):
     auth_provider           = db.Column(db.String(10), default='local')   # local|google
     google_sub              = db.Column(db.String(64), unique=True, nullable=True)
     session_token           = db.Column(db.String(32), nullable=True)    # rotates to kill sessions
+    ban_reason              = db.Column(db.String(200), nullable=True)
 
     def get_id(self):
         # flask-login session id carries the session_token; rotating the
@@ -201,6 +202,7 @@ class Payment(db.Model):
     receipt      = db.Column(db.String(40), nullable=True)               # MpesaReceiptNumber
     status       = db.Column(db.String(10), default='pending')  # pending | paid | cancelled | failed | refunded
     flagged      = db.Column(db.Boolean, default=False)
+    notes        = db.Column(db.String(300), nullable=True)   # admin refund/reconcile notes
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime, nullable=True)
 
@@ -257,6 +259,42 @@ class AdminAuditLog(db.Model):
     detail      = db.Column(db.String(400), nullable=True)
     ip          = db.Column(db.String(45), nullable=True)
     created_at  = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
+class AuditLogImmutableError(Exception):
+    """Raised on any attempt to update or delete an admin_audit_log row."""
+
+
+# Append-only guard, enforced at the ORM layer so no route, console
+# statement or future code path can rewrite audit history through the
+# session. (Raw engine-level SQL is additionally blocked in the admin
+# SQL console.)
+from sqlalchemy import event as _sa_event
+
+
+@_sa_event.listens_for(AdminAuditLog, "before_update")
+def _audit_no_update(mapper, connection, target):
+    raise AuditLogImmutableError("admin_audit_log is append-only: update refused")
+
+
+@_sa_event.listens_for(AdminAuditLog, "before_delete")
+def _audit_no_delete(mapper, connection, target):
+    raise AuditLogImmutableError("admin_audit_log is append-only: delete refused")
+
+
+# Bulk ORM operations (AdminAuditLog.query.delete()/update()) skip the
+# per-instance events above, so they are intercepted at execute time.
+from sqlalchemy.orm import Session as _SASession
+
+
+@_sa_event.listens_for(_SASession, "do_orm_execute")
+def _audit_no_bulk_write(execute_state):
+    if not (execute_state.is_update or execute_state.is_delete):
+        return
+    mapper = execute_state.bind_mapper
+    if mapper is not None and mapper.class_ is AdminAuditLog:
+        raise AuditLogImmutableError(
+            "admin_audit_log is append-only: bulk write refused")
 
 
 class AppSetting(db.Model):

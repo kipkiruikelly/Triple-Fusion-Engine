@@ -21,6 +21,9 @@
     <button class="btn danger" data-a="ban">Ban</button>
     <button class="btn" data-a="unban">Unban</button>
     <button class="btn" data-a="reset_password">Reset password</button>
+    <button class="btn" id="resendBtn">Resend verification</button>
+    <button class="btn" id="forceLogoutBtn">Force logout</button>
+    <button class="btn danger" id="resetPaperBtn">Reset paper account</button>
     {% if current_user.role == 'admin' %}
     <select id="roleSel"><option value="user">user</option><option value="viewer">viewer</option><option value="support">support</option><option value="admin">admin</option></select>
     <button class="btn" id="roleBtn">Change role</button>
@@ -44,6 +47,14 @@
     <tbody id="predBody"></tbody></table>
   </div>
 </div>
+{% if current_user.role in ('support','admin') %}
+<div class="card" style="margin-top:16px">
+  <h2>Login sessions</h2>
+  <div class="stat-sub" id="sessNote" style="margin-bottom:8px"></div>
+  <table><thead><tr><th>Action</th><th>IP</th><th>Device</th><th>When</th></tr></thead>
+  <tbody id="sessBody"></tbody></table>
+</div>
+{% endif %}
 <div class="card" style="margin-top:16px">
   <h2>Activity history</h2>
   <table><thead><tr><th>Action</th><th>Detail</th><th>IP</th><th>When</th></tr></thead>
@@ -67,7 +78,9 @@ async function load() {
   document.getElementById('s-expiry').textContent = d.pro_expires_at ? 'expires ' + d.pro_expires_at : '';
   const stBadge = {active: 'b-green', deactivated: 'b-muted', banned: 'b-red'}[u.status] || 'b-muted';
   document.getElementById('s-status').innerHTML = `<span class="badge ${stBadge}" style="font-size:10pt">${u.status}</span>`;
-  document.getElementById('s-role').textContent = 'role: ' + u.role;
+  document.getElementById('s-role').textContent = u.status === 'banned' && u.ban_reason
+    ? `role: ${u.role} · reason: ${u.ban_reason}`
+    : 'role: ' + u.role;
   document.getElementById('s-preds').textContent = fmtNum(u.predictions);
   document.getElementById('s-signed').textContent = 'joined ' + fmtDay(u.created_at);
   document.getElementById('s-seen').textContent = fmtDate(u.last_seen);
@@ -93,6 +106,18 @@ async function load() {
     <td>${esc(a.action)}</td><td class="muted">${esc(a.detail || '')}</td>
     <td class="muted">${esc(a.ip || '')}</td><td class="muted">${fmtDate(a.at)}</td></tr>`).join('')
     : ''; if (!d.activity.length) emptyRow(ab, 4, 'No recorded activity');
+
+  const sb = document.getElementById('sessBody');
+  if (sb) {
+    try {
+      const sd = await api('/admin/api/users/' + UID + '/sessions');
+      document.getElementById('sessNote').textContent = sd.note;
+      sb.innerHTML = sd.logins.length ? sd.logins.map(a => `<tr>
+        <td>${esc(a.action)}</td><td class="muted">${esc(a.ip || '')}</td>
+        <td class="muted">${esc(a.ua || '')}</td><td class="muted">${fmtDate(a.at)}</td></tr>`).join('')
+        : ''; if (!sd.logins.length) emptyRow(sb, 4, 'No recorded logins');
+    } catch (e) { emptyRow(sb, 4, 'Could not load sessions'); }
+  }
 }
 
 async function doAction(action, extra = {}) {
@@ -107,9 +132,17 @@ async function doAction(action, extra = {}) {
 const actions = document.getElementById('actions');
 if (actions) actions.querySelectorAll('button[data-a]').forEach(b => b.onclick = () => {
   const a = b.dataset.a;
-  const destructive = ['ban', 'deactivate'].includes(a);
+  if (a === 'ban') {
+    const reason = prompt(`Reason for banning ${USERNAME} (required):`, '');
+    if (reason === null) return;
+    if (!reason.trim()) { toast('A reason is required to ban a user', 'err'); return; }
+    confirmModal(`Ban ${USERNAME}?`, `The user will be blocked from logging in. Reason: ${reason}`,
+      () => doAction(a, {reason: reason.trim()}));
+    return;
+  }
+  const destructive = ['deactivate'].includes(a);
   destructive
-    ? confirmModal(`${a} ${USERNAME}?`, `The user will ${a === 'ban' ? 'be blocked from logging in' : 'lose access until reactivated'}.`, () => doAction(a))
+    ? confirmModal(`${a} ${USERNAME}?`, 'The user will lose access until reactivated.', () => doAction(a))
     : doAction(a);
 });
 const roleBtn = document.getElementById('roleBtn');
@@ -119,6 +152,22 @@ if (roleBtn) roleBtn.onclick = () => {
     role === 'admin' ? 'This grants FULL admin console access.' : `Grants "${role}" console access.`,
     () => doAction('set_role', {role}));
 };
+const resendBtn = document.getElementById('resendBtn');
+if (resendBtn) resendBtn.onclick = async () => {
+  try {
+    await api(`/admin/api/users/${UID}/resend-verification`, {method: 'POST'});
+    toast('Verification email sent');
+  } catch (e) { toast('Failed: ' + e.message, 'err'); }
+};
+const forceLogoutBtn = document.getElementById('forceLogoutBtn');
+if (forceLogoutBtn) forceLogoutBtn.onclick = () => confirmModal(
+  `Force logout ${USERNAME}?`, 'Every active session for this user is invalidated immediately.',
+  async () => { await api(`/admin/api/users/${UID}/force-logout`, {method: 'POST'}); toast('Sessions revoked'); });
+const resetPaperBtn = document.getElementById('resetPaperBtn');
+if (resetPaperBtn) resetPaperBtn.onclick = () => confirmModal(
+  `Reset ${USERNAME}'s paper account?`, 'All simulated paper trades, events and equity history for this user are cleared. This cannot be undone.',
+  async () => { const r = await api(`/admin/api/users/${UID}/reset-paper`, {method: 'POST'}); toast(`Cleared ${r.cleared} paper row(s)`); },
+  'Reset paper account');
 const delBtn = document.getElementById('delBtn');
 if (delBtn) delBtn.onclick = () => confirmModal(`Delete ${USERNAME}?`,
   'This permanently deletes the user and all their data (predictions, alerts, positions, keys). This cannot be undone.',

@@ -27,12 +27,27 @@ from extensions import db
 from models import (User, PredictionHistory, PriceAlert, PortfolioPosition,
                     ApiKey, Payment, GiftCode, Notification, ActivityLog,
                     AdminAuditLog, AppSetting, TickerConfig, Broadcast,
-                    ErrorLog, PasswordResetToken, ROLE_LEVELS)
+                    ErrorLog, PasswordResetToken, TwoFactorAuth, ROLE_LEVELS)
+
+try:
+    import pyotp as _pyotp
+    _PYOTP_OK = True
+except ImportError:
+    _pyotp    = None
+    _PYOTP_OK = False
 
 BASE_DIR   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
 ADMIN_SESSION_MINUTES = int(os.environ.get("ADMIN_SESSION_MINUTES", "30"))
+
+# Admin roles (support and above) must pass a TOTP check at /admin/login if
+# they have 2FA enabled on their account (enrolled via the regular
+# /api/2fa/setup + /api/2fa/enable endpoints, this console does not have its
+# own separate enrollment). The credential check and the code check happen
+# as two round trips of the same form; PENDING_2FA_MAX_S bounds how long a
+# verified-password-but-no-code-yet session may sit before it must restart.
+PENDING_2FA_MAX_S = 5 * 60
 
 # ── Login rate limiting (per-IP, in-memory) ───────────────────────────────────
 
@@ -176,34 +191,72 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
 
     # ══ Auth ══════════════════════════════════════════════════════════════════
 
+    def _complete_admin_login(user, ip):
+        login_user(user)
+        session["admin_auth_at"] = time.time()
+        session["csrf_token"] = secrets.token_hex(16)
+        db.session.add(AdminAuditLog(admin_id=user.id, action="login",
+                                     ip=ip, detail=(request.user_agent.string or "")[:200]))
+        db.session.commit()
+        return redirect(request.args.get("next") or url_for("admin_dashboard"))
+
     @app.route("/admin/login", methods=["GET", "POST"])
     def admin_login():
         error = None
+        need_2fa = False
         if request.method == "POST":
             ip = request.remote_addr or "?"
             if _rate_limited(ip):
                 error = "Too many failed attempts. Try again in 15 minutes."
             else:
-                identifier = request.form.get("identifier", "").strip()
-                password   = request.form.get("password", "")
-                user = User.query.filter(
-                    (User.username == identifier) | (User.email == identifier)).first()
-                if (user and user.check_password(password)
-                        and user.role_level >= ROLE_LEVELS["viewer"]
-                        and user.status == "active"):
-                    login_user(user)
-                    session["admin_auth_at"] = time.time()
-                    session["csrf_token"] = secrets.token_hex(16)
-                    db.session.add(AdminAuditLog(admin_id=user.id, action="login",
-                                                 ip=ip, detail=request.user_agent.string[:200]))
-                    db.session.commit()
-                    return redirect(request.args.get("next") or url_for("admin_dashboard"))
-                _record_fail(ip)
-                if user and user.role_level >= 1:
-                    db.session.add(AdminAuditLog(admin_id=user.id, action="login.failed", ip=ip))
-                    db.session.commit()
-                error = "Invalid credentials or no admin access."
-        return render_template("admin/login.html", error=error)
+                pending_uid = session.get("admin_2fa_pending_uid")
+                pending_at  = session.get("admin_2fa_pending_at", 0)
+                # Second round trip of a 2FA-gated login: only a code was submitted.
+                if pending_uid and time.time() - pending_at <= PENDING_2FA_MAX_S:
+                    user = db.session.get(User, pending_uid)
+                    rec  = TwoFactorAuth.query.filter_by(
+                        user_id=pending_uid, enabled=True).first()
+                    code = request.form.get("code", "").strip()
+                    if (user and rec and _PYOTP_OK and code
+                            and _pyotp.TOTP(rec.secret).verify(code, valid_window=1)):
+                        session.pop("admin_2fa_pending_uid", None)
+                        session.pop("admin_2fa_pending_at", None)
+                        return _complete_admin_login(user, ip)
+                    _record_fail(ip)
+                    if user:
+                        db.session.add(AdminAuditLog(admin_id=user.id, action="login.failed",
+                                                     ip=ip, detail="2FA code invalid or missing"))
+                        db.session.commit()
+                    need_2fa = True
+                    error = "Invalid or missing 2FA code."
+                else:
+                    session.pop("admin_2fa_pending_uid", None)
+                    session.pop("admin_2fa_pending_at", None)
+                    identifier = request.form.get("identifier", "").strip()
+                    password   = request.form.get("password", "")
+                    user = User.query.filter(
+                        (User.username == identifier) | (User.email == identifier)).first()
+                    if (user and user.check_password(password)
+                            and user.role_level >= ROLE_LEVELS["viewer"]
+                            and user.status == "active"):
+                        rec = TwoFactorAuth.query.filter_by(
+                            user_id=user.id, enabled=True).first()
+                        # Admin-only 2FA: required for admin-role accounts
+                        # that have enrolled via /api/2fa/enable.
+                        if user.role_level >= ROLE_LEVELS["admin"] and _PYOTP_OK and rec:
+                            session["admin_2fa_pending_uid"] = user.id
+                            session["admin_2fa_pending_at"] = time.time()
+                            need_2fa = True
+                        else:
+                            return _complete_admin_login(user, ip)
+                    else:
+                        _record_fail(ip)
+                        if user and user.role_level >= 1:
+                            db.session.add(AdminAuditLog(admin_id=user.id,
+                                                         action="login.failed", ip=ip))
+                            db.session.commit()
+                        error = "Invalid credentials or no admin access."
+        return render_template("admin/login.html", error=error, need_2fa=need_2fa)
 
     @app.route("/admin/logout")
     def admin_logout():
@@ -381,6 +434,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
         return {"id": u.id, "username": u.username, "email": u.email,
                 "plan": u.plan, "role": u.role or "user",
                 "status": u.status or "active",
+                "ban_reason": u.ban_reason,
                 "churn": churn_bucket(u),
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "last_seen": u.last_seen.isoformat() if u.last_seen else None,
@@ -433,12 +487,21 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                         "payments": payments, "activity": activity,
                         "predictions": preds})
 
-    def _apply_user_action(u, action):
+    def _apply_user_action(u, action, reason=None):
         """Returns (ok, message_or_extra). Caller commits + audits."""
-        if action == "activate":     u.status = "active"
-        elif action == "deactivate": u.status = "deactivated"
-        elif action == "ban":        u.status = "banned"
-        elif action == "unban":      u.status = "active"
+        if action == "activate":
+            u.status = "active"
+            u.ban_reason = None
+        elif action == "deactivate":
+            u.status = "deactivated"
+        elif action == "ban":
+            if not reason:
+                return False, "A reason is required to ban a user"
+            u.status = "banned"
+            u.ban_reason = reason
+        elif action == "unban":
+            u.status = "active"
+            u.ban_reason = None
         elif action == "reset_password":
             token = secrets.token_urlsafe(32)
             db.session.add(PasswordResetToken(
@@ -485,11 +548,13 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
 
         if u.role_level >= ROLE_LEVELS["admin"] and u.id != current_user.id:
             return jsonify({"ok": False, "error": "Cannot act on another admin"}), 403
-        ok, extra = _apply_user_action(u, action)
+        reason = (data.get("reason") or "").strip()[:200]
+        ok, extra = _apply_user_action(u, action, reason=reason)
         if not ok:
             return jsonify({"ok": False, "error": extra}), 400
         db.session.commit()
-        _audit(f"user.{action}", "user", u.id, u.username)
+        detail = f"{u.username}: {reason}" if action == "ban" else u.username
+        _audit(f"user.{action}", "user", u.id, detail)
         return jsonify({"ok": True, **(extra if isinstance(extra, dict) else {})})
 
     @app.route("/admin/api/users/bulk", methods=["POST"])
@@ -509,6 +574,25 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
         db.session.commit()
         _audit(f"users.bulk_{action}", "user", None, f"{done} users: {ids}")
         return jsonify({"ok": True, "affected": done})
+
+    @app.route("/admin/api/users/<int:user_id>/resend-verification", methods=["POST"])
+    @admin_required("support")
+    def admin_api_user_resend_verification(user_id):
+        u = db.session.get(User, user_id)
+        if not u:
+            return jsonify({"ok": False, "error": "User not found"}), 404
+        if u.email_verified:
+            return jsonify({"ok": False, "error": "User is already verified"}), 400
+        send_fn = app.extensions.get("bulllogic", {}).get("send_verification_email")
+        if not send_fn:
+            return jsonify({"ok": False, "error": "Verification is not configured"}), 500
+        sent = send_fn(u)
+        _audit("user.resend_verification", "user", u.id,
+               u.username + (" (sent)" if sent else " (send failed, no mailer configured)"))
+        if not sent:
+            return jsonify({"ok": False,
+                            "error": "Email is not configured on the server."}), 502
+        return jsonify({"ok": True})
 
     # ══ API: tickers / predictions / models ═══════════════════════════════════
 
@@ -725,7 +809,9 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
             return jsonify({"ok": False, "error": "Not found"}), 404
         if p.status != "paid":
             return jsonify({"ok": False, "error": "Only paid transactions can be refunded"}), 400
+        note = ((request.get_json() or {}).get("note") or "").strip()[:300]
         p.status = "refunded"
+        p.notes = note or None
         # Revoke the granted days from the user's Pro expiry.
         u = db.session.get(User, p.user_id)
         if u and u.pro_expires_at and p.days:
@@ -734,8 +820,10 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                 u.plan = "free"
                 u.pro_expires_at = None
         db.session.commit()
-        _audit("payment.refund", "payment", p.id,
-               f"{p.amount} {p.currency} ref={p.reference} (money movement is manual)")
+        detail = f"{p.amount} {p.currency} ref={p.reference} (money movement is manual)"
+        if note:
+            detail += f"; note: {note}"
+        _audit("payment.refund", "payment", p.id, detail)
         return jsonify({"ok": True, "note": "Marked refunded and Pro days revoked. "
                         "Actual M-Pesa reversal must be done in the Daraja portal."})
 
@@ -885,6 +973,25 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                            else (f"last: {_retrain['finished_at'] or 'never'}"
                                  f" rc={_retrain['returncode']}"
                                  if _retrain["finished_at"] else "never run")}]
+
+        # Manually run-able jobs (grading, data fetch, retraining, etc). This
+        # is a read-only status view; use the Job Runner page to run one now.
+        try:
+            from routes.admin_jobs import JOB_REGISTRY, job_status
+            status = job_status()
+            for key, meta in JOB_REGISTRY.items():
+                st = status.get(key, {})
+                if st.get("running"):
+                    detail = "running now"
+                elif st.get("last_run"):
+                    detail = f"last: {st['last_run']} ok={st.get('last_ok')}"
+                else:
+                    detail = "never run, use Job Runner"
+                jobs.append({"name": meta["label"],
+                            "status": "running" if st.get("running") else "idle",
+                            "detail": detail})
+        except Exception:
+            pass
 
         return jsonify({"ok": True, "endpoints": stats,
                         "uptime_s": round(time.time() - app_start, 1),
@@ -1230,3 +1337,18 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                                      "target_id": r.target_id, "detail": r.detail,
                                      "ip": r.ip, "at": r.created_at.isoformat()}
                                     for r in rows]})
+
+    # ── Power tools + extended capabilities (routes/admin_power.py) ────────────
+    # Shared here so that module reuses the exact same guard, audit sink and
+    # CSRF check rather than reimplementing them.
+    app.extensions.setdefault("bulllogic", {})
+    app.extensions["bulllogic"]["admin"] = {
+        "admin_required": admin_required,
+        "audit": _audit,
+        "get_setting": _get_setting,
+        "set_setting": _set_setting,
+        "page": _page,
+        "ROLE_LEVELS": ROLE_LEVELS,
+    }
+    from routes.admin_power import register_admin_power_routes
+    register_admin_power_routes(app)

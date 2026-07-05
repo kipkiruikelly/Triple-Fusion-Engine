@@ -492,6 +492,8 @@ def _run_migrations(db):
         ("price_alert",         "note",            "VARCHAR(100)"),
         ("price_alert",         "triggered_at",    "DATETIME"),
         ("user",                "theme_preference", "VARCHAR(10) DEFAULT 'system'"),
+        ("user",                "ban_reason",       "VARCHAR(200)"),
+        ("payment",             "notes",            "VARCHAR(300)"),
     ]
     with engine.connect() as conn:
         for table, column, coltype in migrations:
