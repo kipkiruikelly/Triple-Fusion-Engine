@@ -123,6 +123,29 @@ def _model_suffix(interval: str) -> str:
     return "" if interval == "1d" else f"_{interval}"
 
 
+_INTERVAL_ORDER = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"]
+
+
+def available_models() -> dict:
+    """Ticker -> sorted list of intervals with a trained model actually on
+    disk. Scans Saved Models/ directly (ground truth) rather than any
+    cached manifest, so it's always accurate even for models trained
+    outside the usual training scripts."""
+    import re
+    pattern = re.compile(r"^lr_model_(.+?)(?:_(1h|4h|1w|30m|15m|5m|1m))?\.pkl$")
+    by_ticker: dict = {}
+    for fname in os.listdir(MODELS_DIR):
+        m = pattern.match(fname)
+        if not m:
+            continue
+        ticker, suffix = m.group(1), m.group(2)
+        by_ticker.setdefault(ticker, set()).add(suffix or "1d")
+    return {
+        t: sorted(ivs, key=_INTERVAL_ORDER.index)
+        for t, ivs in sorted(by_ticker.items())
+    }
+
+
 def _infer_model(model, X: np.ndarray, current_price: float):
     """Return (price_target, return_pct, prob_up) compatible with any model type.
 

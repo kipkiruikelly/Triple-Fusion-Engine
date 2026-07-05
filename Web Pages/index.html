@@ -922,6 +922,7 @@
           <span class="quick-tag" onclick="setTickerAndPredict('AMZN')">AMZN</span>
           <span class="quick-tag" onclick="setTickerAndPredict('NDX')">NDX</span>
           <span class="quick-tag" onclick="setTickerAndPredict('DIA')">DIA</span>
+          <span class="quick-tag" onclick="showAvailableModels()" style="background:var(--accent);color:var(--white);border-color:var(--accent);">&#128269; All available tickers &amp; timeframes</span>
         </div>
         {% if error %}
         <div class="error-box">{{ error }}
@@ -1376,6 +1377,44 @@
     document.getElementById('modalTitle').textContent = section.title;
     document.getElementById('modalBody').innerHTML = section.body;
     document.getElementById('modal').style.display = 'flex';
+  }
+
+  var _tfLabel = {'1m':'1m','5m':'5m','15m':'15m','30m':'30m','1h':'1h','4h':'4h','1d':'1D','1w':'1W'};
+
+  async function showAvailableModels() {
+    document.getElementById('modalTitle').textContent = 'Available Tickers & Timeframes';
+    document.getElementById('modalBody').innerHTML =
+      '<input type="text" id="availSearch" placeholder="Search ticker…" oninput="filterAvailableModels(this.value)" ' +
+      'style="width:100%;padding:8px 10px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:9.5pt;">' +
+      '<div id="availCount" style="font-size:8.5pt;color:var(--muted);margin-bottom:8px;">Loading…</div>' +
+      '<div id="availList" style="max-height:50vh;overflow-y:auto;"></div>';
+    document.getElementById('modal').style.display = 'flex';
+    try {
+      const r = await fetch('/api/available-models');
+      const d = await r.json();
+      if (!d.ok) { document.getElementById('availList').innerHTML = '<div style="color:var(--muted)">Could not load.</div>'; return; }
+      window._availModels = d.tickers;
+      filterAvailableModels('');
+    } catch (e) {
+      document.getElementById('availList').innerHTML = '<div style="color:var(--muted)">Could not load.</div>';
+    }
+  }
+
+  function filterAvailableModels(q) {
+    const all = window._availModels || {};
+    q = (q || '').toUpperCase();
+    const tickers = Object.keys(all).filter(t => t.includes(q)).sort();
+    document.getElementById('availCount').textContent =
+      tickers.length + ' of ' + Object.keys(all).length + ' tickers with a trained model, across 1m/5m/15m/30m/1h/4h/1D/1W';
+    document.getElementById('availList').innerHTML = tickers.map(t => {
+      const badges = all[t].map(tf =>
+        '<span style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;font-size:7.5pt;color:var(--muted);margin:0 0 3px 3px;display:inline-block;">' +
+        (_tfLabel[tf] || tf) + '</span>').join('');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+        '<span style="font-weight:700;color:var(--white);cursor:pointer;white-space:nowrap;" onclick="closeModal();setTicker(\'' + t + '\')">' + t + '</span>' +
+        '<span style="text-align:right;">' + badges + '</span>' +
+      '</div>';
+    }).join('') || '<div style="color:var(--muted);padding:8px 0;">No matches.</div>';
   }
 </script>
 

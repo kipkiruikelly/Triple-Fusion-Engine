@@ -350,6 +350,13 @@ def register_prediction_routes(app, metrics):
             "prediction": prediction,
         })
 
+    @app.route("/api/available-models")
+    @login_required
+    def api_available_models():
+        from predictor import available_models
+        models = available_models()
+        return jsonify({"ok": True, "tickers": models, "total_tickers": len(models)})
+
     @app.route("/api/pro-signals")
     @login_required
     def api_pro_signals():
