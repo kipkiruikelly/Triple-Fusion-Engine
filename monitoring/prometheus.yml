@@ -1,0 +1,48 @@
+# ── Prometheus Configuration ──────────────────────────────────────────────
+# Scrapes: cadvisor (containers), node-exporter (host), app /health endpoints
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+
+  # ── Prometheus self ──────────────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+
+  # ── cadvisor (Docker container metrics) ──────────────────────────────────
+  - job_name: cadvisor
+    static_configs:
+      - targets:
+          - cadvisor:8080
+
+  # ── Node exporter (host CPU/memory/disk/network) ─────────────────────────
+  - job_name: node
+    static_configs:
+      - targets:
+          - node-exporter:9100
+
+  # ── TFE Web (Flask /health endpoint) ─────────────────────────────────────
+  - job_name: tfe-web
+    metrics_path: /health
+    static_configs:
+      - targets:
+          - web:5000
+
+  # ── TFE Predictor (/health endpoint) ─────────────────────────────────────
+  - job_name: tfe-predictor
+    metrics_path: /health
+    static_configs:
+      - targets:
+          - predictor:5001

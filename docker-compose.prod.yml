@@ -1,0 +1,234 @@
+# ── Triple-Fusion-Engine Production Overrides ──────────────────────────────────
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# This file overlays the base docker-compose.yml with production settings:
+#   - Named Docker volumes for data/models/logs persistence
+#   - Redis AOF persistence + LRU eviction
+#   - Resource limits (CPU / memory) per service
+#   - JSON-file log rotation (10 MB × 3-5 files)
+#   - Gunicorn tuned for production (preload, max-requests recycling)
+#   - Healthchecks with sensible start periods
+#   - `restart: always` on long-running services
+
+version: "3.9"
+
+services:
+
+  # ── Redis (persistent cache + message broker) ─────────────────────────────
+  redis:
+    restart: always
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+    volumes:
+      - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # ── Web UI (Flask + Gunicorn) ─────────────────────────────────────────────
+  web:
+    restart: always
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      LOG_LEVEL: INFO
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+      SECURE_COOKIES: "true"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - tfe_data:/app/Data
+      - tfe_models:/app/Saved Models
+      - tfe_logs:/app/logs
+      - tfe_instance:/app/instance
+    command: >
+      gunicorn --bind 0.0.0.0:5000
+      --workers 4
+      --worker-class sync
+      --timeout 120
+      --graceful-timeout 30
+      --keep-alive 5
+      --max-requests 1000
+      --max-requests-jitter 50
+      --preload
+      --access-logfile /app/logs/access.log
+      --error-logfile /app/logs/error.log
+      --log-level info
+      wsgi:app
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ── Prediction API ────────────────────────────────────────────────────────
+  predictor:
+    restart: always
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      LOG_LEVEL: INFO
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - tfe_models:/app/Saved Models
+      - tfe_logs:/app/logs
+    command: >
+      gunicorn --bind 0.0.0.0:5001
+      --workers 2
+      --worker-class sync
+      --timeout 180
+      --graceful-timeout 60
+      --keep-alive 5
+      --max-requests 500
+      --max-requests-jitter 25
+      --preload
+      --log-level info
+      predictor_api:app
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "2.0"
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:5001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── Trading Engine ────────────────────────────────────────────────────────
+  trader:
+    restart: always
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      LOG_LEVEL: INFO
+      TRADING_MODE: "${TRADING_MODE:-paper}"
+      ENABLE_LIVE_TRADING: "${ENABLE_LIVE_TRADING:-false}"
+      USE_REDIS: "true"
+      REDIS_URL: redis://redis:6379/0
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - tfe_models:/app/Saved Models
+      - tfe_logs:/app/logs
+      - tfe_data:/app/Data
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── Data Pipeline (one-off, explicit invocation) ──────────────────────────
+  pipeline:
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - tfe_data:/app/Data
+      - tfe_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "1.0"
+          memory: 512M
+
+  # ── Model Training (one-off, explicit invocation) ─────────────────────────
+  trainer:
+    env_file:
+      - .env
+    environment:
+      ENV: production
+      LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: "1"
+      TF_CPP_MIN_LOG_LEVEL: "2"
+    volumes:
+      - tfe_data:/app/Data
+      - tfe_models:/app/Saved Models
+      - tfe_logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: "8.0"
+          memory: 8G
+        reservations:
+          cpus: "4.0"
+          memory: 4G
+
+# ── Named Volumes (survive container recreation) ────────────────────────────
+
+volumes:
+  redis_data:
+    driver: local
+  tfe_data:
+    driver: local
+  tfe_models:
+    driver: local
+  tfe_logs:
+    driver: local
+  tfe_instance:
+    driver: local
