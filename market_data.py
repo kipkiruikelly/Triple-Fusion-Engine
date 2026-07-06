@@ -55,6 +55,8 @@ _source_stats = {
                 "last_error": None, "last_error_at": None},
     "pyth":     {"success": 0, "fail": 0, "last_success": None,
                 "last_error": None, "last_error_at": None},
+    "finnhub":  {"success": 0, "fail": 0, "last_success": None,
+                "last_error": None, "last_error_at": None},
     "failovers": 0, "divergences": 0,
 }
 _divergence_last_logged = {}   # symbol -> ts, throttle ErrorLog spam
@@ -110,8 +112,13 @@ def get_quotes_verified(symbols):
     Returns {symbol: {price, pct, source, verified, divergence_pct,
     conf, conf_pct, publish_time, market_closed} or None}. Primary source
     is yfinance; Pyth verifies it and takes over when yfinance is down.
+    Finnhub (only if FINNHUB_API_KEY is configured) fills the same two
+    roles for symbols with no configured Pyth feed: cross-verifier when
+    yfinance is up, failover when it isn't. Pyth stays the primary
+    verifier wherever a feed exists - Finnhub only covers the gap.
     """
     import pyth_client
+    import finnhub_service
 
     feed_map = _pyth_feed_map(symbols)
     pyth = {}
@@ -140,6 +147,26 @@ def get_quotes_verified(symbols):
                                     if pq["price"] else None,
                         "publish_time": pq["publish_time"],
                         "market_closed": False}
+        elif yq and not pq_usable and finnhub_service.FINNHUB_KEY:
+            fq = finnhub_service.get_quote(sym)
+            _mark("finnhub", fq is not None)
+            if fq and fq["price"]:
+                div = abs(yq["price"] - fq["price"]) / fq["price"] * 100
+                verified = div <= VERIFY_TOLERANCE_PCT
+                if not verified:
+                    _log_divergence(sym, yq["price"], fq["price"], div)
+                out[sym] = {**yq, "source": "yfinance+finnhub",
+                            "verified": verified,
+                            "divergence_pct": round(div, 3),
+                            "finnhub_price": round(fq["price"], 4),
+                            "conf": None, "conf_pct": None,
+                            "publish_time": None,
+                            "market_closed": bool(pq and pq.get("market_closed"))}
+            else:
+                out[sym] = {**yq, "source": "yfinance", "verified": False,
+                            "divergence_pct": None, "conf": None, "conf_pct": None,
+                            "publish_time": None,
+                            "market_closed": bool(pq and pq.get("market_closed"))}
         elif yq:
             out[sym] = {**yq, "source": "yfinance", "verified": False,
                         "divergence_pct": None, "conf": None, "conf_pct": None,
@@ -156,6 +183,15 @@ def get_quotes_verified(symbols):
                                     if pq["price"] else None,
                         "publish_time": pq["publish_time"],
                         "market_closed": False}
+        elif finnhub_service.FINNHUB_KEY and (
+                fq := finnhub_service.get_quote(sym)):
+            # yfinance and Pyth both down/unconfigured: Finnhub keeps a
+            # live price flowing, same failover shape as the Pyth branch.
+            _mark("finnhub", True)
+            _source_stats["failovers"] += 1
+            out[sym] = {**fq, "source": "finnhub", "verified": False,
+                        "divergence_pct": None, "conf": None, "conf_pct": None,
+                        "publish_time": None, "market_closed": False}
         else:
             out[sym] = None
     return out

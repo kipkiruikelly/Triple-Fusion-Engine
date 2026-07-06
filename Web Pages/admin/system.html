@@ -138,7 +138,7 @@ async function loadDataQuality() {
     ${st.last_error ? `<div class="stat-sub red" style="margin-top:2px" title="${esc(st.last_error)}">
       last error ${fmtDate(st.last_error_at)}: ${esc(st.last_error)}</div>` : ''}</div>`;
   document.getElementById('srcCards').innerHTML =
-    card('yfinance', s.yfinance) + card('Pyth oracle', s.pyth) +
+    card('yfinance', s.yfinance) + card('Pyth oracle', s.pyth) + card('Finnhub', s.finnhub) +
     `<div class="card" style="margin:0"><div class="stat-label">Failovers / divergences</div>
      <div class="stat-val" style="font-size:12pt">${s.failovers} / ${s.divergences}</div>
      <div class="stat-sub">${d.breaker.rate_limited ? 'circuit breaker OPEN' : 'breaker closed'}</div></div>`;

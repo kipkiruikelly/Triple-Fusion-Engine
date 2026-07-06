@@ -1391,12 +1391,16 @@ function _applyLiveData(sym, price, chg, v) {
   const up = chg >= 0;
   let badge = '';
   if (v) {
+    const verifierName = v.source === 'yfinance+finnhub' ? 'Finnhub' : 'the Pyth oracle network';
     if (v.verified) {
-      badge = `<span title="Verified: this price was cross-checked against the Pyth oracle network and both sources agree${v.conf != null ? '. Oracle confidence: about ±$' + _fmtPrice(v.conf) : ''}" style="color:var(--green);font-size:8pt;cursor:help"> ✓</span>`;
+      badge = `<span title="Verified: this price was cross-checked against ${verifierName} and both sources agree${v.conf != null ? '. Oracle confidence: about ±$' + _fmtPrice(v.conf) : ''}" style="color:var(--green);font-size:8pt;cursor:help"> ✓</span>`;
     } else if (v.divergence_pct != null) {
-      badge = `<span title="Sources disagree: yfinance says $${_fmtPrice(price)} but the Pyth oracle says $${_fmtPrice(v.pyth_price ?? price)} (${v.divergence_pct}% apart). Treat this price with caution." style="color:var(--accent);font-size:8pt;cursor:help"> ⚠</span>`;
+      const otherPrice = v.source === 'yfinance+finnhub' ? (v.finnhub_price ?? price) : (v.pyth_price ?? price);
+      badge = `<span title="Sources disagree: yfinance says $${_fmtPrice(price)} but ${verifierName} says $${_fmtPrice(otherPrice)} (${v.divergence_pct}% apart). Treat this price with caution." style="color:var(--accent);font-size:8pt;cursor:help"> ⚠</span>`;
     } else if (v.source === 'pyth') {
       badge = `<span title="Primary source is down. This price comes from the Pyth oracle network." style="color:var(--blue,#3B82F6);font-size:7.5pt;cursor:help"> oracle</span>`;
+    } else if (v.source === 'finnhub') {
+      badge = `<span title="Primary source is down. This price comes from Finnhub." style="color:var(--blue,#3B82F6);font-size:7.5pt;cursor:help"> finnhub</span>`;
     }
   }
   el.innerHTML = `

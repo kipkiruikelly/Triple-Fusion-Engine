@@ -4,6 +4,7 @@ import time
 
 import pyth_client
 import market_data
+import finnhub_service
 
 
 def test_fixed_point_parsing():
@@ -81,3 +82,54 @@ def test_all_sources_down_returns_none(app, monkeypatch):
     monkeypatch.setattr(market_data, "_pyth_feed_map", lambda syms: {})
     with app.app_context():
         assert market_data.get_quotes_verified(["TNONE"])["TNONE"] is None
+
+
+def _fake_finnhub(price):
+    return {"price": price, "prev": price - 1, "chg": 1.0, "pct": 1.0}
+
+
+def test_finnhub_verifies_when_no_pyth_feed(app, monkeypatch):
+    monkeypatch.setattr(finnhub_service, "FINNHUB_KEY", "dummy")
+    monkeypatch.setattr(market_data, "get_quote",
+                        lambda s: {"price": 100.0, "prev": 99.0, "chg": 1.0, "pct": 1.0})
+    monkeypatch.setattr(market_data, "_pyth_feed_map", lambda syms: {})
+    monkeypatch.setattr(finnhub_service, "get_quote", lambda s: _fake_finnhub(100.2))
+    with app.app_context():
+        q = market_data.get_quotes_verified(["TFHV"])["TFHV"]
+    assert q["verified"] is True and q["source"] == "yfinance+finnhub"
+    assert q["divergence_pct"] is not None and q["divergence_pct"] < 0.5
+
+
+def test_finnhub_divergence_flagged(app, monkeypatch):
+    monkeypatch.setattr(finnhub_service, "FINNHUB_KEY", "dummy")
+    monkeypatch.setattr(market_data, "get_quote",
+                        lambda s: {"price": 100.0, "prev": 99.0, "chg": 1.0, "pct": 1.0})
+    monkeypatch.setattr(market_data, "_pyth_feed_map", lambda syms: {})
+    monkeypatch.setattr(finnhub_service, "get_quote", lambda s: _fake_finnhub(105.0))
+    with app.app_context():
+        q = market_data.get_quotes_verified(["TFHD"])["TFHD"]
+    assert q["verified"] is False
+    assert q["divergence_pct"] > market_data.VERIFY_TOLERANCE_PCT
+    assert q["finnhub_price"] == 105.0        # both values exposed, nothing hidden
+
+
+def test_failover_to_finnhub_when_yfinance_and_pyth_down(app, monkeypatch):
+    monkeypatch.setattr(finnhub_service, "FINNHUB_KEY", "dummy")
+    monkeypatch.setattr(market_data, "get_quote", lambda s: None)
+    monkeypatch.setattr(market_data, "_pyth_feed_map", lambda syms: {})
+    monkeypatch.setattr(finnhub_service, "get_quote", lambda s: _fake_finnhub(42.5))
+    before = market_data._source_stats["failovers"]
+    with app.app_context():
+        q = market_data.get_quotes_verified(["TFHF"])["TFHF"]
+    assert q["source"] == "finnhub" and q["price"] == 42.5
+    assert market_data._source_stats["failovers"] == before + 1
+
+
+def test_no_finnhub_key_preserves_old_behaviour(app, monkeypatch):
+    monkeypatch.setattr(finnhub_service, "FINNHUB_KEY", "")
+    monkeypatch.setattr(market_data, "get_quote",
+                        lambda s: {"price": 100.0, "prev": 99.0, "chg": 1.0, "pct": 1.0})
+    monkeypatch.setattr(market_data, "_pyth_feed_map", lambda syms: {})
+    with app.app_context():
+        q = market_data.get_quotes_verified(["TNOKEY"])["TNOKEY"]
+    assert q["source"] == "yfinance" and q["verified"] is False
