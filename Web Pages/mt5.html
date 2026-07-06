@@ -120,11 +120,11 @@
         <!-- Mode tabs -->
         <div style="display:flex;gap:4px;margin-bottom:14px;">
           <button onclick="setMode('metaapi')" id="tabMetaapi"
-            style="flex:1;padding:6px 4px;font-size:8.5pt;font-weight:700;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--white);cursor:pointer;">
+            style="flex:1;padding:6px 4px;font-size:8.5pt;font-weight:700;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;">
             MetaApi
           </button>
           <button onclick="setMode('paper')" id="tabPaper"
-            style="flex:1;padding:6px 4px;font-size:8.5pt;font-weight:700;border-radius:4px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;">
+            style="flex:1;padding:6px 4px;font-size:8.5pt;font-weight:700;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--white);cursor:pointer;">
             Paper
           </button>
           <button onclick="setMode('bridge')" id="tabBridge"
@@ -134,7 +134,7 @@
         </div>
 
         <!-- MetaApi fields -->
-        <div id="fieldsMetaapi">
+        <div id="fieldsMetaapi" style="display:none;">
           <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:6px;padding:10px;margin-bottom:12px;font-size:8.5pt;line-height:1.6;color:var(--blue);">
             <strong>MetaApi Cloud</strong>, works on Mac, Linux &amp; Windows.<br>
             1. Sign up at <strong>metaapi.cloud</strong> (free tier available)<br>
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Paper fields -->
-        <div id="fieldsPaper" style="display:none;">
+        <div id="fieldsPaper">
           <div style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:6px;padding:10px;margin-bottom:12px;font-size:8.5pt;line-height:1.6;color:var(--yellow);">
             <strong>Paper Trading</strong>, $10,000 virtual balance,<br>
             real market data via yfinance. No broker needed.
@@ -230,7 +230,7 @@
             <span style="display:block;font-size:8pt;color:var(--muted);font-weight:400;">Use LR+RF models to filter signals</span>
           </label>
         </div>
-        <button class="btn btn-start" id="btnStart" onclick="startTrading()" disabled>&#9654; Start Algorithm</button>
+        <button class="btn btn-start" id="btnStart" onclick="startTrading()" disabled title="Connect to a broker or paper account above first">&#9654; Start Algorithm</button>
         <button class="btn btn-stop"  id="btnStop"  onclick="stopTrading()"  disabled>&#9632; Stop Algorithm</button>
         <button class="btn btn-close" onclick="closeAll()">&#10005; Close All Positions</button>
       </div>
@@ -329,7 +329,7 @@
 
 <script>
   let pollTimer = null;
-  let activeMode = 'metaapi';
+  let activeMode = 'paper';
 
   function setMode(mode) {
     activeMode = mode;
@@ -448,7 +448,9 @@
   function setConnected(yes, mode) {
     const color = !yes ? 'dot-red' : mode === 'paper' ? 'dot-yellow' : 'dot-green';
     document.getElementById('connDot').className = 'status-dot ' + color;
-    document.getElementById('btnStart').disabled = !yes;
+    const btnStart = document.getElementById('btnStart');
+    btnStart.disabled = !yes;
+    btnStart.title = yes ? '' : 'Connect to a broker or paper account above first';
     if (!yes) {
       document.getElementById('btnStop').disabled = true;
       document.getElementById('acctPanel').style.display = 'none';
