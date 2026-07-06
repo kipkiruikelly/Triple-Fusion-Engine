@@ -10,15 +10,6 @@
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     
     body{font-family:'Inter',sans-serif;font-size:11pt;background:var(--bg);color:var(--text);min-height:100vh}
-    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-    .topbar-left{display:flex;align-items:center;gap:32px}
-    .logo{font-size:15pt;font-weight:700;color:var(--white);text-decoration:none;letter-spacing:-0.5px}
-    .logo span{color:var(--accent)}
-    .nav-links{display:flex;gap:4px}
-    .nav-links a{color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 12px;border-radius:6px;transition:all .15s}
-    .nav-links a:hover,.nav-links a.active{color:var(--text);background:var(--surface2)}
-    .topbar-right{display:flex;align-items:center;gap:8px}
-    .btn-sm{padding:5px 12px;border-radius:4px;font-size:9pt;font-weight:600;text-decoration:none;color:var(--muted);border:1px solid var(--border);background:transparent}
     .container{max-width:860px;margin:0 auto;padding:32px 24px}
     h1{font-size:20pt;font-weight:700;margin-bottom:4px}
     .subtitle{color:var(--muted);font-size:10pt;margin-bottom:28px}
@@ -43,28 +34,11 @@
     .rr-label{display:flex;justify-content:space-between;margin-top:4px;font-size:8.5pt;color:var(--muted)}
     .explainer{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:14px;margin-top:16px;font-size:9pt;color:var(--muted);line-height:1.7}
     .explainer strong{color:var(--text)}
-    @media(max-width:700px){.layout{grid-template-columns:1fr}.result-grid{grid-template-columns:1fr}.nav-links{display:none}}
+    @media(max-width:700px){.layout{grid-template-columns:1fr}.result-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-<div class="topbar">
-  <div class="topbar-left">
-    <a href="/" class="logo">Bull<span>Logic</span></a>
-    <nav class="nav-links">
-      <a href="/">Predictor</a>
-      <a href="/screener">Screener</a>
-      <a href="/calendar">Calendar</a>
-      <a href="/risk" class="active">Risk Calc</a>
-      <a href="/portfolio">Portfolio</a>
-      <a href="/history">History</a>
-    </nav>
-  </div>
-  <div class="topbar-right">
-      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-    <a href="/profile" class="btn-sm">Profile</a>
-    <a href="/logout" class="btn-sm">Logout</a>
-  </div>
-</div>
+{% include "_navbar.html" %}
 
 <div class="container">
   <h1>Risk & Position Size Calculator</h1>

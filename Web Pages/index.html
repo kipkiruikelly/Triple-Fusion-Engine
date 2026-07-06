@@ -28,101 +28,6 @@
       flex-direction: column;
     }
 
-    /* ── Top bar ── */
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .topbar-left {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-    }
-
-    .logo {
-      font-size: 15pt;
-      font-weight: 700;
-      color: var(--white);
-      letter-spacing: -0.5px;
-    }
-
-    .logo span { color: var(--accent); }
-
-    .nav-links {
-      display: flex;
-      gap: 4px;
-    }
-
-    .nav-links a {
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 10pt;
-      font-weight: 500;
-      padding: 6px 12px;
-      border-radius: 4px;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .nav-links a:hover { color: var(--text); background: var(--surface2); }
-    .nav-links a.active { color: var(--white); background: var(--surface2); }
-
-    /* ── "More" nav dropdown (collapses secondary links, keeps primary ones visible) ── */
-    .nav-more { position: relative; }
-
-    .nav-more-btn {
-      color: var(--muted);
-      background: none;
-      border: none;
-      font-family: inherit;
-      text-decoration: none;
-      font-size: 10pt;
-      font-weight: 500;
-      padding: 6px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: color 0.15s, background 0.15s;
-    }
-
-    .nav-more-btn:hover, .nav-more-btn.open { color: var(--text); background: var(--surface2); }
-
-    .nav-more-panel {
-      display: none;
-      position: absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-      min-width: 170px;
-      z-index: 300;
-      padding: 6px;
-    }
-
-    .nav-more-panel.open { display: block; }
-
-    .nav-more-panel a {
-      display: block;
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 10pt;
-      font-weight: 500;
-      padding: 8px 12px;
-      border-radius: 4px;
-    }
-
-    .nav-more-panel a:hover { color: var(--text); background: var(--surface2); }
-    .nav-more-panel a.active { color: var(--white); background: var(--surface2); }
-
     /* ── Market ticker strip ── */
     .ticker-strip {
       background: var(--surface);
@@ -621,7 +526,6 @@
 
     @media (max-width: 600px) {
       .ticker-strip { display: none; }
-      .nav-links { display: none; }
       .stats-row { grid-template-columns: 1fr; }
       .search-row { flex-direction: column; }
       .content { padding: 16px; }
@@ -630,52 +534,7 @@
 </head>
 <body>
 
-<!-- Top bar -->
-<div class="topbar">
-  <div class="topbar-left">
-    <a href="/" class="logo" style="text-decoration:none;">Bull<span>Logic</span></a>
-    <nav class="nav-links">
-      <a href="/" class="active">Predictor</a>
-      <a href="/watchlist">Watchlist</a>
-      <a href="/alerts">Alerts</a>
-      <a href="/pricing">Pricing</a>
-      <div class="nav-more">
-        <button type="button" class="nav-more-btn" id="navMoreBtn" onclick="toggleNavMore(event)">More &#9662;</button>
-        <div class="nav-more-panel" id="navMorePanel">
-          <a href="/market">Markets</a>
-          <a href="/screener">Screener</a>
-          <a href="/leaderboard">Leaderboard</a>
-          <a href="/pipeline">Pipeline</a>
-          <a href="/portfolio">Portfolio</a>
-          <a href="/scanner">Scanner</a>
-          <a href="/journal">Journal</a>
-          <a href="/history">History</a>
-          <a href="/track-record">Track Record</a>
-        </div>
-      </div>
-    </nav>
-  </div>
-  <div style="display:flex;align-items:center;gap:10px;">
-    <span style="color:var(--muted);font-size:9.5pt;font-weight:500;">{{ current_user.username }}</span>
-    {% if current_user.is_pro %}
-      <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:0.5px;">PRO</span>
-    {% else %}
-      <span style="color:var(--muted);font-size:9.5pt;">{{ current_user.predictions_remaining }}/5 left</span>
-      <a href="/pricing" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">Upgrade</a>
-    {% endif %}
-    <!-- Notification Bell -->
-    <div style="position:relative;cursor:pointer" onclick="toggleNotifPanel()" title="Notifications">
-      <span style="font-size:16px">🔔</span>
-      <span id="notif-badge" style="display:none;position:absolute;top:-4px;right:-5px;background:var(--accent);color:#fff;font-size:7.5pt;font-weight:700;min-width:16px;height:16px;border-radius:8px;text-align:center;line-height:16px;padding:0 3px">0</span>
-    </div>
-    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-    {% if current_user.is_authenticated and current_user.role in ('viewer', 'support', 'admin') %}
-    <a href="/admin" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">⚙ Admin</a>
-    {% endif %}
-    <a href="/profile" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Profile</a>
-    <a href="/logout" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:5px 10px;border:1px solid var(--border);border-radius:4px;">Logout</a>
-  </div>
-</div>
+{% include "_navbar.html" %}
 
 <!-- Market ticker -->
 <div class="ticker-strip">
@@ -1003,17 +862,6 @@
           <span id="stream-status" style="font-size:8pt;color:var(--muted)">connecting…</span>
         </div>
         <div id="live-prices" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px"></div>
-      </div>
-    </div>
-
-    <!-- Notification dropdown panel -->
-    <div id="notif-panel" style="display:none;position:fixed;top:58px;right:16px;width:340px;max-height:480px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,0.5);z-index:999;padding:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-weight:700;color:var(--white)">Notifications</span>
-        <button onclick="clearAllNotifs()" style="background:none;border:none;color:var(--muted);font-size:9pt;cursor:pointer">Clear all</button>
-      </div>
-      <div id="notif-list" style="display:flex;flex-direction:column;gap:8px">
-        <div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">Loading…</div>
       </div>
     </div>
 
@@ -1497,80 +1345,6 @@ if ('serviceWorker' in navigator) {
   window.__renderPrices = renderPrices;
 })();
 
-// ── Notification bell ──────────────────────────────────────────────────────
-let _notifOpen = false;
-async function loadNotifications() {
-  try {
-    const r = await fetch('/api/notifications');
-    const d = await r.json();
-    if (!d.ok) return;
-    const badge = document.getElementById('notif-badge');
-    badge.textContent = d.unread;
-    badge.style.display = d.unread > 0 ? 'block' : 'none';
-
-    const list = document.getElementById('notif-list');
-    if (!d.notifications.length) {
-      list.innerHTML = '<div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">No notifications</div>';
-      return;
-    }
-    const icons = {alert:'🔔',signal:'📊',system:'ℹ️',gift:'🎁'};
-    list.innerHTML = d.notifications.map(n => `
-      <div onclick="markRead(${n.id}${n.link ? ',\''+n.link+'\'':',null'})"
-           style="padding:10px 12px;border-radius:7px;background:${n.read?'transparent':'rgba(255,107,53,0.07)'};border:1px solid var(--border);cursor:pointer;transition:background .15s">
-        <div style="display:flex;gap:8px;align-items:flex-start">
-          <span>${icons[n.type]||'ℹ️'}</span>
-          <div>
-            <div style="font-size:10pt;font-weight:${n.read?500:700};color:${n.read?'var(--muted)':'var(--white)'}">${n.title}</div>
-            ${n.body ? `<div style="font-size:8.5pt;color:var(--muted);margin-top:2px">${n.body}</div>` : ''}
-            <div style="font-size:8pt;color:var(--muted);margin-top:3px">${n.created_at}</div>
-          </div>
-        </div>
-      </div>`).join('');
-  } catch(e) {}
-}
-
-function toggleNotifPanel() {
-  _notifOpen = !_notifOpen;
-  document.getElementById('notif-panel').style.display = _notifOpen ? 'block' : 'none';
-  if (_notifOpen) loadNotifications();
-}
-
-async function markRead(id, link) {
-  await fetch('/api/notifications/read', {method:'POST',
-    headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})});
-  if (link) window.location.href = link;
-  else loadNotifications();
-}
-
-async function clearAllNotifs() {
-  await fetch('/api/notifications/clear', {method:'POST'});
-  loadNotifications();
-}
-
-document.addEventListener('click', e => {
-  if (_notifOpen && !e.target.closest('#notif-panel') && !e.target.closest('[onclick*="toggleNotifPanel"]')) {
-    _notifOpen = false;
-    document.getElementById('notif-panel').style.display = 'none';
-  }
-  if (_navMoreOpen && !e.target.closest('#navMorePanel') && !e.target.closest('#navMoreBtn')) {
-    _navMoreOpen = false;
-    document.getElementById('navMorePanel').classList.remove('open');
-    document.getElementById('navMoreBtn').classList.remove('open');
-  }
-});
-
-// ── Top nav: "More" dropdown for secondary links ─────────────────────────
-let _navMoreOpen = false;
-function toggleNavMore(e) {
-  e.stopPropagation();
-  _navMoreOpen = !_navMoreOpen;
-  document.getElementById('navMorePanel').classList.toggle('open', _navMoreOpen);
-  document.getElementById('navMoreBtn').classList.toggle('open', _navMoreOpen);
-}
-
-// Poll notification count every 60s
-loadNotifications();
-setInterval(loadNotifications, 60000);
 
 // ── Sidebar: search filter ────────────────────────────────────────────────
 function filterSidebar(q) {

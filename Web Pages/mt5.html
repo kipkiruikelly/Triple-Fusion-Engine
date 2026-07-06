@@ -13,17 +13,6 @@
 
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
-    .topbar {
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 100;
-    }
-    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; }
-    .logo span { color: var(--accent); }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
-    .btn-nav { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; padding: 6px 12px; border: 1px solid var(--border); border-radius: 4px; transition: all 0.15s; }
-    .btn-nav:hover { color: var(--white); border-color: var(--accent); }
-
     .layout { display: flex; flex: 1; }
 
     /* Sidebar */
@@ -110,15 +99,7 @@
 </head>
 <body>
 
-<div class="topbar">
-  <a href="/" class="logo" style="text-decoration:none;">Market<span>Predict</span> <span style="font-size:9pt;color:var(--accent);font-weight:600;letter-spacing:0.5px;">MT5</span></a>
-  <div class="topbar-right">
-      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-    <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;">PRO</span>
-    <a href="/" class="btn-nav">Dashboard</a>
-    <a href="/logout" class="btn-nav">Logout</a>
-  </div>
-</div>
+{% include "_navbar.html" %}
 
 <div class="layout">
 

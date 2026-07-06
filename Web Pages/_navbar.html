@@ -1,0 +1,312 @@
+<!--
+  _navbar.html - shared public-app navigation (investing.com-style mega menu).
+  Include this file at the point in the page body where the nav belongs.
+  Depends on _theme.html already being included in head (CSS vars +
+  toggleTheme()/blTheme) - this partial does not redefine those.
+  Requires: current_user (Flask-Login), request (Flask template global).
+-->
+<style>
+  .bl-nav {
+    position: sticky; top: 0; z-index: 200;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    height: 48px;
+  }
+  .bl-nav-inner {
+    display: flex; align-items: center; gap: 8px;
+    max-width: 1600px; margin: 0 auto; padding: 0 20px; height: 100%;
+  }
+  .bl-logo {
+    font-size: 14pt; font-weight: 700; color: var(--text);
+    text-decoration: none; white-space: nowrap; font-family: 'Inter', sans-serif;
+  }
+  .bl-logo span { color: var(--accent); }
+
+  .bl-nav-tabs { display: flex; list-style: none; gap: 2px; flex: 1; justify-content: center; }
+  .bl-tab { position: relative; }
+  .bl-tab-btn {
+    background: none; border: none; color: var(--muted);
+    font-size: 10.5pt; font-weight: 500; padding: 0 12px; height: 48px;
+    cursor: pointer; white-space: nowrap; transition: color 0.15s;
+    font-family: inherit; display: flex; align-items: center; gap: 4px;
+  }
+  .bl-tab-btn:hover { color: var(--text); }
+  .bl-tab.active .bl-tab-btn { color: var(--accent); border-bottom: 2px solid var(--accent); }
+  .bl-caret { font-size: 8pt; }
+
+  .bl-dropdown {
+    display: none; position: absolute; top: 48px; left: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 0; min-width: 200px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 300;
+  }
+  .bl-dropdown-right { left: auto; right: 0; }
+  .bl-tab:hover .bl-dropdown, .bl-tab.open .bl-dropdown { display: block; }
+  .bl-dropdown a {
+    display: block; padding: 8px 18px; color: var(--muted); text-decoration: none;
+    font-size: 10pt; white-space: nowrap; transition: background 0.1s, color 0.1s;
+  }
+  .bl-dropdown a:hover { background: var(--surface2); color: var(--text); }
+  .bl-dropdown-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
+  .bl-admin-link { color: var(--accent) !important; }
+
+  .bl-nav-right { display: flex; align-items: center; gap: 6px; }
+  .bl-icon-btn {
+    background: none; border: none; color: var(--muted); font-size: 14pt;
+    cursor: pointer; padding: 4px 8px; border-radius: 4px; position: relative;
+    transition: color 0.15s; line-height: 1;
+  }
+  .bl-icon-btn:hover { color: var(--text); }
+  .bl-badge {
+    position: absolute; top: 0; right: 0; background: var(--accent); color: #fff;
+    font-size: 7pt; font-weight: 700; border-radius: 50%; min-width: 14px; height: 14px;
+    display: flex; align-items: center; justify-content: center; padding: 0 2px;
+  }
+
+  .bl-user-btn {
+    display: flex; align-items: center; gap: 6px; padding: 0 10px; height: 32px;
+    border: 1px solid var(--border); border-radius: 6px; font-size: 9.5pt;
+  }
+  .bl-pro-badge {
+    background: var(--accent); color: #fff; font-size: 8pt; font-weight: 700;
+    padding: 1px 6px; border-radius: 10px;
+  }
+  .bl-free-left { color: var(--muted); font-size: 8.5pt; }
+
+  .bl-notif-panel {
+    display: none; position: fixed; top: 52px; right: 16px; width: 340px;
+    max-height: 480px; overflow-y: auto; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 999; padding: 16px;
+  }
+  .bl-notif-panel.open { display: block; }
+
+  .bl-hamburger { display: none; }
+
+  @media (max-width: 900px) {
+    .bl-nav-tabs {
+      display: none; flex-direction: column; position: fixed; top: 48px; left: 0; right: 0;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 12px 0; z-index: 200; max-height: calc(100vh - 48px); overflow-y: auto;
+    }
+    .bl-nav-tabs.open { display: flex; }
+    .bl-hamburger { display: flex; }
+    .bl-tab { width: 100%; }
+    .bl-tab-btn { width: 100%; text-align: left; padding: 10px 20px; height: auto; }
+    .bl-dropdown { position: static; box-shadow: none; border: none; padding-left: 16px; display: none; }
+    .bl-tab.open .bl-dropdown { display: block; }
+    .bl-tab:hover .bl-dropdown { display: none; }
+    .bl-tab.open:hover .bl-dropdown { display: block; }
+  }
+</style>
+
+{% set _bl_path = request.path.split('/')[1] %}
+{% set _bl_tab_map = {
+  'market': 'markets', 'screener': 'markets', 'calendar': 'markets', 'data-sources': 'markets',
+  '': 'analysis', 'research': 'analysis', 'backtest': 'analysis', 'model-metrics': 'analysis',
+    'track-record': 'analysis', 'methodology': 'analysis',
+  'paper': 'portfolio', 'watchlist': 'portfolio', 'history': 'portfolio', 'performance': 'portfolio',
+    'journal': 'portfolio', 'portfolio': 'portfolio',
+  'scanner': 'tools', 'alerts': 'tools', 'pipeline': 'tools', 'risk': 'tools', 'mt5': 'tools',
+  'leaderboard': 'learn', 'resources': 'learn', 'faq': 'learn', 'risk-basics': 'learn',
+} %}
+{% set _bl_active = _bl_tab_map.get(_bl_path, '') %}
+
+<nav class="bl-nav">
+  <div class="bl-nav-inner">
+    <a href="/" class="bl-logo">Bull<span>Logic</span></a>
+
+    <button class="bl-hamburger bl-icon-btn" onclick="blToggleMobileNav()" title="Menu">&#9776;</button>
+
+    <ul class="bl-nav-tabs" id="blNavTabs">
+      <li class="bl-tab {% if _bl_active == 'markets' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
+        <button class="bl-tab-btn" type="button">Markets <span class="bl-caret">&#9662;</span></button>
+        <div class="bl-dropdown">
+          <a href="/market">Market Overview</a>
+          <a href="/screener">Screener</a>
+          <a href="/calendar">Economic Calendar</a>
+          <a href="/data-sources">Data Sources</a>
+        </div>
+      </li>
+      <li class="bl-tab {% if _bl_active == 'analysis' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
+        <button class="bl-tab-btn" type="button">Analysis <span class="bl-caret">&#9662;</span></button>
+        <div class="bl-dropdown">
+          <a href="/">Predict</a>
+          <a href="/research/AAPL">Research</a>
+          <a href="/backtest">Backtester</a>
+          <a href="/model-metrics">Model Metrics</a>
+          <a href="/track-record">Track Record</a>
+          <a href="/methodology">Methodology</a>
+        </div>
+      </li>
+      <li class="bl-tab {% if _bl_active == 'portfolio' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
+        <button class="bl-tab-btn" type="button">Portfolio <span class="bl-caret">&#9662;</span></button>
+        <div class="bl-dropdown">
+          <a href="/paper">Paper Trading</a>
+          <a href="/watchlist">Watchlist</a>
+          <a href="/history">Trade History</a>
+          <a href="/performance">Performance</a>
+          <a href="/journal">Journal</a>
+          <a href="/portfolio">Portfolio</a>
+        </div>
+      </li>
+      <li class="bl-tab {% if _bl_active == 'tools' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
+        <button class="bl-tab-btn" type="button">Tools <span class="bl-caret">&#9662;</span></button>
+        <div class="bl-dropdown">
+          <a href="/scanner">Scanner</a>
+          <a href="/alerts">Alerts</a>
+          <a href="/pipeline">Pipeline</a>
+          <a href="/risk">Risk Manager</a>
+          <a href="/mt5">MT5 Connect</a>
+        </div>
+      </li>
+      <li class="bl-tab {% if _bl_active == 'learn' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
+        <button class="bl-tab-btn" type="button">Learn <span class="bl-caret">&#9662;</span></button>
+        <div class="bl-dropdown">
+          <a href="/leaderboard">Leaderboard</a>
+          <a href="/resources">Resources</a>
+          <a href="/faq">FAQ</a>
+          <a href="/risk-basics">Risk Basics</a>
+        </div>
+      </li>
+    </ul>
+
+    <div class="bl-nav-right">
+      {% if current_user.is_authenticated %}
+      <div style="position:relative;">
+        <button class="bl-icon-btn" onclick="blToggleNotifPanel()" title="Notifications">
+          &#128276;
+          <span id="bl-notif-badge" class="bl-badge" style="display:none;">0</span>
+        </button>
+      </div>
+      {% endif %}
+
+      <button id="themeToggle" class="bl-icon-btn" onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
+
+      {% if current_user.is_authenticated %}
+      <div class="bl-tab" onclick="blToggleTabMobile(this, event)">
+        <button class="bl-tab-btn bl-user-btn" type="button">
+          <span>{{ current_user.username }}</span>
+          {% if current_user.is_pro %}
+            <span class="bl-pro-badge">PRO</span>
+          {% else %}
+            <span class="bl-free-left">{{ current_user.predictions_remaining }}/5</span>
+          {% endif %}
+          <span class="bl-caret">&#9662;</span>
+        </button>
+        <div class="bl-dropdown bl-dropdown-right">
+          <a href="/profile">Profile</a>
+          <a href="/pricing">Upgrade / Billing</a>
+          {% if current_user.role in ('viewer', 'support', 'admin') %}
+          <a href="/admin" class="bl-admin-link">Admin Console</a>
+          {% endif %}
+          <hr class="bl-dropdown-divider">
+          <a href="/logout">Logout</a>
+        </div>
+      </div>
+      {% else %}
+      <a href="/login" class="bl-tab-btn" style="text-decoration:none;">Log In</a>
+      <a href="/register" class="bl-tab-btn bl-user-btn" style="text-decoration:none;">Sign Up</a>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+{% if current_user.is_authenticated %}
+<div id="bl-notif-panel" class="bl-notif-panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span style="font-weight:700;color:var(--white)">Notifications</span>
+    <button onclick="blClearAllNotifs()" style="background:none;border:none;color:var(--muted);font-size:9pt;cursor:pointer">Clear all</button>
+  </div>
+  <div id="bl-notif-list" style="display:flex;flex-direction:column;gap:8px">
+    <div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">Loading&hellip;</div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+  'use strict';
+
+  // ── Mobile hamburger + tap-to-open dropdowns (desktop still uses :hover) ──
+  window.blToggleMobileNav = function () {
+    document.getElementById('blNavTabs').classList.toggle('open');
+  };
+
+  window.blToggleTabMobile = function (tabEl, e) {
+    if (window.innerWidth > 900) return;   // desktop: rely on :hover
+    e.stopPropagation();
+    var wasOpen = tabEl.classList.contains('open');
+    document.querySelectorAll('.bl-nav-tabs .bl-tab.open, .bl-nav-right .bl-tab.open')
+      .forEach(function (t) { if (t !== tabEl) t.classList.remove('open'); });
+    tabEl.classList.toggle('open', !wasOpen);
+  };
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.bl-tab')) {
+      document.querySelectorAll('.bl-tab.open').forEach(function (t) { t.classList.remove('open'); });
+    }
+  });
+
+  // ── Notification bell (real data via /api/notifications) ─────────────────
+  var notifOpen = false;
+  var icons = { alert: '🔔', signal: '📊', system: 'ℹ️', gift: '🎁' };
+
+  async function loadNotifications() {
+    try {
+      const r = await fetch('/api/notifications');
+      const d = await r.json();
+      if (!d.ok) return;
+      const badge = document.getElementById('bl-notif-badge');
+      badge.textContent = d.unread;
+      badge.style.display = d.unread > 0 ? 'flex' : 'none';
+
+      const list = document.getElementById('bl-notif-list');
+      if (!d.notifications.length) {
+        list.innerHTML = '<div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">No notifications</div>';
+        return;
+      }
+      list.innerHTML = d.notifications.map(function (n) {
+        var linkAttr = n.link ? ",'" + n.link + "'" : ',null';
+        return '<div onclick="blMarkRead(' + n.id + linkAttr + ')" ' +
+          'style="padding:10px 12px;border-radius:7px;background:' + (n.read ? 'transparent' : 'rgba(255,107,53,0.07)') +
+          ';border:1px solid var(--border);cursor:pointer;transition:background .15s">' +
+          '<div style="display:flex;gap:8px;align-items:flex-start">' +
+          '<span>' + (icons[n.type] || 'ℹ️') + '</span>' +
+          '<div><div style="font-size:10pt;font-weight:' + (n.read ? 500 : 700) + ';color:' + (n.read ? 'var(--muted)' : 'var(--white)') + '">' + n.title + '</div>' +
+          (n.body ? '<div style="font-size:8.5pt;color:var(--muted);margin-top:2px">' + n.body + '</div>' : '') +
+          '<div style="font-size:8pt;color:var(--muted);margin-top:3px">' + n.created_at + '</div></div></div></div>';
+      }).join('');
+    } catch (e) { /* transient network error - keep last known badge state */ }
+  }
+
+  window.blToggleNotifPanel = function () {
+    notifOpen = !notifOpen;
+    document.getElementById('bl-notif-panel').classList.toggle('open', notifOpen);
+    if (notifOpen) loadNotifications();
+  };
+
+  window.blMarkRead = async function (id, link) {
+    await fetch('/api/notifications/read', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }),
+    });
+    if (link) window.location.href = link;
+    else loadNotifications();
+  };
+
+  window.blClearAllNotifs = async function () {
+    await fetch('/api/notifications/clear', { method: 'POST' });
+    loadNotifications();
+  };
+
+  document.addEventListener('click', function (e) {
+    if (notifOpen && !e.target.closest('#bl-notif-panel') && !e.target.closest('[onclick*="blToggleNotifPanel"]')) {
+      notifOpen = false;
+      document.getElementById('bl-notif-panel').classList.remove('open');
+    }
+  });
+
+  {% if current_user.is_authenticated %}
+  loadNotifications();
+  setInterval(loadNotifications, 60000);
+  {% endif %}
+})();
+</script>

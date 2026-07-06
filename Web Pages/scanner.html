@@ -10,15 +10,6 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root{--green:#00C853;--yellow:#FFD54F;--blue:#4FC3F7}
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-    .topbar {
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between;
-    }
-    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
-    .logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 20px; align-items: center; }
-    .nav-links a { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; }
-    .nav-links a:hover, .nav-links a.active { color: var(--white); }
     .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
     .page-title { font-size: 22pt; font-weight: 700; color: var(--white); margin-bottom: 6px; }
     .page-sub { color: var(--muted); font-size: 10.5pt; margin-bottom: 28px; }
@@ -96,20 +87,7 @@
 </head>
 <body>
 
-<div class="topbar">
-  <a href="/" class="logo" style="text-decoration:none;">Bull<span>Logic</span></a>
-  <div class="nav-links">
-    <a href="/">Dashboard</a>
-    <a href="/screener">Screener</a>
-    <a href="/scanner" class="active">Scanner</a>
-    <a href="/watchlist">Watchlist</a>
-    <a href="/portfolio">Portfolio</a>
-    <a href="/journal">Journal</a>
-    <a href="/alerts">Alerts</a>
-    <a href="/profile">Profile</a>
-    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-  </div>
-</div>
+{% include "_navbar.html" %}
 
 <div class="main">
   <div class="page-title">Advanced Scanner</div>

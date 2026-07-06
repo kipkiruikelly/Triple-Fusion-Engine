@@ -20,38 +20,6 @@
       flex-direction: column;
     }
 
-    /* ── Top bar ── */
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px;
-      height: 52px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .topbar-left { display: flex; align-items: center; gap: 32px; }
-
-    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; }
-    .logo span { color: var(--accent); }
-
-    .topbar-right a {
-      color: var(--muted);
-      text-decoration: none;
-      font-size: 10pt;
-      font-weight: 500;
-      padding: 6px 12px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      transition: all 0.15s;
-    }
-
-    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
-
     /* ── Ticker strip ── */
     .ticker-strip {
       background: var(--surface);
@@ -697,30 +665,7 @@
 </head>
 <body>
 
-<!-- Top bar -->
-<div class="topbar">
-  <div class="topbar-left">
-    <a href="/" class="logo" style="text-decoration:none;">Bull<span>Logic</span></a>
-    <nav style="display:flex;gap:4px;">
-      <a href="/" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 11px;border-radius:4px;transition:all .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">Predictor</a>
-      <a href="/leaderboard" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 11px;border-radius:4px;transition:all .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">Leaderboard</a>
-      <a href="/pipeline" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 11px;border-radius:4px;transition:all .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">Pipeline</a>
-      <a href="/portfolio" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 11px;border-radius:4px;transition:all .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">Portfolio</a>
-      <a href="/watchlist" style="color:var(--muted);text-decoration:none;font-size:9.5pt;font-weight:500;padding:6px 11px;border-radius:4px;transition:all .15s" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">Watchlist</a>
-    </nav>
-  </div>
-  <div style="display:flex;align-items:center;gap:10px;">
-    {% if current_user.is_pro %}
-      <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:0.5px;">PRO</span>
-    {% else %}
-      <span style="color:var(--muted);font-size:9.5pt;">{{ current_user.predictions_remaining }}/5 left</span>
-      <a href="/pricing" style="color:var(--accent);text-decoration:none;font-size:9.5pt;font-weight:600;padding:5px 10px;border:1px solid var(--accent);border-radius:4px;">Upgrade</a>
-    {% endif %}
-    <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-    <a href="/" style="color:var(--muted);text-decoration:none;font-size:10pt;font-weight:500;padding:6px 12px;border-radius:4px;border:1px solid var(--border);">New Prediction</a>
-    <a href="/logout" style="color:var(--muted);text-decoration:none;font-size:10pt;font-weight:500;padding:6px 12px;border-radius:4px;border:1px solid var(--border);">Logout</a>
-  </div>
-</div>
+{% include "_navbar.html" %}
 
 <!-- Ticker strip -->
 <div class="ticker-strip">

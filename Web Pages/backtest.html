@@ -22,23 +22,6 @@
       flex-direction: column;
     }
 
-    /* ── Topbar ── */
-    .topbar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 0 24px; height: 52px;
-      display: flex; align-items: center; justify-content: space-between;
-      position: sticky; top: 0; z-index: 100;
-    }
-    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
-    .logo span { color: var(--accent); }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
-    .topbar-right a {
-      color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500;
-      padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s;
-    }
-    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
-
     .layout { display: flex; flex: 1; }
 
     /* ── Sidebar ── */
@@ -280,22 +263,7 @@
 </head>
 <body>
 
-<!-- Topbar -->
-<div class="topbar">
-  <div style="display:flex;align-items:center;gap:32px;">
-    <a href="/" class="logo">Market<span>Predict</span></a>
-  </div>
-  <div class="topbar-right">
-      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-    {% if current_user.is_pro %}
-      <span style="background:var(--accent);color:var(--white);font-size:8pt;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:0.5px;">PRO</span>
-    {% else %}
-      <a href="/pricing" style="color:var(--accent);border-color:var(--accent);">Upgrade to Pro</a>
-    {% endif %}
-    <a href="/">New Prediction</a>
-    <a href="/logout">Logout</a>
-  </div>
-</div>
+{% include "_navbar.html" %}
 
 <div class="layout">
 

@@ -11,19 +11,6 @@
     
     body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
-    .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
-    .topbar-left { display: flex; align-items: center; gap: 32px; }
-    .logo { font-size: 15pt; font-weight: 700; color: var(--white); letter-spacing: -0.5px; text-decoration: none; }
-    .logo span { color: var(--accent); }
-    .nav-links { display: flex; gap: 4px; }
-    .nav-links a { color: var(--muted); text-decoration: none; font-size: 10pt; font-weight: 500; padding: 6px 12px; border-radius: 4px; transition: color 0.15s, background 0.15s; }
-    .nav-links a:hover { color: var(--text); background: var(--surface2); }
-    .nav-links a.active { color: var(--white); background: var(--surface2); }
-    .topbar-right { display: flex; align-items: center; gap: 12px; font-size: 10pt; color: var(--muted); }
-    .topbar-right a { color: var(--muted); text-decoration: none; padding: 5px 10px; border-radius: 4px; border: 1px solid var(--border); transition: all 0.15s; }
-    .topbar-right a:hover { color: var(--white); border-color: var(--accent); }
-    .btn-upgrade { background: var(--accent) !important; color: var(--white) !important; border-color: var(--accent) !important; font-weight: 600; }
-
     .ticker-strip { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 36px; display: flex; align-items: center; gap: 32px; overflow: hidden; }
     .ticker-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 9.5pt; }
     .ticker-item .name { color: var(--muted); font-weight: 500; }
@@ -109,27 +96,7 @@
 </head>
 <body>
 
-<nav class="topbar">
-  <div class="topbar-left">
-    <a href="/" class="logo">Market<span>Predict</span></a>
-    <div class="nav-links">
-      <a href="/">Predictor</a>
-      <a href="/market">Markets</a>
-      <a href="/watchlist">Watchlist</a>
-      <a href="/history">History</a>
-      <a href="/pricing">Pricing</a>
-    </div>
-  </div>
-  <div class="topbar-right">
-      <button id="themeToggle" class="theme-toggle" onclick="toggleTheme()">☾ Dark</button>
-    <span>{{ current_user.username }}</span>
-    {% if not current_user.is_pro %}
-      <a href="/pricing" class="btn-upgrade">Upgrade</a>
-    {% endif %}
-    <a href="/profile" class="active" style="color:var(--white);border-color:var(--accent)">Profile</a>
-    <a href="/logout">Logout</a>
-  </div>
-</nav>
+{% include "_navbar.html" %}
 
 <div class="ticker-strip">
   <div class="ticker-item"><span class="name">S&P 500</span><span class="price">5,308.15</span><span class="up">+0.51%</span></div>
