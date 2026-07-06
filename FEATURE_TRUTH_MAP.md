@@ -193,6 +193,48 @@ nonsensical for BTC (~$80k) or GOLD (~$3k) predictions. The existing "no
 prediction model for this timeframe" badge (shipped in the chart-feature
 session) is the honest alternative already in place.
 
+## ICT concept expansion + shared feature module (updated 2026-07-06)
+
+**Architecture fix**: `predictor.py` (live inference) and `train_all_tickers.py`
+(training) each had their own near-identical copy of the base TA/ICT feature
+functions - a drift risk, since a model's saved `feature_cols` only match
+reality if both sides compute every column exactly the same way. Extracted
+both into `ict_features.py`; both callers now import from one implementation.
+
+**16 additional ICT concepts** added on top of the existing set (OB, FVG,
+OTE, IPDA, Equal H/L, CE, PD, Displacement, structure, sweeps, kill zones,
+Silver Bullet, Asia range, NWOG, midnight open):
+
+| Concept | Faithfulness |
+|---|---|
+| Equilibrium (EQ), Turtle Soup, ADR consumption, Std-Dev projections, True Week/Month Open, Breaker Block, Inversion FVG | Fairly unambiguous quantitative definitions |
+| Mitigation Block, Rejection Block, Propulsion Block, Unicorn Model, Power of Three (AMD), Judas Swing | Real concepts, but ICT's actual criteria involve discretionary judgment a rule-based encoding has to approximate |
+| SMT Divergence | Uses whatever correlated reference (SPY/sector ETF) is already fetched for VIX/sector features - **not a genuine correlated pair** for crypto/forex/commodities, only meaningful for equities |
+| Market Maker Buy/Sell Models (MMBM/MMSM) | Heuristic 3-step approximation (liquidity sweep -> structure shift -> displacement) of what ICT teaches as a much richer multi-step sequence |
+
+**Two real bugs found and fixed while implementing** (neither was a
+pre-existing issue - both were introduced by adding 30+ new columns and
+caught before shipping):
+- `Dist_to_EQ` was defined as a pure linear transform of the already-existing
+  `PD_Position` (correlation 1.0) - redundant but not itself harmful (Ridge
+  tolerates perfect collinearity).
+- After the full retrain, ~12 combos showed catastrophically negative R2
+  (e.g. `UNI_1d`: -11,351). Diagnosed as **not** a coefficient blowup (Ridge
+  coefficients stayed small and stable) but tiny test-split sizes (as few as
+  33-72 rows) combined with 100+ features - R2's denominator is the test
+  set's own variance, so it's inherently unstable on a small sample even
+  when absolute error (MAE) is fine. Tried scaling Ridge's alpha up for
+  low-sample combos; it helped some tickers and hurt others, confirming
+  this is evaluation-metric noise, not a fixable modeling defect. Instead,
+  `train_universe.py`'s `low_data` flag now also triggers on test-split
+  size and observed R2 (not just total row count), so the manifest is
+  honest about it: 23 combos are flagged, up from whatever the old
+  rows-only threshold caught.
+
+**Full retrain result**: all 8 timeframes across the ~76-ticker universe,
+0 failures, verified live (AAPL prediction + Model Drivers panel both
+reflect the new feature set without a code regression).
+
 ### Promotion script
 
 `scripts/promote_admin.py <email> [--demote]` looks up a user by email

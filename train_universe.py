@@ -80,8 +80,17 @@ def _train_one(ticker: str, interval: str, fast: bool) -> dict:
     r["interval"]   = interval
     r["trained_at"] = datetime.now(timezone.utc).isoformat()
     if r["status"] == "ok":
-        r["status"]    = "success"
-        r["low_data"]  = r.get("rows", 0) < 100
+        r["status"] = "success"
+        rows = r.get("rows", 0)
+        test_rows = rows * 0.1   # matches train_ticker's 90/10 train/test split
+        lr_r2 = r.get("lr_r2")
+        # A tiny test split makes R2 inherently unstable (its denominator is
+        # the test set's own variance) even when the model's absolute error
+        # is fine - seen on weekly bars for shorter-history altcoins and on
+        # 30m/15m/5m combos capped by yfinance's short intraday history.
+        # Flag on rows, test-set size, or an observed bad R2 - whichever
+        # catches it first - rather than guessing a single threshold.
+        r["low_data"] = bool(rows < 100 or test_rows < 40 or (lr_r2 is not None and lr_r2 < -1))
         if r["low_data"]:
             r["note"] = "Low data model - treat signal as indicative only."
     return r

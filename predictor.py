@@ -23,6 +23,8 @@ import joblib
 import yfinance as yf
 import ta
 
+import ict_features
+
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "Saved Models")
 
@@ -296,179 +298,11 @@ def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
 # ── Feature engineering ────────────────────────────────────────────────────────
 
 def _add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
-    close = df["Close"]
-    high  = df["High"]
-    low   = df["Low"]
-    open_ = df["Open"]
-
-    df["SMA_7"]  = ta.trend.sma_indicator(close, window=7)
-    df["SMA_21"] = ta.trend.sma_indicator(close, window=21)
-    df["EMA_12"] = ta.trend.ema_indicator(close, window=12)
-    df["EMA_26"] = ta.trend.ema_indicator(close, window=26)
-    df["RSI_14"] = ta.momentum.rsi(close, window=14)
-
-    macd_obj = ta.trend.MACD(close, window_fast=12, window_slow=26, window_sign=9)
-    df["MACD"]        = macd_obj.macd()
-    df["MACD_Signal"] = macd_obj.macd_signal()
-    df["MACD_Hist"]   = macd_obj.macd_diff()
-
-    bb_obj = ta.volatility.BollingerBands(close, window=20, window_dev=2)
-    df["BB_Upper"] = bb_obj.bollinger_hband()
-    df["BB_Lower"] = bb_obj.bollinger_lband()
-    df["BB_Mid"]   = bb_obj.bollinger_mavg()
-    df["BB_Width"] = (df["BB_Upper"] - df["BB_Lower"]) / df["BB_Mid"]
-
-    df["Volume_SMA_10"] = ta.trend.sma_indicator(df["Volume"], window=10)
-    df["Daily_Return"]  = close.pct_change() * 100
-
-    for lag in range(1, 6):
-        df[f"Close_lag_{lag}"]  = close.shift(lag)
-    for lag in range(1, 4):
-        df[f"Return_lag_{lag}"] = df["Daily_Return"].shift(lag)
-
-    # ATR for position sizing (not a model feature, kept for ml_signal)
-    atr14 = ta.volatility.AverageTrueRange(high, low, close, window=14).average_true_range()
-    atr14 = atr14.fillna(close * 0.01)
-    df["ATR_14"] = atr14
-
-    # ICT, base features (work on all timeframes)
-    sma200 = close.rolling(200, min_periods=1).mean()
-    df["Above_200SMA"] = (close > sma200).astype(int)
-    df["Dist_200SMA"]  = ((close - sma200) / sma200 * 100).fillna(0)
-
-    rng  = (high - low).replace(0, np.nan)
-    body = (close - open_).abs()
-    df["Body_Ratio"]   = (body / rng).fillna(0).clip(0, 1)
-    df["Displacement"] = ((rng.fillna(0) > atr14 * 1.5) & (df["Body_Ratio"] > 0.6)).astype(int)
-
-    sh20 = high.rolling(20).max()
-    sl20 = low.rolling(20).min()
-    df["Dist_to_SH"]       = ((sh20 - close) / (atr14 + 1e-8)).clip(-10, 10)
-    df["Dist_to_SL"]       = ((close - sl20)  / (atr14 + 1e-8)).clip(-10, 10)
-    df["Structure_Bullish"] = (sh20 > high.rolling(60).max().shift(20)).astype(int)
-
-    rh = high.rolling(60).max()
-    rl = low.rolling(60).min()
-    df["PD_Position"] = ((close - rl) / (rh - rl).replace(0, np.nan)).fillna(0.5).clip(0, 1)
-
-    bull_fvg = (low > high.shift(2)).astype(int)
-    bear_fvg = (high < low.shift(2)).astype(int)
-    df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
-    df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
-
-    bearish = (close < open_)
-    bullish = (close > open_)
-    bull_ob = (bearish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bullish
-    bear_ob = (bullish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bearish
-    df["Bull_OB_Count"] = bull_ob.astype(int).rolling(10, min_periods=1).sum()
-    df["Bear_OB_Count"] = bear_ob.astype(int).rolling(10, min_periods=1).sum()
-
-    pwh = high.rolling(5).max().shift(1)
-    pwl = low.rolling(5).min().shift(1)
-    df["Dist_PWH"] = ((pwh - close) / (atr14 + 1e-8)).clip(-10, 10)
-    df["Dist_PWL"] = ((close - pwl)  / (atr14 + 1e-8)).clip(-10, 10)
-
-    df["Swept_High"] = ((high > sh20.shift(1)) & (close < sh20.shift(1))).astype(int)
-    df["Swept_Low"]  = ((low  < sl20.shift(1)) & (close > sl20.shift(1))).astype(int)
-
-    q = df.index.quarter
-    m = df.index.month
-    df["Quarter_Sin"] = np.sin(2 * np.pi * q / 4)
-    df["Quarter_Cos"] = np.cos(2 * np.pi * q / 4)
-    df["Month_Sin"]   = np.sin(2 * np.pi * m / 12)
-    df["Month_Cos"]   = np.cos(2 * np.pi * m / 12)
-
-    # ICT 2022, IPDA lookback levels (20 / 40 / 60 bars)
-    for n in [20, 40, 60]:
-        df[f"IPDA_{n}_High_Dist"] = ((high.rolling(n).max().shift(1) - close) / (atr14 + 1e-8)).clip(-20, 20)
-        df[f"IPDA_{n}_Low_Dist"]  = ((close - low.rolling(n).min().shift(1))  / (atr14 + 1e-8)).clip(-20, 20)
-
-    # ICT 2022, Equal Highs / Equal Lows (liquidity pools)
-    tol   = close * 0.001
-    r10h  = high.rolling(10).max().shift(1)
-    r10l  = low.rolling(10).min().shift(1)
-    df["Equal_Highs"] = ((high - r10h).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
-    df["Equal_Lows"]  = ((low  - r10l).abs() < tol).astype(int).rolling(10, min_periods=1).sum()
-
-    # ICT 2022, OTE zone (Optimal Trade Entry: 0.62-0.79 Fibonacci of 20-bar swing)
-    rng20 = (sh20 - sl20).replace(0, np.nan)
-    df["In_OTE_Buy"]  = ((close >= sh20 - rng20 * 0.79) & (close <= sh20 - rng20 * 0.62)).astype(int)
-    df["In_OTE_Sell"] = ((close >= sl20 + rng20 * 0.62) & (close <= sl20 + rng20 * 0.79)).astype(int)
-
-    # ICT 2022, Consequent Encroachment (CE) of most recent FVG midpoint
-    bull_ce_level = ((high.shift(2) + low) / 2).where(bull_fvg.astype(bool)).ffill()
-    bear_ce_level = ((low.shift(2)  + high) / 2).where(bear_fvg.astype(bool)).ffill()
-    df["CE_Bull_FVG_Dist"] = ((close - bull_ce_level) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
-    df["CE_Bear_FVG_Dist"] = ((bear_ce_level - close) / (atr14 + 1e-8)).clip(-10, 10).fillna(0)
-
-    return df
+    return ict_features.add_base_ta(df)
 
 
 def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
-    """Kill-zone and session features, only meaningful on sub-daily bars."""
-    idx = df.index
-    if idx.tz is not None:
-        et_idx = idx.tz_convert("America/New_York")
-    else:
-        et_idx = idx.tz_localize("UTC").tz_convert("America/New_York")
-
-    hour = et_idx.hour
-
-    df["In_London_KZ"]  = ((hour >= 3)  & (hour < 5)).astype(int)
-    df["In_NY_Open_KZ"] = ((hour >= 9)  & (hour < 11)).astype(int)
-    df["In_NY_PM_KZ"]   = ((hour >= 13) & (hour < 15)).astype(int)
-
-    date_str     = pd.Series(et_idx.date, index=df.index)
-    midnight_open = df.groupby(date_str)["Open"].transform("first")
-    df["Price_vs_MidnightOpen"] = (
-        (df["Close"] - midnight_open) / (midnight_open + 1e-8) * 100
-    )
-
-    session_high = df.groupby(date_str)["High"].transform("cummax")
-    session_low  = df.groupby(date_str)["Low"].transform("cummin")
-    atr_h = ta.volatility.AverageTrueRange(
-        df["High"], df["Low"], df["Close"], window=14
-    ).average_true_range().fillna(df["Close"] * 0.01)
-    df["Session_High_Dist"] = ((session_high - df["Close"]) / (atr_h + 1e-8)).clip(-10, 10)
-    df["Session_Low_Dist"]  = ((df["Close"] - session_low)  / (atr_h + 1e-8)).clip(-10, 10)
-
-    df["Hour_Sin"] = np.sin(2 * np.pi * hour / 24)
-    df["Hour_Cos"] = np.cos(2 * np.pi * hour / 24)
-    dow = et_idx.dayofweek
-    df["Day_Sin"] = np.sin(2 * np.pi * dow / 5)
-    df["Day_Cos"] = np.cos(2 * np.pi * dow / 5)
-
-    # ICT 2022, Silver Bullet windows (ET)
-    df["In_SilverBullet_AM"] = ((hour >= 10) & (hour < 11)).astype(int)
-    df["In_SilverBullet_PM"] = ((hour >= 14) & (hour < 15)).astype(int)
-
-    # ICT 2022, Asia session range (8 PM - 2 AM ET)
-    is_asia = (hour >= 20) | (hour < 2)
-    atr_h2 = ta.volatility.AverageTrueRange(df["High"], df["Low"], df["Close"], window=14) \
-               .average_true_range().fillna(df["Close"] * 0.01)
-    asia_high_ref = df["High"].where(is_asia).rolling(14, min_periods=1).max().ffill()
-    asia_low_ref  = df["Low"].where(is_asia).rolling(14, min_periods=1).min().ffill()
-    df["Asia_High_Dist"]    = ((asia_high_ref - df["Close"]) / (atr_h2 + 1e-8)).clip(-10, 10).fillna(0)
-    df["Asia_Low_Dist"]     = ((df["Close"] - asia_low_ref)  / (atr_h2 + 1e-8)).clip(-10, 10).fillna(0)
-    df["Asia_Range_Norm"]   = ((asia_high_ref - asia_low_ref) / (atr_h2 + 1e-8)).clip(0, 20).fillna(0)
-    df["Price_vs_AsiaHigh"] = (df["Close"] > asia_high_ref).astype(int)
-    df["Price_vs_AsiaLow"]  = (df["Close"] < asia_low_ref).astype(int)
-
-    # ICT 2022, New Week Opening Gap (Monday open vs previous Friday close)
-    is_monday  = (et_idx.dayofweek == 0)
-    prev_close = df["Close"].shift(1)
-    nwog_open  = df["Open"].where(is_monday).ffill()
-    nwog_close = prev_close.where(is_monday).ffill()
-    nwog_lo    = nwog_close.clip(lower=0)
-    nwog_hi    = nwog_open
-    df["In_NWOG"] = (
-        nwog_hi.notna() & nwog_lo.notna() &
-        (df["Close"] >= nwog_lo) & (df["Close"] <= nwog_hi)
-    ).astype(int)
-    week_gap = (df["Open"] - prev_close).where(is_monday).ffill().fillna(0)
-    df["NWOG_Gap_Norm"] = (week_gap / (atr_h2 + 1e-8)).clip(-5, 5)
-
-    return df
+    return ict_features.add_intraday_ict(df)
 
 
 def _fetch_aux(ticker: str, interval: str = "1d") -> dict:
@@ -587,8 +421,9 @@ def build_features(df: pd.DataFrame, interval: str = "1d",
         df = _apply_vix(df, aux.get("vix"))
         df = _apply_sector(df, aux.get("sector"), aux.get("spy"))
         df = _apply_earnings(df, aux.get("earnings", pd.DatetimeIndex([])))
+        df = ict_features.add_smt_divergence(df, aux.get("spy") if aux.get("spy") is not None else aux.get("sector"))
     else:
-        for c in _AUX_COLS:
+        for c in _AUX_COLS + ict_features.SMT_COLS:
             df[c] = 0.0
     # Quant alpha features (Alpha_*). Causal by contract; existing models
     # ignore them (they select by saved feature_cols) and the next retrain
