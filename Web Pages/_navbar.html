@@ -226,13 +226,16 @@
 (function () {
   'use strict';
 
-  // ── Mobile hamburger + tap-to-open dropdowns (desktop still uses :hover) ──
+  // ── Hamburger (mobile) + click-to-pin dropdowns (desktop keeps :hover too) ──
+  // Clicking a tab pins its dropdown open via the .open class so it survives
+  // the mouse leaving the hover area - needed to reliably reach links like
+  // Admin Console without the dropdown closing mid-move. Hover still opens
+  // it instantly for quick access; outside-click (below) closes it again.
   window.blToggleMobileNav = function () {
     document.getElementById('blNavTabs').classList.toggle('open');
   };
 
   window.blToggleTabMobile = function (tabEl, e) {
-    if (window.innerWidth > 900) return;   // desktop: rely on :hover
     e.stopPropagation();
     var wasOpen = tabEl.classList.contains('open');
     document.querySelectorAll('.bl-nav-tabs .bl-tab.open, .bl-nav-right .bl-tab.open')
