@@ -65,9 +65,73 @@
       width: 220px;
       background: var(--surface);
       border-right: 1px solid var(--border);
-      padding: 20px 0;
+      padding-top: 16px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 48px);
+      position: sticky;
+      top: 48px;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar asset-class tabs ── */
+    .sb-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 0 14px 10px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
       flex-shrink: 0;
     }
+    .sb-tab {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      font-size: 8.5pt;
+      font-weight: 600;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .sb-tab:hover { border-color: var(--accent); color: var(--text); }
+    .sb-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    #sb-ticker-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+
+    .sb-models {
+      flex-shrink: 0;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sb-models-label {
+      font-size: 8pt;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+    .sb-models-tags { display: flex; gap: 6px; }
+    .sb-model-tag {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      font-size: 8.5pt;
+      font-weight: 700;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .sb-model-tag:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Sidebar search ── */
     .sidebar-search {
@@ -96,19 +160,6 @@
     .sidebar-section {
       padding: 0 14px;
       margin-bottom: 20px;
-    }
-
-    .sidebar-label {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 8pt;
-      font-weight: 700;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      margin-bottom: 6px;
-      padding: 0 2px;
     }
 
     .sidebar-item {
@@ -588,139 +639,85 @@
              oninput="filterSidebar(this.value)" autocomplete="off" />
     </div>
 
-    <!-- Navigation, grouped -->
-    <div class="sidebar-section" id="sec-nav">
-      <div class="sidebar-label">📈 Markets</div>
-      <div class="sidebar-item active" onclick="window.scrollTo({top:0,behavior:'smooth'})">
-        <div class="sym-name"><div class="dot"></div><span>Price Predictor</span></div>
-      </div>
-      <div class="sidebar-item" onclick="showSection('markets')">
-        <div class="sym-name"><div class="dot"></div><span>Market Overview</span></div>
-      </div>
-      <div class="sidebar-item" onclick="showSection('movers')">
-        <div class="sym-name"><div class="dot"></div><span>Top Movers</span></div>
-      </div>
-      <a class="sidebar-item" href="/leaderboard" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Signal Leaderboard</span></div>
-      </a>
-      <a class="sidebar-item" href="/research/AAPL" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Deep Research</span></div>
-      </a>
-
-      <div class="sidebar-label" style="margin-top:12px">🎯 My Predictions</div>
-      <a class="sidebar-item" href="/history" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Prediction History</span></div>
-      </a>
-      <a class="sidebar-item" href="/watchlist" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Watchlist</span></div>
-      </a>
-      <a class="sidebar-item" href="/portfolio" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Portfolio</span></div>
-      </a>
-      <a class="sidebar-item" href="/pipeline" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Strategy Pipeline</span></div>
-      </a>
-
-      <div class="sidebar-label" style="margin-top:12px">✅ Trust</div>
-      <a class="sidebar-item" href="/track-record" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Track Record</span></div>
-      </a>
-      <a class="sidebar-item" href="/methodology" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Methodology</span></div>
-      </a>
-      <a class="sidebar-item" href="/resources" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Resources</span></div>
-      </a>
-      <a class="sidebar-item" href="/data-sources" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Data Sources</span></div>
-      </a>
-
-      <div class="sidebar-label" style="margin-top:12px">👤 Account</div>
-      <a class="sidebar-item" href="/profile" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Profile &amp; Settings</span></div>
-      </a>
-      <a class="sidebar-item" href="/pricing" style="text-decoration:none;">
-        <div class="sym-name"><div class="dot"></div><span>Plans &amp; Billing</span></div>
-      </a>
+    <!-- Asset class tabs -->
+    <div class="sb-tabs" id="sb-asset-tabs">
+      <button class="sb-tab active" data-tab="stocks" onclick="switchAssetTab('stocks')">Stocks</button>
+      <button class="sb-tab" data-tab="etfs" onclick="switchAssetTab('etfs')">ETF</button>
+      <button class="sb-tab" data-tab="crypto" onclick="switchAssetTab('crypto')">Crypto</button>
+      <button class="sb-tab" data-tab="forex" onclick="switchAssetTab('forex')">Forex</button>
+      <button class="sb-tab" data-tab="commodities" onclick="switchAssetTab('commodities')">Cmdy</button>
+      <button class="sb-tab" data-tab="indices" onclick="switchAssetTab('indices')">Index</button>
     </div>
 
-    <!-- US Stocks -->
-    <div class="sidebar-section" id="sec-stocks">
-      <div class="sidebar-label">🇺🇸 US Stocks</div>
-      {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT'] %}
-      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-        <div class="live-data" id="ld-{{ sym }}"></div>
+    <div id="sb-ticker-scroll">
+      <!-- US Stocks -->
+      <div class="sidebar-section sb-asset-panel" id="sec-stocks" data-tab="stocks">
+        {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT'] %}
+        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+          <div class="live-data" id="ld-{{ sym }}"></div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
 
-    <!-- ETFs -->
-    <div class="sidebar-section" id="sec-etfs">
-      <div class="sidebar-label">📦 ETFs</div>
-      {% for sym in ['SPY','QQQ','IWM','DIA','GLD','SLV','TLT','XLF','XLE'] %}
-      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-        <div class="live-data" id="ld-{{ sym }}"></div>
+      <!-- ETFs -->
+      <div class="sidebar-section sb-asset-panel" id="sec-etfs" data-tab="etfs" style="display:none">
+        {% for sym in ['SPY','QQQ','IWM','DIA','GLD','SLV','TLT','XLF','XLE'] %}
+        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+          <div class="live-data" id="ld-{{ sym }}"></div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
 
-    <!-- Crypto -->
-    <div class="sidebar-section" id="sec-crypto">
-      <div class="sidebar-label">₿ Crypto</div>
-      {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','LINK'] %}
-      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-        <div class="live-data" id="ld-{{ sym }}"></div>
+      <!-- Crypto -->
+      <div class="sidebar-section sb-asset-panel" id="sec-crypto" data-tab="crypto" style="display:none">
+        {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','LINK'] %}
+        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+          <div class="live-data" id="ld-{{ sym }}"></div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
 
-    <!-- Forex -->
-    <div class="sidebar-section" id="sec-forex">
-      <div class="sidebar-label">💱 Forex</div>
-      {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD','EURGBP'] %}
-      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-        <div class="live-data" id="ld-{{ sym }}"></div>
+      <!-- Forex -->
+      <div class="sidebar-section sb-asset-panel" id="sec-forex" data-tab="forex" style="display:none">
+        {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD','EURGBP'] %}
+        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+          <div class="live-data" id="ld-{{ sym }}"></div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
 
-    <!-- Commodities -->
-    <div class="sidebar-section" id="sec-commodities">
-      <div class="sidebar-label">🛢️ Commodities</div>
-      {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT','BRENT'] %}
-      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-        <div class="live-data" id="ld-{{ sym }}"></div>
+      <!-- Commodities -->
+      <div class="sidebar-section sb-asset-panel" id="sec-commodities" data-tab="commodities" style="display:none">
+        {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT','BRENT'] %}
+        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+          <div class="live-data" id="ld-{{ sym }}"></div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
-    </div>
 
-    <!-- Indices -->
-    <div class="sidebar-section" id="sec-indices">
-      <div class="sidebar-label">📊 Indices</div>
-      {% for sym in ['SPX','NDX','DJI','RUT','VIX','FTSE','DAX','NIKKEI'] %}
-      <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-        <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-        <div class="live-data" id="ld-{{ sym }}"></div>
+      <!-- Indices -->
+      <div class="sidebar-section sb-asset-panel" id="sec-indices" data-tab="indices" style="display:none">
+        {% for sym in ['SPX','NDX','DJI','RUT','VIX','FTSE','DAX','NIKKEI'] %}
+        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
+          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
+          <div class="live-data" id="ld-{{ sym }}"></div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
 
     <!-- Models -->
-    <div class="sidebar-section" id="sec-models">
-      <div class="sidebar-label">&#128202; Models</div>
-      <div class="sidebar-item" onclick="showSection('lr')">
-        <div class="sym-name"><div class="dot"></div><span>Linear Regression</span></div>
-      </div>
-      <div class="sidebar-item" onclick="showSection('rf')">
-        <div class="sym-name"><div class="dot"></div><span>Random Forest</span></div>
-      </div>
-      <div class="sidebar-item" onclick="showSection('lstm')">
-        <div class="sym-name"><div class="dot"></div><span>LSTM Network</span></div>
+    <div class="sb-models">
+      <span class="sb-models-label">Models</span>
+      <div class="sb-models-tags">
+        <span class="sb-model-tag" onclick="showSection('lr')">LR</span>
+        <span class="sb-model-tag" onclick="showSection('rf')">RF</span>
+        <span class="sb-model-tag" onclick="showSection('lstm')">LSTM</span>
       </div>
     </div>
 
@@ -1349,18 +1346,27 @@ if ('serviceWorker' in navigator) {
 // ── Sidebar: search filter ────────────────────────────────────────────────
 function filterSidebar(q) {
   q = q.trim().toUpperCase();
-  document.querySelectorAll('.sidebar-item[data-sym]').forEach(el => {
+  document.querySelectorAll('.sb-asset-panel .sidebar-item[data-sym]').forEach(el => {
     const sym = el.dataset.sym || '';
     el.classList.toggle('sidebar-hidden', q.length > 0 && !sym.includes(q));
   });
-  // show/hide section headers based on whether any children visible
-  document.querySelectorAll('.sidebar-section').forEach(sec => {
-    if (!sec.id || sec.id === 'sec-nav' || sec.id === 'sec-models') return;
-    const anyVisible = [...sec.querySelectorAll('.sidebar-item[data-sym]')]
-      .some(el => !el.classList.contains('sidebar-hidden'));
-    sec.style.display = (q.length > 0 && !anyVisible) ? 'none' : '';
-  });
 }
+
+// ── Sidebar: asset-class tabs ─────────────────────────────────────────────
+function switchAssetTab(tab) {
+  document.querySelectorAll('.sb-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.querySelectorAll('.sb-asset-panel').forEach(panel => {
+    panel.style.display = panel.dataset.tab === tab ? 'block' : 'none';
+  });
+  localStorage.setItem('bl-asset-tab', tab);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('bl-asset-tab') || 'stocks';
+  switchAssetTab(saved);
+});
 
 // ── Sidebar: live prices ──────────────────────────────────────────────────
 const _SIDEBAR_TICKERS = [
