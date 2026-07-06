@@ -1083,7 +1083,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
                         "MPESA_CONSUMER_KEY", "MPESA_CONSUMER_SECRET",
                         "MPESA_PASSKEY", "STRIPE_SECRET_KEY",
                         "STRIPE_WEBHOOK_SECRET", "MAIL_USERNAME",
-                        "ANTHROPIC_API_KEY"]
+                        "ANTHROPIC_API_KEY", "FINNHUB_API_KEY", "PYTH_API_KEY"]
 
     @app.route("/admin/api/settings")
     @admin_required("admin")
