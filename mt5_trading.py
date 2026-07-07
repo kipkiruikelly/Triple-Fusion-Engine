@@ -29,6 +29,8 @@ from datetime import datetime, date, timezone
 import numpy as np
 import pandas as pd
 
+import mt5_config
+
 try:
     from predictor import ml_signal as _ml_signal, build_features as _build_features
     _ML_AVAILABLE = True
@@ -195,19 +197,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s  %(levelname)s  %(me
 log = logging.getLogger("mt5_trading")
 
 # Phase 2: Centralized config (falls back to defaults if config.py unavailable)
+# max_positions/daily_loss_limit/risk_pct are tunable at runtime via
+# mt5_config.py instead - see _trading_loop().
 try:
     from config import settings as _cfg
     MAX_LOG_ENTRIES  = _cfg.MAX_LOG_ENTRIES
-    MAX_POSITIONS    = _cfg.MAX_POSITIONS
-    DAILY_LOSS_LIMIT = _cfg.DAILY_LOSS_LIMIT
     PAPER_BALANCE    = _cfg.PAPER_BALANCE
-    RISK_PCT         = _cfg.RISK_PCT
 except ImportError:
     MAX_LOG_ENTRIES  = 200
-    MAX_POSITIONS    = 3
-    DAILY_LOSS_LIMIT = 0.05
     PAPER_BALANCE    = 10_000.0
-    RISK_PCT         = 1.0
 
 
 # ── Pure-Python indicator helpers ────────────────────────────────────────────
@@ -249,37 +247,40 @@ def _calc_atr(highs: np.ndarray, lows: np.ndarray, closes: np.ndarray, period: i
 
 def _signal_from_arrays(closes, highs, lows):
     """Core signal logic shared between live and paper modes."""
-    rsi             = _calc_rsi(closes)
-    prev_rsi        = _calc_rsi(closes[:-1])
-    macd, sig, hist = _calc_macd(closes)
-    _, _, prev_hist = _calc_macd(closes[:-1])
-    atr             = _calc_atr(highs, lows, closes)
+    cfg             = mt5_config.load()
+    rsi             = _calc_rsi(closes, period=cfg["rsi_period"])
+    prev_rsi        = _calc_rsi(closes[:-1], period=cfg["rsi_period"])
+    macd, sig, hist = _calc_macd(closes, fast=cfg["macd_fast"], slow=cfg["macd_slow"],
+                                 signal=cfg["macd_signal_period"])
+    _, _, prev_hist = _calc_macd(closes[:-1], fast=cfg["macd_fast"], slow=cfg["macd_slow"],
+                                 signal=cfg["macd_signal_period"])
+    atr             = _calc_atr(highs, lows, closes, period=cfg["atr_period"])
     price           = float(closes[-1])
 
     buy_score = sell_score = 0
 
-    if prev_rsi < 30 and rsi >= 30:
+    if prev_rsi < cfg["rsi_oversold"] and rsi >= cfg["rsi_oversold"]:
         buy_score += 1
-    elif rsi < 35:
+    elif rsi < cfg["rsi_soft_os"]:
         buy_score += 1
 
-    if prev_rsi > 70 and rsi <= 70:
+    if prev_rsi > cfg["rsi_overbought"] and rsi <= cfg["rsi_overbought"]:
         sell_score += 1
-    elif rsi > 65:
+    elif rsi > cfg["rsi_soft_ob"]:
         sell_score += 1
 
     if prev_hist < 0 and hist >= 0:
-        buy_score += 2
+        buy_score += cfg["macd_cross_pts"]
     elif hist > 0 and hist > prev_hist:
-        buy_score += 1
+        buy_score += cfg["macd_trend_pts"]
 
     if prev_hist > 0 and hist <= 0:
-        sell_score += 2
+        sell_score += cfg["macd_cross_pts"]
     elif hist < 0 and hist < prev_hist:
-        sell_score += 1
+        sell_score += cfg["macd_trend_pts"]
 
-    ema20 = float(pd.Series(closes).ewm(span=20, adjust=False).mean().iloc[-1])
-    if price > ema20:
+    ema = float(pd.Series(closes).ewm(span=cfg["ema_period"], adjust=False).mean().iloc[-1])
+    if price > ema:
         buy_score += 1
     else:
         sell_score += 1
@@ -618,29 +619,30 @@ class MT5Trader:
             bullish_bias = (above_200 >= 0.5) and (struct_b >= 0.5) and st_bull
             bearish_bias = (above_200 < 0.5)  and (struct_b < 0.5)  and st_bear
 
+            cfg = mt5_config.load()
             buy = sell = 0
 
             # PD zone (where to trade)
-            if pd_pos < 0.40:    buy  += 3
-            elif pd_pos < 0.50:  buy  += 1
-            if pd_pos > 0.60:    sell += 3
-            elif pd_pos > 0.50:  sell += 1
+            if pd_pos < cfg["pd_zone_buy_strong"]:    buy  += 3
+            elif pd_pos < cfg["pd_zone_buy_weak"]:    buy  += 1
+            if pd_pos > cfg["pd_zone_sell_strong"]:   sell += 3
+            elif pd_pos > cfg["pd_zone_sell_weak"]:   sell += 1
 
             # Order blocks
-            if bull_ob > 0:  buy  += 2
-            if bear_ob > 0:  sell += 2
+            if bull_ob > 0:  buy  += cfg["ob_pts"]
+            if bear_ob > 0:  sell += cfg["ob_pts"]
 
             # Fair Value Gaps
-            if bull_fvg > 0: buy  += 1
-            if bear_fvg > 0: sell += 1
+            if bull_fvg > 0: buy  += cfg["fvg_pts"]
+            if bear_fvg > 0: sell += cfg["fvg_pts"]
 
             # Liquidity sweeps
-            if swept_l > 0:  buy  += 2
-            if swept_h > 0:  sell += 2
+            if swept_l > 0:  buy  += cfg["sweep_pts"]
+            if swept_h > 0:  sell += cfg["sweep_pts"]
 
             # Displacement
-            if disp > 0 and close > open_: buy  += 1
-            if disp > 0 and close < open_: sell += 1
+            if disp > 0 and close > open_: buy  += cfg["displacement_pts"]
+            if disp > 0 and close < open_: sell += cfg["displacement_pts"]
 
             return {
                 "bullish_bias": bullish_bias,
@@ -689,6 +691,8 @@ class MT5Trader:
         score  = 0
 
         if ict is not None:
+            cfg = mt5_config.load()
+
             # Use ICT's ATR (daily ATR, better for daily signal sizing)
             if ict["atr"] > 0:
                 atr = ict["atr"]
@@ -697,15 +701,16 @@ class MT5Trader:
                 bias_ok = ict["bullish_bias"] if side == "BUY" else ict["bearish_bias"]
                 ict_raw = ict["buy_score"]    if side == "BUY" else ict["sell_score"]
 
-                if not bias_ok or ict_raw < 3:
+                if not bias_ok or ict_raw < cfg["ict_score_threshold"]:
                     continue
 
-                ml_pts  = 2 if ml_action == side else (0 if ml_action == "HOLD" else -1)
+                ml_pts  = (cfg["ml_agreement_pts"] if ml_action == side
+                           else (0 if ml_action == "HOLD" else cfg["ml_conflict_pts"]))
                 tec_pts = tec.get("score", 0) if tec_action == side else (
                           0 if tec_action == "HOLD" else -1)
 
                 total = ict_raw + ml_pts + tec_pts
-                if total >= 5:
+                if total >= cfg["total_score_threshold"]:
                     action = side
                     score  = total
                     break
@@ -866,19 +871,21 @@ class MT5Trader:
         except Exception:
             return []
     def _calc_lot(self, risk_pct: float, sl_points: float, price: float) -> float:
+        cfg      = mt5_config.load()
         balance  = self.account.get("balance", PAPER_BALANCE)
         risk_amt = balance * (risk_pct / 100.0)
         if sl_points <= 0 or price <= 0:
-            return 0.01
+            return cfg["min_lot"]
         sl_pct = sl_points / price
         if sl_pct <= 0:
-            return 0.01
+            return cfg["min_lot"]
         lot = risk_amt / (sl_pct * price * 1000)
-        return round(max(0.01, min(lot, 10.0)), 2)
+        return round(max(cfg["min_lot"], min(lot, cfg["max_lot"])), 2)
 
     def place_order(self, symbol: str, action: str, risk_pct: float, atr: float) -> dict:
-        sl_dist = atr * 1.5
-        tp_dist = atr * 3.0
+        cfg     = mt5_config.load()
+        sl_dist = atr * cfg["sl_multiplier"]
+        tp_dist = atr * cfg["tp_multiplier"]
 
         if self.is_paper:
             df = self._get_bars_paper(symbol, n=5)
@@ -1045,14 +1052,16 @@ class MT5Trader:
         mode = "Paper" if self.is_paper else "Live"
         self._log("INFO", f"{mode} trading started, {symbol} {timeframe} risk={risk_pct}% interval={interval}s")
 
-        # Phase 3: Initialize risk manager
+        # Phase 3: Initialize risk manager (recreated fresh so config changes
+        # made since the last Start take effect; see start_trading()).
+        cfg = mt5_config.load()
         if self.risk_manager is None:
             try:
                 from risk_manager import RiskManager
                 self.risk_manager = RiskManager(
-                    max_positions=MAX_POSITIONS,
-                    daily_loss_limit=DAILY_LOSS_LIMIT,
-                    base_risk_pct=RISK_PCT,
+                    max_positions=cfg["max_positions"],
+                    daily_loss_limit=cfg["daily_loss_limit"],
+                    base_risk_pct=risk_pct,
                 )
             except ImportError:
                 pass
@@ -1084,14 +1093,14 @@ class MT5Trader:
                     # Legacy guard: daily loss limit
                     if self.equity_open and eq and self.equity_open > 0:
                         drawdown = (self.equity_open - eq) / self.equity_open
-                        if drawdown >= DAILY_LOSS_LIMIT:
+                        if drawdown >= cfg["daily_loss_limit"]:
                             self._log("WARN", f"Daily loss limit hit ({drawdown*100:.1f}%). Trading halted.")
                             self.trading = False
-                            self.status_msg = f"Halted, {DAILY_LOSS_LIMIT*100:.0f}% daily loss limit"
+                            self.status_msg = f"Halted, {cfg['daily_loss_limit']*100:.0f}% daily loss limit"
                             break
 
                 # Max positions guard
-                    self._log("INFO", f"Max positions ({MAX_POSITIONS}) held, waiting")
+                    self._log("INFO", f"Max positions ({cfg['max_positions']}) held, waiting")
                     time.sleep(interval)
                     continue
 
@@ -1128,8 +1137,9 @@ class MT5Trader:
             return {"ok": False, "error": "Not connected. Use account=0 for paper mode."}
         if self.trading:
             return {"ok": False, "error": "Already trading"}
-        self.use_ml     = use_ml and _ML_AVAILABLE
-        self.trading    = True
+        self.use_ml       = use_ml and _ML_AVAILABLE
+        self.trading      = True
+        self.risk_manager = None   # recreated in _trading_loop with fresh config
         mode = "Paper" if self.is_paper else ("MetaApi" if self.is_metaapi else "Live")
         ml_tag = "+ML" if self.use_ml else ""
         self.status_msg = f"{mode} Trading{ml_tag}, {symbol} {timeframe}"

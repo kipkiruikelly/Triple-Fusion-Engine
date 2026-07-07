@@ -289,6 +289,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
     _page("/admin/broadcasts", "admin_broadcasts_page", "admin/broadcasts.html")
     _page("/admin/settings",   "admin_settings_page",   "admin/settings.html", min_role="admin")
     _page("/admin/audit",      "admin_audit_page",      "admin/audit.html")
+    _page("/admin/mt5",        "admin_mt5_page",        "admin/mt5.html", min_role="admin")
 
     @app.route("/admin/users/<int:user_id>")
     @admin_required("viewer")
@@ -1122,6 +1123,159 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
             pass
         _audit("settings.update", "setting", None, "; ".join(changed))
         return jsonify({"ok": True, "changed": len(changed)})
+
+    # ══ API: MT5 algorithm control panel ═════════════════════════════════════
+    # Never returns the MT5 password or MetaApi token - trader.account only
+    # ever holds login/name/server/currency/balance/equity/margin/leverage,
+    # the credentials themselves are passed through connect() and not stored.
+
+    _MT5_RANGES = {
+        "ict_score_threshold":   (1, 8),     "total_score_threshold": (1, 15),
+        "pd_zone_buy_strong":    (0.20, 0.50), "pd_zone_buy_weak":    (0.30, 0.60),
+        "pd_zone_sell_strong":   (0.50, 0.80), "pd_zone_sell_weak":   (0.40, 0.70),
+        "ob_pts": (1, 5), "fvg_pts": (1, 3), "sweep_pts": (1, 5), "displacement_pts": (1, 3),
+        "ml_agreement_pts": (1, 5), "ml_conflict_pts": (-5, 0),
+        "rsi_period": (5, 30), "rsi_oversold": (10, 40), "rsi_overbought": (60, 90),
+        "rsi_soft_os": (20, 45), "rsi_soft_ob": (55, 80),
+        "macd_fast": (5, 20), "macd_slow": (15, 40), "macd_signal_period": (5, 15),
+        "macd_cross_pts": (1, 5), "macd_trend_pts": (1, 3), "ema_period": (10, 50),
+        "risk_pct": (0.1, 10), "sl_multiplier": (0.5, 5.0), "tp_multiplier": (1.0, 10.0),
+        "atr_period": (5, 30), "max_positions": (1, 10),
+        "daily_loss_limit": (0.01, 0.20), "max_lot": (0.01, 100), "min_lot": (0.01, 1.0),
+        "paper_balance": (100, 1_000_000), "interval_sec": (10, 3600),
+    }
+    _MT5_TIMEFRAMES = {"M1", "M5", "M15", "M30", "H1", "H4", "D1"}
+
+    def _validate_mt5_config(data):
+        errors = []
+        for key, (lo, hi) in _MT5_RANGES.items():
+            if key not in data:
+                continue
+            try:
+                v = float(data[key])
+            except (TypeError, ValueError):
+                errors.append(f"{key} must be a number")
+                continue
+            if not (lo <= v <= hi):
+                errors.append(f"{key} must be between {lo} and {hi}")
+        if "min_lot" in data and "max_lot" in data:
+            try:
+                if float(data["min_lot"]) >= float(data["max_lot"]):
+                    errors.append("min_lot must be less than max_lot")
+            except (TypeError, ValueError):
+                pass
+        if "timeframe" in data and data["timeframe"] not in _MT5_TIMEFRAMES:
+            errors.append(f"timeframe must be one of {', '.join(sorted(_MT5_TIMEFRAMES))}")
+        if "symbol" in data and not str(data["symbol"]).strip():
+            errors.append("symbol cannot be empty")
+        return errors
+
+    @app.route("/admin/api/mt5/config")
+    @admin_required("admin")
+    def admin_api_mt5_config():
+        import mt5_config
+        return jsonify({"ok": True, "config": mt5_config.load()})
+
+    @app.route("/admin/api/mt5/config", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_mt5_config_save():
+        import mt5_config
+        data = request.get_json() or {}
+        if not data:
+            return jsonify({"ok": False, "error": "No data"}), 400
+        errors = _validate_mt5_config(data)
+        if errors:
+            return jsonify({"ok": False, "errors": errors}), 400
+        if "symbol" in data:
+            data["symbol"] = str(data["symbol"]).strip().upper()
+        merged = mt5_config.save(data)
+        _audit("mt5.config.update", "mt5_config", None,
+              "; ".join(f"{k}={data[k]}" for k in data))
+        return jsonify({"ok": True, "config": merged})
+
+    @app.route("/admin/api/mt5/config/reset", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_mt5_config_reset():
+        import mt5_config
+        defaults = mt5_config.reset()
+        _audit("mt5.config.reset", "mt5_config")
+        return jsonify({"ok": True, "config": defaults})
+
+    @app.route("/admin/api/mt5/status")
+    @admin_required("admin")
+    def admin_api_mt5_status():
+        import mt5_config
+        from mt5_trading import trader as mt5_trader, live_trading_enabled
+        status = mt5_trader.get_status()
+        log_entries = status.get("log", [])
+        trades = [e for e in log_entries if e["level"] in ("TRADE", "PAPER TRADE")]
+        closed = [e for e in log_entries if "CLOSE" in e["level"]]
+        return jsonify({
+            "ok": True,
+            "status": status,
+            "config": mt5_config.load(),
+            "live_trading_enabled": live_trading_enabled(),
+            "metrics": {
+                "total_signals": len([e for e in log_entries if e["level"] == "SIGNAL"]),
+                "total_trades":  len(trades),
+                "total_closed":  len(closed),
+                "errors":        len([e for e in log_entries if e["level"] == "ERROR"]),
+            },
+        })
+
+    @app.route("/admin/api/mt5/start", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_mt5_start():
+        import mt5_config
+        from mt5_trading import trader as mt5_trader
+        cfg = mt5_config.load()
+        result = mt5_trader.start_trading(
+            symbol=cfg["symbol"], timeframe=cfg["timeframe"],
+            risk_pct=cfg["risk_pct"], interval=cfg["interval_sec"],
+            use_ml=cfg["use_ml"],
+        )
+        if result.get("ok"):
+            _audit("mt5.start", "mt5_trader", None, f"{cfg['symbol']} {cfg['timeframe']}")
+        return jsonify(result)
+
+    @app.route("/admin/api/mt5/stop", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_mt5_stop():
+        from mt5_trading import trader as mt5_trader
+        result = mt5_trader.stop_trading()
+        if result.get("ok"):
+            _audit("mt5.stop", "mt5_trader")
+        return jsonify(result)
+
+    @app.route("/admin/api/mt5/signal")
+    @admin_required("admin")
+    def admin_api_mt5_signal():
+        import mt5_config
+        from mt5_trading import trader as mt5_trader
+        cfg = mt5_config.load()
+        signal = (mt5_trader.generate_signal_ml(cfg["symbol"]) if cfg["use_ml"]
+                  else mt5_trader.generate_signal(cfg["symbol"]))
+        return jsonify({"ok": True, "signal": signal})
+
+    @app.route("/admin/api/mt5/log")
+    @admin_required("admin")
+    def admin_api_mt5_log():
+        from mt5_trading import trader as mt5_trader
+        return jsonify({"ok": True, "log": list(mt5_trader.trade_log)})
+
+    @app.route("/admin/api/mt5/paper/reset", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_mt5_paper_reset():
+        import mt5_config
+        from mt5_trading import trader as mt5_trader, PaperAccount
+        if not mt5_trader.is_paper:
+            return jsonify({"ok": False, "error": "Not in paper mode"}), 400
+        cfg = mt5_config.load()
+        mt5_trader._paper = PaperAccount(balance=cfg["paper_balance"])
+        mt5_trader.account = mt5_trader._paper.info()
+        mt5_trader.equity_open = mt5_trader._paper.balance
+        _audit("mt5.paper.reset", "mt5_trader", None, f"balance={cfg['paper_balance']}")
+        return jsonify({"ok": True, "account": mt5_trader.account})
 
     # ══ API: data quality (sources, Pyth feeds, divergences) ═════════════════
 
