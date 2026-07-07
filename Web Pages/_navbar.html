@@ -79,6 +79,28 @@
   }
   .bl-notif-panel.open { display: block; }
 
+  .bl-upgrade-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 998; align-items: center; justify-content: center;
+  }
+  .bl-upgrade-overlay.open { display: flex; }
+  .bl-upgrade-card {
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 12px;
+    padding: 32px; max-width: 380px; width: 90%; text-align: center;
+  }
+  .bl-upgrade-icon { font-size: 26pt; margin-bottom: 12px; }
+  .bl-upgrade-card h3 { color: var(--text); margin-bottom: 10px; font-size: 14pt; }
+  #bl-upgrade-message { color: var(--muted); font-size: 10pt; margin-bottom: 20px; line-height: 1.5; }
+  .bl-upgrade-btn {
+    display: block; background: var(--accent); color: #fff;
+    padding: 10px; border-radius: 6px; text-decoration: none;
+    font-weight: 700; margin-bottom: 10px; font-size: 10pt;
+  }
+  .bl-upgrade-dismiss {
+    background: none; border: none; color: var(--muted);
+    font-size: 9pt; cursor: pointer; text-decoration: underline; font-family: inherit;
+  }
+
   .bl-hamburger { display: none; }
 
   @media (max-width: 900px) {
@@ -220,6 +242,27 @@
     <div style="color:var(--muted);font-size:9.5pt;text-align:center;padding:20px">Loading&hellip;</div>
   </div>
 </div>
+
+<!--
+  Upgrade prompt: any endpoint that gates a Pro feature returns
+  {"ok": false, "error": "upgrade_required", "feature": "...", "message": "...", "cta": "/pricing"}
+  with HTTP 403. Call window.blHandleUpgrade(data) with the parsed JSON
+  body from your own fetch call; it shows this modal and returns true if
+  the response was an upgrade prompt, false otherwise (so callers can
+  fall through to their normal error handling for anything else):
+
+    const data = await res.json();
+    if (window.blHandleUpgrade(data)) return;
+-->
+<div id="bl-upgrade-modal" class="bl-upgrade-overlay" onclick="blCloseUpgradeModal(event)">
+  <div class="bl-upgrade-card" onclick="event.stopPropagation()">
+    <div class="bl-upgrade-icon">&#11088;</div>
+    <h3>This is a Pro feature</h3>
+    <p id="bl-upgrade-message"></p>
+    <a href="/pricing" id="bl-upgrade-cta" class="bl-upgrade-btn">See Pro Plans</a>
+    <button class="bl-upgrade-dismiss" onclick="blCloseUpgradeModal()">Not now</button>
+  </div>
+</div>
 {% endif %}
 
 <script>
@@ -306,6 +349,25 @@
       document.getElementById('bl-notif-panel').classList.remove('open');
     }
   });
+
+  // ── Upgrade prompt (house ad for BullLogic Pro, not a third-party ad) ─────
+  // Any page can call window.blHandleUpgrade(parsedJsonBody) right after its
+  // own fetch call. Returns true (and shows the modal) if the response was
+  // an upgrade_required gate; returns false for every other response so the
+  // caller's normal error handling still runs unchanged.
+  window.blHandleUpgrade = function (data) {
+    if (!data || data.error !== 'upgrade_required') return false;
+    document.getElementById('bl-upgrade-message').textContent =
+      data.message || 'This feature requires a Pro plan.';
+    document.getElementById('bl-upgrade-cta').href = data.cta || '/pricing';
+    document.getElementById('bl-upgrade-modal').classList.add('open');
+    return true;
+  };
+
+  window.blCloseUpgradeModal = function (e) {
+    if (e && e.target !== e.currentTarget) return;
+    document.getElementById('bl-upgrade-modal').classList.remove('open');
+  };
 
   {% if current_user.is_authenticated %}
   loadNotifications();

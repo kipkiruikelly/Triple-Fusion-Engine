@@ -469,7 +469,7 @@ function createKey() {
         alert.style.display='block';
         alert.innerHTML='<strong style="color:var(--green)">Key created, copy it now, it will not be shown again:</strong><br><code style="font-size:10pt">'+d.key+'</code>';
         loadKeys();
-      } else alert(d.error);
+      } else if (!window.blHandleUpgrade(d)) alert(d.error);
     });
 }
 

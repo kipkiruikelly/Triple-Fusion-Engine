@@ -568,6 +568,11 @@ def register_auth_routes(app):
     @app.route("/api/keys/create", methods=["POST"])
     @login_required
     def api_keys_create():
+        if not current_user.is_pro:
+            return jsonify({
+                "ok": False, "error": "upgrade_required", "feature": "api_access",
+                "message": "REST API access is a Pro feature.", "cta": "/pricing",
+            }), 403
         if ApiKey.query.filter_by(user_id=current_user.id).count() >= 5:
             return jsonify({"ok": False, "error": "Maximum 5 API keys per account"}), 400
         name = (request.get_json() or {}).get("name", "Default")[:50]
