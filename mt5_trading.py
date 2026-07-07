@@ -72,6 +72,52 @@ def live_trading_enabled() -> bool:
         "1", "true", "yes", "on")
 
 
+_ENV_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+
+
+def set_live_trading_enabled(enabled: bool) -> None:
+    """Flip ENABLE_LIVE_TRADING for this process and persist it to .env.
+
+    app.py loads .env with override=False at startup, so this process's
+    os.environ already holds whatever .env said; updating os.environ here
+    takes effect immediately (no restart needed), and rewriting the .env
+    line makes it stick across the next restart too. Every other line in
+    .env (comments, other secrets) is preserved untouched.
+    """
+    value = "true" if enabled else "false"
+    lines = []
+    if os.path.exists(_ENV_PATH):
+        # newline="" disables universal-newline translation so whatever
+        # line ending the file already uses (LF or CRLF) round-trips
+        # byte-for-byte instead of getting silently rewritten throughout.
+        with open(_ENV_PATH, "r", encoding="utf-8", newline="") as f:
+            lines = f.readlines()
+
+    eol = "\n"
+    for line in lines:
+        if line.endswith("\r\n"):
+            eol = "\r\n"
+            break
+        if line.endswith("\n"):
+            eol = "\n"
+            break
+
+    found = False
+    for i, line in enumerate(lines):
+        if line.split("=", 1)[0].strip() == "ENABLE_LIVE_TRADING":
+            lines[i] = f"ENABLE_LIVE_TRADING={value}{eol}"
+            found = True
+            break
+    if not found:
+        if lines and not lines[-1].endswith(("\n", "\r")):
+            lines[-1] += eol
+        lines.append(f"ENABLE_LIVE_TRADING={value}{eol}")
+
+    with open(_ENV_PATH, "w", encoding="utf-8", newline="") as f:
+        f.writelines(lines)
+    os.environ["ENABLE_LIVE_TRADING"] = value
+
+
 class MetaApiBackend:
     """
     Async MetaApi SDK wrapped for synchronous use inside Flask/threading.

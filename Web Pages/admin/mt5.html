@@ -116,10 +116,14 @@
       <div class="mt-row-toggle">
         <span class="mt-dot" id="mt-live-dot"></span>
         <span id="mt-live-state" style="font-size:9.5pt;font-weight:600">-</span>
+        <button class="btn danger small" id="btn-live-enable" style="margin-left:auto" onclick="mtEnableLiveTrading()">Enable Live Trading</button>
+        <button class="btn small" id="btn-live-disable" style="display:none" onclick="mtDisableLiveTrading()">Disable Live Trading</button>
       </div>
       <div class="mt-warn orange" style="margin-top:6px">
-        To enable live trading, set <code>ENABLE_LIVE_TRADING=true</code> in your <code>.env</code> file and restart the server.
-        This panel cannot and does not change that flag.
+        Live trading permits the algorithm to place <b>real orders with real money</b> once a real
+        broker (MetaApi or MT5 bridge) is connected on the Status &amp; Controls tab - this switch alone
+        does not connect one or place any order. It's written to <code>.env</code>, so it also survives
+        a server restart.
       </div>
     </div>
   </div>
@@ -443,6 +447,8 @@
     const liveOn = !!d.live_trading_enabled;
     document.getElementById('mt-live-dot').classList.toggle('on', liveOn);
     document.getElementById('mt-live-state').textContent = 'Live trading: ' + (liveOn ? 'ENABLED' : 'disabled (paper only)');
+    document.getElementById('btn-live-enable').style.display  = liveOn ? 'none' : 'inline-flex';
+    document.getElementById('btn-live-disable').style.display = liveOn ? 'inline-flex' : 'none';
   }
 
   window.mtStart = async function () {
@@ -452,6 +458,29 @@
   window.mtStop = async function () {
     try { await api('/admin/api/mt5/stop', { method: 'POST' }); toast('Trading stopped'); mtLoadStatus(); }
     catch (e) {}
+  };
+
+  window.mtEnableLiveTrading = function () {
+    confirmModal(
+      'Enable LIVE trading?',
+      'This permits the algorithm to place REAL orders with REAL money once a real broker is connected. ' +
+      'This is not paper trading. Only proceed if you understand and accept that risk.',
+      async () => {
+        try {
+          await api('/admin/api/mt5/live-trading', { method: 'POST', body: { enabled: true } });
+          toast('Live trading ENABLED');
+          mtLoadStatus();
+        } catch (e) {}
+      },
+      'Enable Live Trading'
+    );
+  };
+  window.mtDisableLiveTrading = async function () {
+    try {
+      await api('/admin/api/mt5/live-trading', { method: 'POST', body: { enabled: false } });
+      toast('Live trading disabled');
+      mtLoadStatus();
+    } catch (e) {}
   };
   window.mtRunSignalNow = async function () {
     const el = document.getElementById('mt-signal-now');

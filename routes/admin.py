@@ -1223,6 +1223,20 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
             },
         })
 
+    @app.route("/admin/api/mt5/live-trading", methods=["POST"])
+    @admin_required("admin")
+    def admin_api_mt5_live_trading():
+        from mt5_trading import set_live_trading_enabled, live_trading_enabled
+        data = request.get_json() or {}
+        if "enabled" not in data:
+            return jsonify({"ok": False, "error": "Missing 'enabled'"}), 400
+        enabled = bool(data["enabled"])
+        set_live_trading_enabled(enabled)
+        _audit("mt5.live_trading." + ("enable" if enabled else "disable"),
+              "mt5_trader", None,
+              f"Live trading {'ENABLED' if enabled else 'disabled'} by {current_user.username}")
+        return jsonify({"ok": True, "live_trading_enabled": live_trading_enabled()})
+
     @app.route("/admin/api/mt5/start", methods=["POST"])
     @admin_required("admin")
     def admin_api_mt5_start():
