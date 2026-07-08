@@ -418,20 +418,20 @@ _SENT_TELEGRAM_ALERTS = {}
 
 def _scan_watchlist_and_alert(app, db):
     """Scan watchlist items of all users for high-confidence predictions and send notifications."""
-    from models import User, WatchlistItem, TelegramConfig
+    from models import User, WatchlistItem, TelegramConfig, WhatsappConfig
     from predictor import ml_signal
     from utils import _send_telegram, _send_whatsapp
-    import os
 
     now_ts = time.time()
-    whatsapp_to = os.environ.get("WHATSAPP_TO", "")
     with app.app_context():
         try:
-            tg_configs = TelegramConfig.query.filter_by(enabled=True).all()
-            for config in tg_configs:
-                user = db.session.get(User, config.user_id)
-                if not user:
+            users = User.query.all()
+            for user in users:
+                tg_config = TelegramConfig.query.filter_by(user_id=user.id, enabled=True).first()
+                wa_config = WhatsappConfig.query.filter_by(user_id=user.id, enabled=True).first()
+                if not tg_config and not wa_config:
                     continue
+
                 items = WatchlistItem.query.filter_by(user_id=user.id).all()
                 for item in items:
                     for interval in ["15m", "1h", "1d"]:
@@ -454,9 +454,10 @@ def _scan_watchlist_and_alert(app, db):
                                     f"Current Price: *${price:.4f}*\n\n"
                                     f"⚡ Live trade this signal: http://localhost:5000/predict"
                                 )
-                                _send_telegram(config.chat_id, msg)
-                                if whatsapp_to:
-                                    _send_whatsapp(whatsapp_to, msg)
+                                if tg_config:
+                                    _send_telegram(tg_config.chat_id, msg)
+                                if wa_config:
+                                    _send_whatsapp(wa_config.phone_number, msg)
                                 _SENT_TELEGRAM_ALERTS[alert_key] = now_ts
                         except Exception as e:
                             log.warning(f"Failed to scan watchlist signal for {item.ticker} {interval}: {e}")

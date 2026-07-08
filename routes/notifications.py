@@ -8,8 +8,8 @@ from flask import render_template, request, jsonify
 from flask_login import login_required, current_user
 
 from extensions import db
-from models import PriceAlert, TelegramConfig, DiscordConfig, Notification
-from utils import _add_notification, _send_telegram, _send_discord, _log_activity
+from models import PriceAlert, TelegramConfig, WhatsappConfig, DiscordConfig, Notification
+from utils import _add_notification, _send_telegram, _send_whatsapp, _send_discord, _log_activity
 
 
 def register_notification_routes(app):
@@ -104,6 +104,45 @@ def register_notification_routes(app):
     @login_required
     def telegram_remove():
         TelegramConfig.query.filter_by(user_id=current_user.id).delete()
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    # ── WhatsApp ───────────────────────────────────────────────────────────────
+
+    @app.route("/api/whatsapp/configure", methods=["POST"])
+    @login_required
+    def whatsapp_configure():
+        data         = request.get_json() or {}
+        phone_number = data.get("phone_number", "").strip()
+        enabled      = bool(data.get("enabled", True))
+        if not phone_number:
+            return jsonify({"ok": False, "error": "phone_number required"}), 400
+        cfg = WhatsappConfig.query.filter_by(user_id=current_user.id).first()
+        if cfg:
+            cfg.phone_number = phone_number
+            cfg.enabled      = enabled
+        else:
+            cfg = WhatsappConfig(user_id=current_user.id, phone_number=phone_number, enabled=enabled)
+            db.session.add(cfg)
+        db.session.commit()
+        
+        _send_whatsapp(phone_number,
+                       f"✅ BullLogic connected for *{current_user.username}*. "
+                       "You'll receive price alerts and watchlist signals here on WhatsApp.")
+        return jsonify({"ok": True})
+
+    @app.route("/api/whatsapp/status")
+    @login_required
+    def whatsapp_status():
+        cfg = WhatsappConfig.query.filter_by(user_id=current_user.id).first()
+        return jsonify({"configured": bool(cfg),
+                        "phone_number": cfg.phone_number if cfg else None,
+                        "enabled": cfg.enabled if cfg else False})
+
+    @app.route("/api/whatsapp/remove", methods=["POST"])
+    @login_required
+    def whatsapp_remove():
+        WhatsappConfig.query.filter_by(user_id=current_user.id).delete()
         db.session.commit()
         return jsonify({"ok": True})
 

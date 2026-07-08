@@ -601,7 +601,7 @@ def _start_alert_thread(app, db):
                                         daemon=True
                                     ).start()
                                     from utils import _send_whatsapp
-                                    whatsapp_to = os.environ.get("WHATSAPP_TO", "")
+                                    from models import WhatsappConfig
                                     msg = (
                                         f"🔔 *BullLogic Alert*\n"
                                         f"*{alert.ticker}* hit *${price:.4f}*\n"
@@ -615,10 +615,12 @@ def _start_alert_thread(app, db):
                                             target=_send_telegram,
                                             args=(tg.chat_id, msg), daemon=True
                                         ).start()
-                                    if whatsapp_to:
+                                    wa = WhatsappConfig.query.filter_by(
+                                        user_id=user.id, enabled=True).first()
+                                    if wa and wa.phone_number:
                                         threading.Thread(
                                             target=_send_whatsapp,
-                                            args=(whatsapp_to, msg), daemon=True
+                                            args=(wa.phone_number, msg), daemon=True
                                         ).start()
                         db.session.commit()
                 except Exception:

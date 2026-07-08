@@ -157,6 +157,13 @@ class TelegramConfig(db.Model):
     enabled = db.Column(db.Boolean, default=True)
 
 
+class WhatsappConfig(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
+    phone_number = db.Column(db.String(32), nullable=False)
+    enabled      = db.Column(db.Boolean, default=True)
+
+
 class Notification(db.Model):
     id         = db.Column(db.Integer, primary_key=True)
     user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

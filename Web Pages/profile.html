@@ -275,6 +275,20 @@
       </div>
     </div>
 
+    <!-- WhatsApp Alerts -->
+    <div class="section-card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="section-title">WhatsApp Alerts</div>
+        <span id="waStatus" style="font-size:9pt;color:var(--muted)">Loading…</span>
+      </div>
+      <p style="color:var(--muted);font-size:9.5pt;margin-bottom:14px">Get instant price alerts and watchlist signals on WhatsApp. Enter your phone number below in international format (e.g. <code>+254712345678</code> or <code>+14155552671</code>).</p>
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="waPhone" type="text" placeholder="Your WhatsApp phone number (e.g. +254712345678)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:6px;font-size:9.5pt;width:280px;font-family:'Inter',sans-serif"/>
+        <button onclick="saveWhatsapp()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:9.5pt;font-weight:600;cursor:pointer">Connect</button>
+        <button id="waRemoveBtn" onclick="removeWhatsapp()" style="display:none;background:none;border:1px solid var(--border);color:var(--red);padding:7px 12px;border-radius:6px;font-size:9pt;cursor:pointer">Disconnect</button>
+      </div>
+    </div>
+
     <!-- API Keys -->
     <div class="section-card" style="margin-bottom:16px">
       <div class="section-title" style="margin-bottom:14px">API Keys</div>
@@ -546,6 +560,44 @@ function removeTelegram() {
 }
 
 loadTelegram();
+
+function loadWhatsapp() {
+  fetch('/api/whatsapp/status').then(r=>r.json()).then(d=>{
+    const status = document.getElementById('waStatus');
+    const removeBtn = document.getElementById('waRemoveBtn');
+    if (d.configured) {
+      status.textContent = '✓ Connected: ' + d.phone_number;
+      status.style.color = 'var(--green)';
+      document.getElementById('waPhone').value = d.phone_number;
+      removeBtn.style.display = 'inline-block';
+    } else {
+      status.textContent = 'Not connected';
+      removeBtn.style.display = 'none';
+    }
+  });
+}
+
+function saveWhatsapp() {
+  const phone = document.getElementById('waPhone').value.trim();
+  if (!phone) { alert('Enter your WhatsApp phone number.'); return; }
+  fetch('/api/whatsapp/configure', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({phone_number: phone, enabled: true})
+  }).then(r=>r.json()).then(d=>{
+    if (d.ok) { alert('WhatsApp connected! You should receive a test message.'); loadWhatsapp(); }
+    else alert(d.error);
+  });
+}
+
+function removeWhatsapp() {
+  if (!confirm('Disconnect WhatsApp?')) return;
+  fetch('/api/whatsapp/remove', {method:'POST'}).then(r=>r.json()).then(d=>{
+    if (d.ok) { alert('WhatsApp disconnected.'); loadWhatsapp(); }
+  });
+}
+
+loadWhatsapp();
+
 
 // ── Discord Webhook ──────────────────────────────────────────────────────────
 function loadDiscord() {
