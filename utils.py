@@ -254,10 +254,17 @@ def _send_telegram(chat_id: str, text: str):
 
 def _send_whatsapp(to_number: str, text: str):
     sid = os.environ.get("TWILIO_ACCOUNT_SID", "")
-    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
     from_number = os.environ.get("TWILIO_WHATSAPP_FROM", "")
     
-    if not sid or not token or not from_number or not to_number:
+    # Support both Twilio Auth Token and API Key authentication
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    api_key_sid = os.environ.get("TWILIO_API_KEY_SID", "")
+    api_key_secret = os.environ.get("TWILIO_API_KEY_SECRET", "")
+    
+    auth_user = api_key_sid if api_key_sid else sid
+    auth_pass = api_key_secret if api_key_secret else token
+    
+    if not sid or not auth_user or not auth_pass or not from_number or not to_number:
         return
         
     # Standardize format
@@ -276,7 +283,7 @@ def _send_whatsapp(to_number: str, text: str):
         "Body": text
     }
     try:
-        _req.post(url, data=payload, auth=_BasicAuth(sid, token), timeout=8)
+        _req.post(url, data=payload, auth=_BasicAuth(auth_user, auth_pass), timeout=8)
     except Exception:
         pass
 
