@@ -309,7 +309,7 @@ window.addEventListener('themechange', () => {
 // Load Chart.js then draw equity curve
 (function() {
   const s = document.createElement('script');
-  s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+  s.src = "{{ url_for('static', filename='chart.js') }}";
   s.onload = loadEquityCurve;
   document.head.appendChild(s);
 })();
