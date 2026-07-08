@@ -10,6 +10,9 @@ import yfinance as yf
 _MACRO_CACHE = {}
 _MACRO_CACHE_TIMEOUT = 3600  # 1 hour cache
 
+_HEATMAP_CACHE = {}
+_HEATMAP_CACHE_TIMEOUT = 12 * 3600  # 12 hour cache
+
 def register_macro_routes(app):
     @app.route("/macro")
     @login_required
@@ -44,6 +47,53 @@ def register_macro_routes(app):
             return jsonify(result)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/macro/heatmap")
+    @login_required
+    def macro_heatmap():
+        now = time.time()
+        if "data" in _HEATMAP_CACHE and now - _HEATMAP_CACHE.get("timestamp", 0) < _HEATMAP_CACHE_TIMEOUT:
+            return jsonify(_HEATMAP_CACHE["data"])
+
+        try:
+            res = _fetch_heatmap_data()
+            _HEATMAP_CACHE["data"] = res
+            _HEATMAP_CACHE["timestamp"] = now
+            return jsonify(res)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    @app.route("/api/macro/ticker-insights/<ticker>")
+    @login_required
+    def ticker_insights(ticker):
+        ticker = ticker.upper().strip()
+        token = os.environ.get("FINNHUB_API_KEY", "")
+        
+        # 1. Recommendation Trends (Consensus revisions)
+        recs = []
+        if token:
+            try:
+                url = f"https://finnhub.io/api/v1/stock/recommendation?symbol={ticker}&token={token}"
+                res = requests.get(url, timeout=8).json()
+                recs = res[:4] if isinstance(res, list) else []
+            except Exception:
+                pass
+                
+        # 2. Insider Transactions
+        insiders = []
+        if token:
+            try:
+                url = f"https://finnhub.io/api/v1/stock/insider-transactions?symbol={ticker}&token={token}"
+                res = requests.get(url, timeout=8).json()
+                insiders = res.get("data", [])[:25] if isinstance(res, dict) else []
+            except Exception:
+                pass
+                
+        return jsonify({
+            "ticker": ticker,
+            "recommendations": recs,
+            "insiders": insiders
+        })
 
 def _fetch_yield_curve():
     try:
@@ -138,3 +188,51 @@ def _fetch_market_overview():
         except Exception:
             pass
     return data
+
+
+def _fetch_heatmap_data():
+    indexes = {
+        "S&P 500": "^GSPC",
+        "Nasdaq 100": "^IXIC",
+        "Dow Jones": "^DJI",
+        "Russell 2000": "^RUT",
+        "DAX (Germany)": "^GDAXI",
+        "FTSE 100 (UK)": "^FTSE",
+        "CAC 40 (France)": "^FCHI",
+        "Nikkei 225 (Japan)": "^N225",
+        "Hang Seng (HK)": "^HSI",
+        "Nifty 50 (India)": "^NSEI",
+        "Shanghai Comp (China)": "000001.SS",
+        "ASX 200 (Australia)": "^AXJO"
+    }
+    
+    heatmap = {}
+    for name, sym in indexes.items():
+        try:
+            ticker = yf.Ticker(sym)
+            hist = ticker.history(period="1y")
+            if hist.empty or len(hist) < 20:
+                continue
+                
+            curr_price = float(hist.iloc[-1]["Close"])
+            prev_price = float(hist.iloc[-2]["Close"])
+            week_price = float(hist.iloc[-6]["Close"]) if len(hist) >= 6 else prev_price
+            month_price = float(hist.iloc[-21]["Close"]) if len(hist) >= 21 else prev_price
+            
+            df_2026 = hist[hist.index.year == 2026]
+            if not df_2026.empty:
+                ytd_price = float(df_2026.iloc[0]["Close"])
+            else:
+                ytd_price = float(hist.iloc[0]["Close"])
+                
+            heatmap[name] = {
+                "symbol": sym,
+                "price": round(curr_price, 2),
+                "chg_1d": round((curr_price - prev_price) / prev_price * 100, 2),
+                "chg_1w": round((curr_price - week_price) / week_price * 100, 2),
+                "chg_1m": round((curr_price - month_price) / month_price * 100, 2),
+                "chg_ytd": round((curr_price - ytd_price) / ytd_price * 100, 2)
+            }
+        except Exception:
+            pass
+    return heatmap

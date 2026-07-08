@@ -63,6 +63,27 @@
 
     /* Loading overlay */
     .loading-state { display: flex; align-items: center; justify-content: center; height: 300px; font-size: 11pt; color: var(--muted); }
+
+    /* Heatmap Layout */
+    .heatmap-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 6px; }
+    .heatmap-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px; text-align: center; transition: all 0.15s; background: var(--surface2); }
+    .heatmap-card:hover { border-color: var(--accent); }
+    .heatmap-name { font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .heatmap-val { font-size: 13pt; font-weight: 700; color: var(--white); }
+    .heatmap-metric { font-size: 8pt; color: var(--muted); margin-top: 4px; }
+
+    /* Button Strip */
+    .btn-strip { display: flex; gap: 8px; margin-bottom: 16px; }
+    .btn-strip button { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); font-size: 8.5pt; font-weight: 600; padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+    .btn-strip button:hover { border-color: var(--accent); color: var(--white); }
+    .btn-strip button.active { background: var(--accent); border-color: var(--accent); color: var(--white); }
+
+    /* Search row */
+    .search-row { display: flex; gap: 10px; margin-bottom: 24px; align-items: center; max-width: 500px; }
+    .search-row input { flex: 1; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 9px 14px; font-size: 10pt; font-family: inherit; outline: none; }
+    .search-row input:focus { border-color: var(--accent); }
+    .search-row button { background: var(--accent); color: var(--white); border: none; font-size: 9.5pt; font-weight: 600; padding: 9px 18px; border-radius: 6px; cursor: pointer; }
+    .search-row button.btn-clear { background: none; border: 1px solid var(--border); color: var(--muted); }
   </style>
 </head>
 <body>
@@ -100,12 +121,20 @@
 
   <main class="content">
     <div class="page-title">Market Intelligence</div>
-    <div class="page-subtitle">Interactive U.S. yield curves, Federal Reserve macroeconomic indicators, and global asset tracking</div>
+    <div class="page-subtitle">Interactive U.S. yield curves, global performance heatmaps, analyst estimates, and insider transactions</div>
+
+    <!-- Search Box -->
+    <div class="search-row">
+      <input id="tickerSearch" type="text" placeholder="Enter Equity Ticker (e.g. AAPL, MSFT, TSLA)" onkeydown="if(event.key==='Enter') searchTicker()" />
+      <button onclick="searchTicker()">Analyze Ticker</button>
+      <button id="clearSearchBtn" class="btn-clear" onclick="clearSearch()" style="display:none">Clear</button>
+    </div>
 
     <div id="loader" class="loading-state">
       <div>Analyzing global market rates, please wait...</div>
     </div>
 
+    <!-- General Market & Macro Dashboard -->
     <div id="dashboard" class="grid" style="display:none">
       
       <!-- Yield Curve -->
@@ -114,8 +143,22 @@
           <span>U.S. Treasury Par Yield Curve</span>
           <span id="yield-curve-date" class="section-date"></span>
         </div>
-        <div style="position:relative; height:320px; width:100%">
+        <div style="position:relative; height:300px; width:100%">
           <canvas id="yieldChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Global Performance Heatmap -->
+      <div class="section-card grid-wide">
+        <div class="section-title">Global Indices Performance Heatmap</div>
+        <div class="btn-strip">
+          <button id="btn-1d" class="active" onclick="switchHeatmapTimeframe('1d')">1D Change</button>
+          <button id="btn-1w" onclick="switchHeatmapTimeframe('1w')">1W Change</button>
+          <button id="btn-1m" onclick="switchHeatmapTimeframe('1m')">1M Change</button>
+          <button id="btn-ytd" onclick="switchHeatmapTimeframe('ytd')">YTD Change</button>
+        </div>
+        <div id="heatmap-container" class="heatmap-grid">
+          <!-- Populated dynamically -->
         </div>
       </div>
 
@@ -161,11 +204,57 @@
       </div>
 
     </div>
+
+    <!-- Ticker Deep-Dive Insights view -->
+    <div id="ticker-insights" class="grid" style="display:none">
+      
+      <!-- Consensus Recommendations stacked bar chart -->
+      <div class="section-card grid-wide">
+        <div class="section-title">
+          <span>Consensus Recommendation Revisions Trend</span>
+          <span class="section-date" id="recs-ticker-title"></span>
+        </div>
+        <div style="position:relative; height:280px; width:100%">
+          <canvas id="recsChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Insider Trading Log Table -->
+      <div class="section-card grid-wide">
+        <div class="section-title">
+          <span>Insider Trading Transactions Log</span>
+          <span class="section-date">Last 25 filings (via SEC Form 4)</span>
+        </div>
+        <div style="max-height: 400px; overflow-y: auto;">
+          <table class="market-table">
+            <thead>
+              <tr>
+                <th>Insider</th>
+                <th>Relationship</th>
+                <th>Trade Date</th>
+                <th>Shares Change</th>
+                <th>Price Paid</th>
+                <th>Type</th>
+              </tr>
+            </thead>
+            <tbody id="insiders-tbody">
+              <!-- Filled dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
   </main>
 </div>
 
 <script>
+let heatmapData = null;
+let activeTimeframe = '1d';
+let recsChartInstance = null;
+
 document.addEventListener("DOMContentLoaded", () => {
+  // Load main macro & yield data
   fetch("/api/macro/data")
     .then(r => r.json())
     .then(data => {
@@ -230,7 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       }
 
-      // 2. Set Macro Indicators
+      // 2. Set FRED Indicators
       const ind = data.indicators;
       if (ind) {
         if (ind.fed_funds !== undefined) document.getElementById("val-fedfunds").textContent = ind.fed_funds.toFixed(2);
@@ -239,7 +328,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (ind.gdp_growth !== undefined) document.getElementById("val-gdp").textContent = ind.gdp_growth.toFixed(2);
       }
 
-      // 3. Set Market table
+      // 3. Set Market overview
       const markets = data.markets;
       const tbody = document.getElementById("market-tbody");
       if (markets) {
@@ -264,7 +353,177 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(err);
       document.getElementById("loader").textContent = "Failed to load Market Intelligence data.";
     });
+
+  // Load Heatmap data
+  fetch("/api/macro/heatmap")
+    .then(r => r.json())
+    .then(data => {
+      heatmapData = data;
+      renderHeatmap();
+    })
+    .catch(err => console.error("Failed to load heatmap data", err));
 });
+
+function switchHeatmapTimeframe(tf) {
+  activeTimeframe = tf;
+  document.querySelectorAll(".btn-strip button").forEach(btn => btn.classList.remove("active"));
+  document.getElementById("btn-" + tf).classList.add("active");
+  renderHeatmap();
+}
+
+function renderHeatmap() {
+  const container = document.getElementById("heatmap-container");
+  container.innerHTML = "";
+  if (!heatmapData) return;
+
+  Object.entries(heatmapData).forEach(([name, item]) => {
+    let val = 0.0;
+    if (activeTimeframe === '1d') val = item.chg_1d;
+    else if (activeTimeframe === '1w') val = item.chg_1w;
+    else if (activeTimeframe === '1m') val = item.chg_1m;
+    else if (activeTimeframe === 'ytd') val = item.chg_ytd;
+
+    const sign = val >= 0 ? "+" : "";
+    
+    let bg = "rgba(42,49,80,0.2)"; 
+    let border = "rgba(42,49,80,0.6)";
+    let textColor = "var(--text)";
+    
+    if (val > 2.0) {
+      bg = "rgba(0,192,118,0.25)";
+      border = "rgba(0,192,118,0.6)";
+      textColor = "var(--green)";
+    } else if (val > 0.0) {
+      bg = "rgba(0,192,118,0.12)";
+      border = "rgba(0,192,118,0.3)";
+      textColor = "var(--green)";
+    } else if (val < -2.0) {
+      bg = "rgba(255,77,77,0.25)";
+      border = "rgba(255,77,77,0.6)";
+      textColor = "var(--red)";
+    } else if (val < 0.0) {
+      bg = "rgba(255,77,77,0.12)";
+      border = "rgba(255,77,77,0.3)";
+      textColor = "var(--red)";
+    }
+
+    const card = document.createElement("div");
+    card.className = "heatmap-card";
+    card.style.background = bg;
+    card.style.borderColor = border;
+    card.innerHTML = `
+      <div class="heatmap-name" title="${name}">${name}</div>
+      <div class="heatmap-val" style="color: ${textColor}">${sign}${val.toFixed(2)}%</div>
+      <div class="heatmap-metric">${item.price.toLocaleString(undefined, {minimumFractionDigits: 1})}</div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function searchTicker() {
+  const query = document.getElementById("tickerSearch").value.trim().toUpperCase();
+  if (!query) return;
+
+  document.getElementById("loader").style.display = "flex";
+  document.getElementById("dashboard").style.display = "none";
+  document.getElementById("ticker-insights").style.display = "none";
+  document.getElementById("clearSearchBtn").style.display = "inline-block";
+
+  fetch("/api/macro/ticker-insights/" + query)
+    .then(r => r.json())
+    .then(data => {
+      document.getElementById("loader").style.display = "none";
+      document.getElementById("ticker-insights").style.display = "grid";
+
+      // 1. Recommendations stacked bar chart
+      const rTitle = document.getElementById("recs-ticker-title");
+      rTitle.textContent = "Recommendation revisions history for: " + query;
+      
+      const recs = data.recommendations;
+      const ctx = document.getElementById("recsChart").getContext("2d");
+      
+      if (recsChartInstance) {
+        recsChartInstance.destroy();
+      }
+
+      if (recs && recs.length > 0) {
+        const rev = [...recs].reverse();
+        const periods = rev.map(r => r.period);
+        const buy = rev.map(r => r.buy);
+        const strongBuy = rev.map(r => r.strongBuy);
+        const hold = rev.map(r => r.hold);
+        const sell = rev.map(r => r.sell);
+        const strongSell = rev.map(r => r.strongSell);
+
+        recsChartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: periods,
+            datasets: [
+              { label: "Strong Buy", data: strongBuy, backgroundColor: "#008a50" },
+              { label: "Buy", data: buy, backgroundColor: "#00C076" },
+              { label: "Hold", data: hold, backgroundColor: "#EAB308" },
+              { label: "Sell", data: sell, backgroundColor: "#FF4D4D" },
+              { label: "Strong Sell", data: strongSell, backgroundColor: "#a80000" }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { stacked: true, grid: { display: false }, ticks: { color: "#7A8499" } },
+              y: { stacked: true, grid: { color: "rgba(42,49,80,0.4)" }, ticks: { color: "#7A8499" } }
+            },
+            plugins: {
+              legend: { position: 'bottom', labels: { color: "#E2E8F0" } }
+            }
+          }
+        });
+      } else {
+        // Draw empty message context
+        ctx.clearRect(0,0,ctx.canvas.width, ctx.canvas.height);
+        ctx.fillStyle = "#7A8499";
+        ctx.font = "14px Inter";
+        ctx.fillText("No Recommendation Trends data found (Ensure FINNHUB_API_KEY is active).", 20, 100);
+      }
+
+      // 2. Insiders logs
+      const tbody = document.getElementById("insiders-tbody");
+      tbody.innerHTML = "";
+      const ins = data.insiders;
+      if (ins && ins.length > 0) {
+        ins.forEach(tx => {
+          const row = document.createElement("tr");
+          const changeStr = tx.change.toLocaleString();
+          const colorClass = tx.change >= 0 ? "up" : "dn";
+          const sign = tx.change >= 0 ? "+" : "";
+          const priceStr = tx.price ? "$" + tx.price.toFixed(2) : "-";
+          row.innerHTML = `
+            <td><strong class="market-name">${tx.name}</strong></td>
+            <td>${tx.share} shares owned</td>
+            <td>${tx.transactionDate}</td>
+            <td class="${colorClass}">${sign}${changeStr}</td>
+            <td>${priceStr}</td>
+            <td><span class="badge ${tx.change >= 0 ? 'badge-member' : 'badge-free'}">${tx.transactionCode} (${tx.transactionCode === 'S' ? 'Sale' : 'Purchase'})</span></td>
+          `;
+          tbody.appendChild(row);
+        });
+      } else {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted); padding: 30px;">No Insider transaction data found. Make sure your FINNHUB_API_KEY is configured in the environment settings.</td></tr>`;
+      }
+    })
+    .catch(err => {
+      console.error(err);
+      document.getElementById("loader").textContent = "Failed to load ticker data details.";
+    });
+}
+
+function clearSearch() {
+  document.getElementById("tickerSearch").value = "";
+  document.getElementById("clearSearchBtn").style.display = "none";
+  document.getElementById("ticker-insights").style.display = "none";
+  document.getElementById("dashboard").style.display = "grid";
+}
 </script>
 
 </body>
