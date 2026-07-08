@@ -107,15 +107,9 @@
       <a class="sidebar-item active" href="/macro"><div class="dot"></div>Market Intelligence</a>
       <a class="sidebar-item" href="/watchlist"><div class="dot"></div>Watchlist</a>
       <a class="sidebar-item" href="/history"><div class="dot"></div>Prediction History</a>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Account</div>
-      <a class="sidebar-item" href="/profile"><div class="dot"></div>My Profile</a>
-      <a class="sidebar-item" href="/pricing"><div class="dot"></div>Subscription</a>
       {% if current_user.is_pro %}
       <a class="sidebar-item" href="/mt5"><div class="dot"></div>MT5 Trading</a>
       {% endif %}
-      <a class="sidebar-item" href="/logout"><div class="dot"></div>Logout</a>
     </div>
   </aside>
 
