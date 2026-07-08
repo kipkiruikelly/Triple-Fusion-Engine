@@ -84,6 +84,18 @@
     .search-row input:focus { border-color: var(--accent); }
     .search-row button { background: var(--accent); color: var(--white); border: none; font-size: 9.5pt; font-weight: 600; padding: 9px 18px; border-radius: 6px; cursor: pointer; }
     .search-row button.btn-clear { background: none; border: 1px solid var(--border); color: var(--muted); }
+
+    /* Sidebar Dropdowns */
+    .sidebar-dropdown { margin-bottom: 4px; margin-top: 4px; padding: 0 10px; }
+    .sidebar-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 6px; font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; cursor: pointer; transition: all 0.15s; user-select: none; }
+    .sidebar-dropdown-header:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-dropdown-content { display: none; padding-left: 8px; margin-top: 4px; max-height: 180px; overflow-y: auto; border-left: 1px solid var(--border); }
+    .sidebar-dropdown.open .sidebar-dropdown-content { display: block; }
+    .sidebar-dropdown-header .caret { font-size: 7.5pt; transition: transform 0.15s; color: var(--muted); }
+    .sidebar-dropdown.open .sidebar-dropdown-header .caret { transform: rotate(180deg); color: var(--accent); }
+    
+    .sidebar-ticker-item { display: block; padding: 6px 10px; font-size: 9pt; color: var(--muted); text-decoration: none; cursor: pointer; border-radius: 4px; transition: all 0.15s; font-weight: 500; }
+    .sidebar-ticker-item:hover { background: var(--surface2); color: var(--accent); }
   </style>
 </head>
 <body>
@@ -110,6 +122,79 @@
       {% if current_user.is_pro %}
       <a class="sidebar-item" href="/mt5"><div class="dot"></div>MT5 Trading</a>
       {% endif %}
+    </div>
+
+    <!-- Asset Class Dropdowns -->
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Stocks</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT'] %}
+        <div class="sidebar-ticker-item" onclick="loadTickerIntelligence('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>ETFs</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['SPY','QQQ','DIA','IWM','VOO','VEA','VWO','GLD','SLV','USO','UNG','TLT','LQD','HYG'] %}
+        <div class="sidebar-ticker-item" onclick="loadTickerIntelligence('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Crypto</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['BTC-USD','ETH-USD','SOL-USD','BNB-USD','XRP-USD','ADA-USD','DOGE-USD','DOT-USD','LTC-USD','LINK-USD'] %}
+        <div class="sidebar-ticker-item" onclick="loadTickerIntelligence('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Forex</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['EURUSD=X','GBPUSD=X','USDJPY=X','AUDUSD=X','USDCAD=X','USDCHF=X','NZDUSD=X','EURGBP=X','EURJPY=X','GBPJPY=X'] %}
+        <div class="sidebar-ticker-item" onclick="loadTickerIntelligence('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Commodities</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="sidebar-dropdown-content">
+        {% for sym, label in [('GC=F', 'Gold'), ('CL=F', 'Crude Oil'), ('SI=F', 'Silver'), ('NG=F', 'Natural Gas'), ('BZ=F', 'Brent'), ('HG=F', 'Copper'), ('C=F', 'Corn'), ('S=F', 'Soybeans'), ('W=F', 'Wheat')] %}
+        <div class="sidebar-ticker-item" onclick="loadTickerIntelligence('{{ sym }}')" title="{{ label }}">{{ sym }} ({{ label }})</div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Indices</span>
+        <span class="caret">▼</span>
+      </div>
+      <div class="sidebar-dropdown-content">
+        {% for sym, label in [('^GSPC', 'S&P 500'), ('^IXIC', 'Nasdaq'), ('^DJI', 'Dow Jones'), ('^RUT', 'Russell 2000'), ('^VIX', 'VIX'), ('^FTSE', 'FTSE 100'), ('^GDAXI', 'DAX'), ('^N225', 'Nikkei 225'), ('^HSI', 'Hang Seng')] %}
+        <div class="sidebar-ticker-item" onclick="loadTickerIntelligence('{{ sym }}')" title="{{ label }}">{{ sym }} ({{ label }})</div>
+        {% endfor %}
+      </div>
     </div>
   </aside>
 
@@ -517,6 +602,15 @@ function clearSearch() {
   document.getElementById("clearSearchBtn").style.display = "none";
   document.getElementById("ticker-insights").style.display = "none";
   document.getElementById("dashboard").style.display = "grid";
+}
+
+function toggleSidebarDropdown(header) {
+  header.parentElement.classList.toggle("open");
+}
+
+function loadTickerIntelligence(ticker) {
+  document.getElementById("tickerSearch").value = ticker;
+  searchTicker();
 }
 </script>
 
