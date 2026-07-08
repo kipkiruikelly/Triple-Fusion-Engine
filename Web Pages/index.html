@@ -728,6 +728,30 @@
     <div class="page-title">Price Analysis</div>
     <div class="page-subtitle">Quantitative price forecasting across 1-minute through daily timeframes, ICT structure, ensemble classifiers, and multi-timeframe confluence</div>
 
+    <!-- Quick Access Tool Links -->
+    <div class="tool-links-container" style="display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;">
+      <a href="/macro" class="tool-link-card" style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; color: var(--text); font-size: 9pt; font-weight: 600; transition: all 0.15s;">
+        <span style="color: var(--accent);">📊</span> Market Intelligence (Macro & Yield)
+      </a>
+      <a href="/profile" class="tool-link-card" style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; color: var(--text); font-size: 9pt; font-weight: 600; transition: all 0.15s;">
+        <span style="color: var(--green);">💬</span> Alert Settings (WhatsApp & Telegram)
+      </a>
+      {% if current_user.is_pro %}
+      <a href="/mt5" class="tool-link-card" style="display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); padding: 8px 14px; border-radius: 6px; text-decoration: none; color: var(--text); font-size: 9pt; font-weight: 600; transition: all 0.15s;">
+        <span style="color: var(--blue);">⚡</span> MT5 Trailing Stop Manager
+      </a>
+      {% endif %}
+    </div>
+
+    <!-- Add hover style override if not already defined -->
+    <style>
+      .tool-link-card:hover {
+        border-color: var(--accent) !important;
+        background: var(--surface2) !important;
+        color: var(--white) !important;
+      }
+    </style>
+
     <!-- Search -->
     <div class="search-section">
       <div class="search-label">Enter Ticker Symbol</div>
