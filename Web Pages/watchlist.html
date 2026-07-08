@@ -163,17 +163,24 @@
     <!-- Watchlist table -->
     {% if watchlist %}
     <div class="wl-table-wrap">
+      <div style="padding:10px 20px; border-bottom:1px solid var(--border); display:flex; gap:10px;">
+        <span style="font-size:8pt;color:var(--muted);align-self:center;">Columns:</span>
+        <label><input type="checkbox" onchange="toggleCol(1, this.checked)" checked> Price</label>
+        <label><input type="checkbox" onchange="toggleCol(2, this.checked)" checked> Change</label>
+        <label><input type="checkbox" onchange="toggleCol(3, this.checked)" checked> Signal</label>
+        <label><input type="checkbox" onchange="toggleCol(4, this.checked)" checked> Conf.</label>
+      </div>
       <div class="wl-header">
-        <span>Symbol</span><span>Price</span><span>Change</span><span>ML Signal</span><span>Confidence</span><span></span><span></span>
+        <span>Symbol</span><span class="col-1">Price</span><span class="col-2">Change</span><span class="col-3">ML Signal</span><span class="col-4">Confidence</span><span></span><span></span>
       </div>
       <div id="wlBody">
         {% for ticker in watchlist %}
         <div class="wl-row" id="row-{{ ticker }}">
           <div><div class="ticker-sym">{{ ticker }}</div><div class="ticker-co" id="co-{{ ticker }}">Loading…</div></div>
-          <div class="cell-price" id="price-{{ ticker }}">-</div>
-          <div class="cell-chg" id="chg-{{ ticker }}">-</div>
-          <div id="sig-{{ ticker }}"><span class="signal-pill signal-hold">-</span></div>
-          <div id="conf-{{ ticker }}" style="color:var(--muted)">-</div>
+          <div class="cell-price col-1" id="price-{{ ticker }}">-</div>
+          <div class="cell-chg col-2" id="chg-{{ ticker }}">-</div>
+          <div class="col-3" id="sig-{{ ticker }}"><span class="signal-pill signal-hold">-</span></div>
+          <div class="col-4" id="conf-{{ ticker }}" style="color:var(--muted)">-</div>
           <div class="cell-actions">
             <a class="btn-predict-sm" href="/predict" onclick="return submitPredict('{{ ticker }}')">Predict</a>
           </div>
@@ -184,6 +191,19 @@
         {% endfor %}
       </div>
     </div>
+    <script>
+    function toggleCol(i, show) {
+      document.querySelectorAll('.col-' + i).forEach(el => el.style.display = show ? '' : 'none');
+      localStorage.setItem('wl-col-' + i, show);
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      [1,2,3,4].forEach(i => {
+        const show = localStorage.getItem('wl-col-' + i) !== 'false';
+        toggleCol(i, show);
+        document.querySelector(`input[onchange="toggleCol(${i}, this.checked)"]`).checked = show;
+      });
+    });
+    </script>
     {% else %}
     <div class="wl-table-wrap">
       <div class="empty-state">

@@ -99,6 +99,18 @@
     .sidebar-price-row .chg.up { color: var(--green); }
     .sidebar-price-row .chg.down { color: var(--red); }
 
+    /* ── Dashboard Grid ── */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .widget {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
     /* ── Main content ── */
     .content { flex: 1; padding: 24px 28px; overflow-y: auto; }
 
@@ -766,41 +778,41 @@
 
   <!-- Content -->
   <main class="content">
-
-    <!-- Stock header -->
-    <div class="stock-header">
-      <div class="stock-header-left">
-        <div class="ticker-name">
-          {{ ticker }}
-          <span style="font-size:10pt;font-weight:600;padding:3px 10px;border-radius:4px;margin-left:10px;vertical-align:middle;
-            {% if interval == '15m' %}background:rgba(139,92,246,0.15);color:#A78BFA;
-            {% elif interval == '1h' %}background:rgba(59,130,246,0.15);color:#60A5FA;
-            {% else %}background:rgba(255,107,53,0.15);color:var(--accent);{% endif %}">
-            {{ interval|upper }}
-          </span>
+    <div class="dashboard-grid">
+      <!-- Stock header -->
+      <div class="widget stock-header" style="padding:20px;">
+        <div class="stock-header-left">
+          <div class="ticker-name">
+            {{ ticker }}
+            <span style="font-size:10pt;font-weight:600;padding:3px 10px;border-radius:4px;margin-left:10px;vertical-align:middle;
+              {% if interval == '15m' %}background:rgba(139,92,246,0.15);color:#A78BFA;
+              {% elif interval == '1h' %}background:rgba(59,130,246,0.15);color:#60A5FA;
+              {% else %}background:rgba(255,107,53,0.15);color:var(--accent);{% endif %}">
+              {{ interval|upper }}
+            </span>
+          </div>
+          <div class="company-label">
+            As of {{ as_of }} &nbsp;&middot;&nbsp; {{ horizon }} Prediction
+            {% if live_quote and live_quote.price %}
+            <span style="font-size:8.5pt;font-weight:600;margin-left:8px;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10B981;vertical-align:middle;">
+              &#9679; Live ${{ live_quote.price }}
+              {% if live_quote.pct is not none %}({% if live_quote.pct >= 0 %}+{% endif %}{{ live_quote.pct }}%){% endif %}
+            </span>
+            {% endif %}
+          </div>
         </div>
-        <div class="company-label">
-          As of {{ as_of }} &nbsp;&middot;&nbsp; {{ horizon }} Prediction
-          {% if live_quote and live_quote.price %}
-          <span style="font-size:8.5pt;font-weight:600;margin-left:8px;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.15);color:#10B981;vertical-align:middle;">
-            &#9679; Live ${{ live_quote.price }}
-            {% if live_quote.pct is not none %}({% if live_quote.pct >= 0 %}+{% endif %}{{ live_quote.pct }}%){% endif %}
-          </span>
-          {% endif %}
+        <div class="stock-header-right">
+          <div class="current-price">${{ current_price }}</div>
+          <div class="price-change {% if direction == 'Up' %}up{% else %}down{% endif %}">
+            {% if price_change >= 0 %}+{% endif %}${{ price_change }}
+            &nbsp;({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
+          </div>
+          <div class="as-of">Predicted {{ horizon|lower }} close</div>
         </div>
       </div>
-      <div class="stock-header-right">
-        <div class="current-price">${{ current_price }}</div>
-        <div class="price-change {% if direction == 'Up' %}up{% else %}down{% endif %}">
-          {% if price_change >= 0 %}+{% endif %}${{ price_change }}
-          &nbsp;({% if price_change >= 0 %}+{% endif %}{{ change_pct }}%)
-        </div>
-        <div class="as-of">Predicted {{ horizon|lower }} close</div>
-      </div>
-    </div>
 
     <!-- Prediction cards -->
-    <div class="prediction-banner">
+    <div class="widget prediction-banner" style="padding:16px;">
       <div class="pred-card primary">
         <div class="pred-label">ML Prediction Signal</div>
         <div class="pred-value">${{ primary_pred }}</div>
