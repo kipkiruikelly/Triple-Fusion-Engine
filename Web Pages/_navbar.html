@@ -122,7 +122,7 @@
 
 {% set _bl_path = request.path.split('/')[1] %}
 {% set _bl_tab_map = {
-  'market': 'markets', 'screener': 'markets', 'calendar': 'markets', 'data-sources': 'markets',
+  'market': 'markets', 'macro': 'markets', 'screener': 'markets', 'calendar': 'markets', 'data-sources': 'markets',
   '': 'analysis', 'research': 'analysis', 'backtest': 'analysis', 'model-metrics': 'analysis',
     'track-record': 'analysis', 'methodology': 'analysis',
   'paper': 'portfolio', 'watchlist': 'portfolio', 'history': 'portfolio', 'performance': 'portfolio',
@@ -143,6 +143,7 @@
         <button class="bl-tab-btn" type="button">Markets <span class="bl-caret">&#9662;</span></button>
         <div class="bl-dropdown">
           <a href="/market">Market Overview</a>
+          <a href="/macro">Market Intelligence</a>
           <a href="/screener">Screener</a>
           <a href="/calendar">Economic Calendar</a>
           <a href="/data-sources">Data Sources</a>
