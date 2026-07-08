@@ -559,13 +559,22 @@ class MT5Trader:
             active_info = mt5.account_info()
             need_login = True
             if active_info is not None:
-                if active_info.login == account_num:
+                if active_info.login == account_num and not password:
                     need_login = False
 
             if need_login:
-                if not mt5.login(account_num, password=password, server=server):
+                login_ok = False
+                last_err = None
+                for attempt in range(3):
+                    if mt5.login(account_num, password=password, server=server):
+                        login_ok = True
+                        break
+                    last_err = mt5.last_error()
+                    time.sleep(1.5)
+
+                if not login_ok:
                     mt5.shutdown()
-                    return {"ok": False, "error": f"Login failed: {mt5.last_error()}"}
+                    return {"ok": False, "error": f"Login failed: {last_err or mt5.last_error()}"}
 
             info = mt5.account_info()
             if info is None:
