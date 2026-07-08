@@ -600,18 +600,25 @@ def _start_alert_thread(app, db):
                                         target=_send_alert_email, args=(user, alert, price),
                                         daemon=True
                                     ).start()
+                                    from utils import _send_whatsapp
+                                    whatsapp_to = os.environ.get("WHATSAPP_TO", "")
+                                    msg = (
+                                        f"🔔 *BullLogic Alert*\n"
+                                        f"*{alert.ticker}* hit *${price:.4f}*\n"
+                                        f"Condition: price {alert.direction} *${alert.price:.4f}*\n"
+                                        f"Note: {alert.note or '-'}"
+                                    )
                                     tg = TelegramConfig.query.filter_by(
                                         user_id=user.id, enabled=True).first()
                                     if tg:
-                                        msg = (
-                                            f"🔔 *BullLogic Alert*\n"
-                                            f"*{alert.ticker}* hit `${price:.4f}`\n"
-                                            f"Condition: price {alert.direction} `${alert.price:.4f}`\n"
-                                            f"Note: {alert.note or '-'}"
-                                        )
                                         threading.Thread(
                                             target=_send_telegram,
                                             args=(tg.chat_id, msg), daemon=True
+                                        ).start()
+                                    if whatsapp_to:
+                                        threading.Thread(
+                                            target=_send_whatsapp,
+                                            args=(whatsapp_to, msg), daemon=True
                                         ).start()
                         db.session.commit()
                 except Exception:

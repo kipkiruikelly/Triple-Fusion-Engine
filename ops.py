@@ -420,9 +420,11 @@ def _scan_watchlist_and_alert(app, db):
     """Scan watchlist items of all users for high-confidence predictions and send notifications."""
     from models import User, WatchlistItem, TelegramConfig
     from predictor import ml_signal
-    from utils import _send_telegram
+    from utils import _send_telegram, _send_whatsapp
+    import os
 
     now_ts = time.time()
+    whatsapp_to = os.environ.get("WHATSAPP_TO", "")
     with app.app_context():
         try:
             tg_configs = TelegramConfig.query.filter_by(enabled=True).all()
@@ -449,10 +451,12 @@ def _scan_watchlist_and_alert(app, db):
                                     f"Interval: *{interval}*\n"
                                     f"Signal: *{direction}*\n"
                                     f"Confidence: *{confidence:.1f}%*\n"
-                                    f"Current Price: `${price:.4f}`\n\n"
+                                    f"Current Price: *${price:.4f}*\n\n"
                                     f"⚡ Live trade this signal: http://localhost:5000/predict"
                                 )
                                 _send_telegram(config.chat_id, msg)
+                                if whatsapp_to:
+                                    _send_whatsapp(whatsapp_to, msg)
                                 _SENT_TELEGRAM_ALERTS[alert_key] = now_ts
                         except Exception as e:
                             log.warning(f"Failed to scan watchlist signal for {item.ticker} {interval}: {e}")

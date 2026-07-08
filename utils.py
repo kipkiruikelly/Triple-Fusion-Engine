@@ -252,6 +252,35 @@ def _send_telegram(chat_id: str, text: str):
         pass
 
 
+def _send_whatsapp(to_number: str, text: str):
+    sid = os.environ.get("TWILIO_ACCOUNT_SID", "")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    from_number = os.environ.get("TWILIO_WHATSAPP_FROM", "")
+    
+    if not sid or not token or not from_number or not to_number:
+        return
+        
+    # Standardize format
+    if not to_number.startswith("whatsapp:"):
+        to_number = f"whatsapp:{to_number}"
+    if not from_number.startswith("whatsapp:"):
+        from_number = f"whatsapp:{from_number}"
+        
+    import requests as _req
+    from requests.auth import HTTPBasicAuth as _BasicAuth
+    
+    url = f"https://api.twilio.org/2010-04-01/Accounts/{sid}/Messages.json"
+    payload = {
+        "From": from_number,
+        "To": to_number,
+        "Body": text
+    }
+    try:
+        _req.post(url, data=payload, auth=_BasicAuth(sid, token), timeout=8)
+    except Exception:
+        pass
+
+
 def _try_azure_download(ticker: str, interval: str = "1d"):
     from azure_storage import download_models_from_azure, azure_enabled
     BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
