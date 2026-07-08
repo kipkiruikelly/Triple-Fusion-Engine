@@ -198,6 +198,12 @@
     </div>
   </aside>
 
+  <script>
+    function toggleSidebarDropdown(header) {
+      header.parentElement.classList.toggle("open");
+    }
+  </script>
+
   <main class="content">
     <div class="page-title">Market Intelligence</div>
     <div class="page-subtitle">Interactive U.S. yield curves, global performance heatmaps, analyst estimates, and insider transactions</div>
@@ -602,10 +608,6 @@ function clearSearch() {
   document.getElementById("clearSearchBtn").style.display = "none";
   document.getElementById("ticker-insights").style.display = "none";
   document.getElementById("dashboard").style.display = "grid";
-}
-
-function toggleSidebarDropdown(header) {
-  header.parentElement.classList.toggle("open");
 }
 
 function loadTickerIntelligence(ticker) {

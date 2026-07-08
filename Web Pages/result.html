@@ -808,6 +808,12 @@
     </div>
   </aside>
 
+  <script>
+    function toggleSidebarDropdown(header) {
+      header.parentElement.classList.toggle("open");
+    }
+  </script>
+
   <!-- Content -->
   <main class="content">
     <div class="dashboard-grid">
@@ -2315,10 +2321,6 @@ async function confirmLiveTrade() {
     msg.textContent = 'Network error: ' + e.message;
     btn.disabled = false; btn.textContent = 'Place Order';
   }
-}
-
-function toggleSidebarDropdown(header) {
-  header.parentElement.classList.toggle("open");
 }
 </script>
 
