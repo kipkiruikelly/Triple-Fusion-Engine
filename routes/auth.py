@@ -213,7 +213,7 @@ def register_auth_routes(app):
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if current_user.is_authenticated:
-            return redirect(url_for('home'))
+            logout_user()
         error = None
         if request.method == "POST":
             from utils import rate_limited
@@ -241,7 +241,7 @@ def register_auth_routes(app):
     @app.route("/register", methods=["GET", "POST"])
     def register():
         if current_user.is_authenticated:
-            return redirect(url_for('home'))
+            logout_user()
         error = None
         try:
             from models import AppSetting

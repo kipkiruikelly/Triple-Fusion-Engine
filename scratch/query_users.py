@@ -11,4 +11,4 @@ with app.app_context():
     users = User.query.all()
     print("Found users:")
     for u in users:
-        print(f"ID: {u.id}, Username: {u.username}, Email: {u.email}, Role: {'PRO' if u.is_pro else 'FREE'}")
+        print(f"ID: {u.id}, Username: {u.username}, Session Token: {u.session_token}")
