@@ -598,10 +598,50 @@ class MT5Trader:
             self.equity_open = info.equity
             self.status_msg  = f"Connected (Live), {info.name} @ {info.server}"
             self._log("INFO", f"Connected to {info.server} as {info.name}")
+            self._save_connection_details(account_num, password, server, host, port)
             return {"ok": True, "account": self.account, "mode": "live"}
 
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def _save_connection_details(self, account_num, password, server, host, port):
+        try:
+            conn_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Data", "mt5_connection.json")
+            os.makedirs(os.path.dirname(conn_path), exist_ok=True)
+            data = {
+                "account": account_num,
+                "password": password,
+                "server": server,
+                "host": host,
+                "port": port
+            }
+            with open(conn_path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        except Exception as e:
+            self._log("ERROR", f"Failed to save connection details: {e}")
+
+    def _auto_connect_live(self) -> bool:
+        if self.connected:
+            return True
+        try:
+            conn_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "Data", "mt5_connection.json")
+            if not os.path.exists(conn_path):
+                return False
+            with open(conn_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            account  = int(data.get("account", 0))
+            password = data.get("password", "")
+            server   = data.get("server", "")
+            host     = data.get("host", "localhost")
+            port     = int(data.get("port", 18812))
+            
+            if account > 0:
+                self._log("INFO", f"Attempting auto-connect to live MT5 account {account}...")
+                res = self.connect(account, password, server, host, port)
+                return res.get("ok", False)
+        except Exception as e:
+            self._log("ERROR", f"Auto-connect error: {e}")
+        return False
 
     def disconnect(self):
         self.stop_trading()
@@ -1005,7 +1045,7 @@ class MT5Trader:
         lot = risk_amt / (sl_pct * price * 1000)
         return round(max(cfg["min_lot"], min(lot, cfg["max_lot"])), 2)
 
-    def place_order(self, symbol: str, action: str, risk_pct: float, atr: float) -> dict:
+    def place_order(self, symbol: str, action: str, risk_pct: float, atr: float, order_type_str: str = "MARKET", target_price: float = None) -> dict:
         cfg     = mt5_config.load()
         sl_dist = atr * cfg["sl_multiplier"]
         tp_dist = atr * cfg["tp_multiplier"]
@@ -1077,20 +1117,51 @@ class MT5Trader:
         if tick is None:
             return {"ok": False, "error": f"No tick data for {resolved_symbol}"}
 
-        if action == "BUY":
-            order_type = mt5.ORDER_TYPE_BUY
-            price      = tick.ask
-            sl         = round(price - sl_dist, 5)
-            tp         = round(price + tp_dist, 5)
+        order_type_str = (order_type_str or "MARKET").upper()
+        if order_type_str == "MARKET":
+            trade_action = mt5.TRADE_ACTION_DEAL
+            if action == "BUY":
+                order_type = mt5.ORDER_TYPE_BUY
+                price      = tick.ask
+                sl         = round(price - sl_dist, 5)
+                tp         = round(price + tp_dist, 5)
+            else:
+                order_type = mt5.ORDER_TYPE_SELL
+                price      = tick.bid
+                sl         = round(price + sl_dist, 5)
+                tp         = round(price - tp_dist, 5)
         else:
-            order_type = mt5.ORDER_TYPE_SELL
-            price      = tick.bid
-            sl         = round(price + sl_dist, 5)
-            tp         = round(price - tp_dist, 5)
+            trade_action = mt5.TRADE_ACTION_PENDING
+            if target_price is None or target_price <= 0:
+                target_price = tick.ask if action == "BUY" else tick.bid
+            price = round(target_price, 5)
+
+            if order_type_str == "LIMIT":
+                if action == "BUY":
+                    order_type = mt5.ORDER_TYPE_BUY_LIMIT
+                    sl         = round(price - sl_dist, 5)
+                    tp         = round(price + tp_dist, 5)
+                else:
+                    order_type = mt5.ORDER_TYPE_SELL_LIMIT
+                    sl         = round(price + sl_dist, 5)
+                    tp         = round(price - tp_dist, 5)
+            elif order_type_str == "STOP":
+                if action == "BUY":
+                    order_type = mt5.ORDER_TYPE_BUY_STOP
+                    sl         = round(price - sl_dist, 5)
+                    tp         = round(price + tp_dist, 5)
+                else:
+                    order_type = mt5.ORDER_TYPE_SELL_STOP
+                    sl         = round(price + sl_dist, 5)
+                    tp         = round(price - tp_dist, 5)
+            else:
+                return {"ok": False, "error": f"Invalid order type: {order_type_str}"}
 
         lot = self._calc_lot(risk_pct, sl_dist, price)
+        filling_type = mt5.ORDER_FILLING_IOC if trade_action == mt5.TRADE_ACTION_DEAL else mt5.ORDER_FILLING_RETURN
+
         request = {
-            "action"       : mt5.TRADE_ACTION_DEAL,
+            "action"       : trade_action,
             "symbol"       : resolved_symbol,
             "volume"       : lot,
             "type"         : order_type,
@@ -1101,7 +1172,7 @@ class MT5Trader:
             "magic"        : 20250622,
             "comment"      : "BullLogic algo",
             "type_time"    : mt5.ORDER_TIME_GTC,
-            "type_filling" : mt5.ORDER_FILLING_IOC,
+            "type_filling" : filling_type,
         }
         result = mt5.order_send(request)
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:

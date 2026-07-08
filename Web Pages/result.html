@@ -860,6 +860,9 @@
       <button onclick="openPaperTradeModal()" style="background:var(--green);border:none;border-radius:6px;color:#fff;font-size:9.5pt;font-weight:700;padding:8px 18px;cursor:pointer;display:flex;align-items:center;gap:6px;">
         &#9654; Paper Trade This Signal
       </button>
+      <button onclick="openLiveTradeModal()" style="background:var(--accent);border:none;border-radius:6px;color:#fff;font-size:9.5pt;font-weight:700;padding:8px 18px;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        &#9889; Live Trade This Signal
+      </button>
       <a href="/research/{{ ticker }}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);text-decoration:none;font-size:9.5pt;font-weight:600;padding:8px 16px;display:flex;align-items:center;gap:6px;">
         &#128202; Deep Research
       </a>
@@ -904,6 +907,48 @@
           <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
             <button onclick="document.getElementById('ptModal').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:9.5pt;padding:7px 16px;cursor:pointer;">Cancel</button>
             <button onclick="submitPaperTrade()" style="background:var(--green);border:none;border-radius:5px;color:#fff;font-size:9.5pt;font-weight:700;padding:7px 20px;cursor:pointer;">Log Trade</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Trade Modal -->
+    <div id="ltModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:999;align-items:center;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:340px;max-width:90vw;">
+        <h3 style="font-size:12pt;font-weight:700;color:var(--white);margin-bottom:4px;">Live Trade This Signal</h3>
+        <p style="font-size:9pt;color:var(--muted);margin-bottom:20px;">Sends a real trade order directly to MetaTrader 5.</p>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:8.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px;">Ticker</label>
+            <input id="lt-ticker" value="{{ ticker }}" readonly style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;font-weight:700;">
+          </div>
+          <div>
+            <label style="font-size:8.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px;">Action</label>
+            <select id="lt-action" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;">
+              <option value="BUY" {% if direction=='Up' %}selected{% endif %}>BUY</option>
+              <option value="SELL" {% if direction=='Down' %}selected{% endif %}>SELL</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:8.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px;">Order Type</label>
+            <select id="lt-order-type" onchange="toggleLtPriceInput()" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;">
+              <option value="MARKET" selected>Market Order</option>
+              <option value="LIMIT">Limit Order</option>
+              <option value="STOP">Stop Order</option>
+            </select>
+          </div>
+          <div id="lt-price-group" style="display:none;">
+            <label style="font-size:8.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px;">Trigger Price ($)</label>
+            <input id="lt-price" type="number" value="{{ current_price }}" step="0.0001" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;">
+          </div>
+          <div>
+            <label style="font-size:8.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:5px;">Risk Percentage (%)</label>
+            <input id="lt-risk" type="number" value="1.0" min="0.1" max="10.0" step="0.1" style="background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:10pt;padding:7px 10px;font-family:inherit;width:100%;">
+          </div>
+          <div id="lt-msg" style="font-size:9pt;color:var(--green);display:none;white-space:pre-wrap;"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px;">
+            <button onclick="document.getElementById('ltModal').style.display='none'" style="background:none;border:1px solid var(--border);border-radius:5px;color:var(--muted);font-size:9.5pt;padding:7px 16px;cursor:pointer;">Cancel</button>
+            <button onclick="confirmLiveTrade()" style="background:var(--accent);border:none;border-radius:5px;color:#fff;font-size:9.5pt;font-weight:700;padding:7px 20px;cursor:pointer;">Place Order</button>
           </div>
         </div>
       </div>
@@ -2166,6 +2211,77 @@ async function submitPaperTrade() {
     msg.style.display='block'; msg.style.color='var(--red)';
     msg.textContent = 'Network error.';
     btn.disabled = false; btn.textContent = 'Log Trade';
+  }
+// ── Live Trade Modal ──────────────────────────────────────────────────────────
+function openLiveTradeModal() {
+  document.getElementById('ltModal').style.display = 'flex';
+  document.getElementById('lt-msg').style.display  = 'none';
+}
+
+function toggleLtPriceInput() {
+  const type = document.getElementById('lt-order-type').value;
+  document.getElementById('lt-price-group').style.display = (type === 'MARKET') ? 'none' : 'block';
+}
+
+async function confirmLiveTrade() {
+  const ticker = document.getElementById('lt-ticker').value;
+  const action = document.getElementById('lt-action').value;
+  const type = document.getElementById('lt-order-type').value;
+  const priceVal = document.getElementById('lt-price').value;
+  const risk = document.getElementById('lt-risk').value;
+
+  let detailMsg = `Confirm Live Order:\n\n` +
+                 `Symbol: ${ticker}\n` +
+                 `Action: ${action}\n` +
+                 `Type: ${type}\n`;
+  if (type !== 'MARKET') {
+    detailMsg += `Trigger Price: $${priceVal}\n`;
+  }
+  detailMsg += `Risk: ${risk}%\n\n` +
+               `This will execute a real trade using your MT5 connection. Proceed?`;
+
+  if (!confirm(detailMsg)) {
+    return;
+  }
+
+  const btn = event.target;
+  const msg = document.getElementById('lt-msg');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  msg.style.display = 'block';
+  msg.style.color = 'var(--muted)';
+  msg.textContent = 'Launching MT5 & routing order...';
+
+  try {
+    const res = await fetch('/api/trade/order', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        ticker: ticker,
+        action: action,
+        risk_pct: parseFloat(risk),
+        atr: D.atr || 0.0,
+        order_type: type,
+        target_price: type === 'MARKET' ? null : parseFloat(priceVal)
+      })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = `✓ Order sent! Ticket: #${d.trade.ticket || d.trade.orderId}`;
+      btn.textContent = '✓ Sent';
+      setTimeout(() => document.getElementById('ltModal').style.display='none', 2000);
+      if (typeof refreshTradeStatus === 'function') {
+        refreshTradeStatus();
+      }
+    } else {
+      msg.style.color = 'var(--red)';
+      msg.textContent = d.error || 'Order rejected.';
+      btn.disabled = false; btn.textContent = 'Place Order';
+    }
+  } catch(e) {
+    msg.style.color = 'var(--red)';
+    msg.textContent = 'Network error: ' + e.message;
+    btn.disabled = false; btn.textContent = 'Place Order';
   }
 }
 

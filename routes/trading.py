@@ -109,6 +109,8 @@ def register_trading_routes(app):
     def trade_status():
         if not current_user.is_pro:
             return jsonify({"ok": False, "connected": False}), 403
+        if not mt5_trader.connected:
+            mt5_trader._auto_connect_live()
         s = mt5_trader.get_status()
         return jsonify({
             "ok":        True,
@@ -124,19 +126,29 @@ def register_trading_routes(app):
         if not current_user.is_pro:
             return jsonify({"ok": False, "error": "Pro required"}), 403
         if not mt5_trader.connected:
+            mt5_trader._auto_connect_live()
+        if not mt5_trader.connected:
             return jsonify({"ok": False,
-                            "error": "Not connected, use Connect Paper Account first"}), 400
+                            "error": "Not connected to MT5. Please check configuration."}), 400
         data     = request.get_json() or {}
         ticker   = data.get("ticker", "").upper()
         action   = data.get("action", "").upper()
         risk_pct = float(data.get("risk_pct", 1.0))
         atr      = float(data.get("atr", 0))
+        order_type = data.get("order_type", "MARKET").upper()
+        target_price = data.get("target_price")
+        if target_price is not None:
+            try:
+                target_price = float(target_price)
+            except ValueError:
+                target_price = None
+
         if action not in ("BUY", "SELL"):
             return jsonify({"ok": False, "error": "action must be BUY or SELL"}), 400
         if not ticker:
             return jsonify({"ok": False, "error": "ticker required"}), 400
         try:
-            result = mt5_trader.place_order(ticker, action, risk_pct, atr)
+            result = mt5_trader.place_order(ticker, action, risk_pct, atr, order_type_str=order_type, target_price=target_price)
             if result.get("ok"):
                 mt5_trader.refresh_account()
             return jsonify(result)
