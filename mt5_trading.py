@@ -599,6 +599,7 @@ class MT5Trader:
             self.status_msg  = f"Connected (Live), {info.name} @ {info.server}"
             self._log("INFO", f"Connected to {info.server} as {info.name}")
             self._save_connection_details(account_num, password, server, host, port)
+            self._start_trailing_stop_thread()
             return {"ok": True, "account": self.account, "mode": "live"}
 
         except Exception as e:
@@ -645,6 +646,8 @@ class MT5Trader:
 
     def disconnect(self):
         self.stop_trading()
+        with self._lock:
+            self._trailing_stop_active = False
         if self.connected:
             if self._mt5_instance:
                 try:
@@ -1364,6 +1367,103 @@ class MT5Trader:
         with self._lock:
             self.trade_log.appendleft(entry)
         log.info(f"[{level}] {msg}")
+
+    def _get_dynamic_atr(self, symbol: str) -> float:
+        mt5 = self._mt5_instance
+        if not mt5:
+            return 0.0
+        try:
+            resolved_symbol = self._resolve_broker_symbol(symbol)
+            bars = mt5.copy_rates_from_pos(resolved_symbol, mt5.TIMEFRAME_H1, 0, 20)
+            if bars is None or len(bars) < 14:
+                return 0.0
+            
+            tr_list = []
+            for i in range(1, len(bars)):
+                high = bars[i]['high']
+                low = bars[i]['low']
+                prev_close = bars[i-1]['close']
+                tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+                tr_list.append(tr)
+            return sum(tr_list[-14:]) / 14
+        except Exception as e:
+            log.warning(f"Failed to calculate dynamic ATR for {symbol}: {e}")
+            return 0.0
+
+    def _start_trailing_stop_thread(self):
+        with self._lock:
+            if hasattr(self, "_trailing_stop_active") and self._trailing_stop_active:
+                return
+            self._trailing_stop_active = True
+            
+        t = threading.Thread(target=self._trailing_stop_loop, daemon=True, name="mt5-trailing-stop")
+        t.start()
+
+    def _trailing_stop_loop(self):
+        self._log("INFO", "Trailing stop loop active")
+        while True:
+            with self._lock:
+                if not self.connected or not getattr(self, "_trailing_stop_active", False):
+                    self._trailing_stop_active = False
+                    break
+            
+            if self._mt5_instance and self.connected and not self.is_paper and not self.is_metaapi:
+                try:
+                    mt5 = self._mt5_instance
+                    positions = mt5.positions_get()
+                    if positions:
+                        cfg = mt5_config.load()
+                        sl_mult = cfg.get("sl_multiplier", 1.5)
+                        for pos in positions:
+                            symbol = pos.symbol
+                            ticket = pos.ticket
+                            pos_type = pos.type # 0 = Buy, 1 = Sell
+                            current_sl = pos.sl
+                            current_tp = pos.tp
+                            
+                            atr = self._get_dynamic_atr(symbol)
+                            if atr <= 0:
+                                continue
+                            
+                            trail_dist = atr * sl_mult
+                            tick = mt5.symbol_info_tick(symbol)
+                            if not tick:
+                                continue
+                                
+                            if pos_type == 0: # BUY
+                                current_price = tick.bid
+                                target_sl = round(current_price - trail_dist, 5)
+                                min_move = trail_dist * 0.1
+                                if target_sl > current_sl + min_move:
+                                    request = {
+                                        "action": mt5.TRADE_ACTION_SLTP,
+                                        "position": ticket,
+                                        "symbol": symbol,
+                                        "sl": target_sl,
+                                        "tp": current_tp
+                                    }
+                                    res = mt5.order_send(request)
+                                    if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                                        self._log("TRADE", f"Trailing SL modified for Buy #{ticket} ({symbol}): {current_sl:.5f} -> {target_sl:.5f}")
+                            elif pos_type == 1: # SELL
+                                current_price = tick.ask
+                                target_sl = round(current_price + trail_dist, 5)
+                                min_move = trail_dist * 0.1
+                                if current_sl == 0 or target_sl < current_sl - min_move:
+                                    request = {
+                                        "action": mt5.TRADE_ACTION_SLTP,
+                                        "position": ticket,
+                                        "symbol": symbol,
+                                        "sl": target_sl,
+                                        "tp": current_tp
+                                    }
+                                    res = mt5.order_send(request)
+                                    if res and res.retcode == mt5.TRADE_RETCODE_DONE:
+                                        self._log("TRADE", f"Trailing SL modified for Sell #{ticket} ({symbol}): {current_sl:.5f} -> {target_sl:.5f}")
+                except Exception as e:
+                    log.warning(f"Trailing stop error: {e}")
+            
+            time.sleep(15)
 
     def get_status(self) -> dict:
         self.refresh_account()

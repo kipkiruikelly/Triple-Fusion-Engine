@@ -394,6 +394,11 @@ def start_ops_thread(app, db):
                 except Exception:
                     db.session.rollback()
                     log.exception("paper trading cycle failed")
+                try:
+                    _scan_watchlist_and_alert(app, db)
+                except Exception:
+                    db.session.rollback()
+                    log.exception("watchlist alert scan failed")
                 if time.time() - state["last_accuracy"] > 6 * 3600:
                     try:
                         r, u = resolve_pending(db)
@@ -407,3 +412,49 @@ def start_ops_thread(app, db):
             time.sleep(900)
 
     threading.Thread(target=_loop, daemon=True, name="ops").start()
+
+
+_SENT_TELEGRAM_ALERTS = {}
+
+def _scan_watchlist_and_alert(app, db):
+    """Scan watchlist items of all users for high-confidence predictions and send notifications."""
+    from models import User, WatchlistItem, TelegramConfig
+    from predictor import ml_signal
+    from utils import _send_telegram
+
+    now_ts = time.time()
+    with app.app_context():
+        try:
+            tg_configs = TelegramConfig.query.filter_by(enabled=True).all()
+            for config in tg_configs:
+                user = db.session.get(User, config.user_id)
+                if not user:
+                    continue
+                items = WatchlistItem.query.filter_by(user_id=user.id).all()
+                for item in items:
+                    for interval in ["15m", "1h", "1d"]:
+                        try:
+                            sig = ml_signal(item.ticker, interval)
+                            direction = sig.get("action", "HOLD")
+                            confidence = sig.get("confidence", 0.0)
+                            if direction in ("BUY", "SELL") and confidence >= 75.0:
+                                alert_key = (user.id, item.ticker, interval, direction)
+                                last_sent = _SENT_TELEGRAM_ALERTS.get(alert_key, 0)
+                                if now_ts - last_sent < 12 * 3600:
+                                    continue
+                                price = sig.get("current_price", 0.0)
+                                msg = (
+                                    f"🎯 *BullLogic Watchlist Signal*\n"
+                                    f"Ticker: *{item.ticker}*\n"
+                                    f"Interval: *{interval}*\n"
+                                    f"Signal: *{direction}*\n"
+                                    f"Confidence: *{confidence:.1f}%*\n"
+                                    f"Current Price: `${price:.4f}`\n\n"
+                                    f"⚡ Live trade this signal: http://localhost:5000/predict"
+                                )
+                                _send_telegram(config.chat_id, msg)
+                                _SENT_TELEGRAM_ALERTS[alert_key] = now_ts
+                        except Exception as e:
+                            log.warning(f"Failed to scan watchlist signal for {item.ticker} {interval}: {e}")
+        except Exception as e:
+            log.exception(f"Error in watchlist alerts scan: {e}")
