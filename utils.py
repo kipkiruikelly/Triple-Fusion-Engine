@@ -269,7 +269,7 @@ def _send_whatsapp(to_number: str, text: str):
     import requests as _req
     from requests.auth import HTTPBasicAuth as _BasicAuth
     
-    url = f"https://api.twilio.org/2010-04-01/Accounts/{sid}/Messages.json"
+    url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
     payload = {
         "From": from_number,
         "To": to_number,
