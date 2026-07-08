@@ -494,6 +494,10 @@ def _run_migrations(db):
         ("user",                "theme_preference", "VARCHAR(10) DEFAULT 'system'"),
         ("user",                "ban_reason",       "VARCHAR(200)"),
         ("payment",             "notes",            "VARCHAR(300)"),
+        ("user",                "ai_analyses_today", "INTEGER DEFAULT 0"),
+        ("user",                "last_ai_analysis_date", "DATE"),
+        ("user",                "backtests_today",   "INTEGER DEFAULT 0"),
+        ("user",                "last_backtest_date", "DATE"),
     ]
     with engine.connect() as conn:
         for table, column, coltype in migrations:

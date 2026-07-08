@@ -38,6 +38,10 @@ class User(UserMixin, db.Model):
     alerts_enabled          = db.Column(db.Boolean, default=True)
     pro_expires_at          = db.Column(db.Date, nullable=True)
     theme_preference        = db.Column(db.String(10), default='system')  # light|dark|system
+    ai_analyses_today       = db.Column(db.Integer, default=0)
+    last_ai_analysis_date   = db.Column(db.Date, nullable=True)
+    backtests_today         = db.Column(db.Integer, default=0)
+    last_backtest_date      = db.Column(db.Date, nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

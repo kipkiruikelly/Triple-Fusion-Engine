@@ -25,6 +25,72 @@ SCREENER_TICKERS = [
 
 PRO_TICKERS = ["QQQ", "AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "META", "AMZN", "NDX", "DIA"]
 
+# ── Tier gating (see TIER_MATRIX.md) ─────────────────────────────────────────
+# PRO_TICKERS above is an unrelated concept (the 10 tickers with the full
+# LR+RF+XGB "Pro Models" ensemble, available to every user) - don't confuse
+# it with subscription-tier asset gating below.
+
+FREE_TIMEFRAMES = {"1D", "1W"}
+
+# Built from predictor.YF_SYMBOL_MAP's own crypto/forex/commodity groupings
+# rather than finnhub_service.symbol_for_finnhub(), which classifies anything
+# it can't map as "stock" (including commodities) - fine for routing a quote
+# request, wrong for deciding what's Pro-only here.
+CRYPTO_TICKERS = {
+    "BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "AVAX", "DOGE",
+    "DOT", "LINK", "LTC", "MATIC", "SHIB", "UNI", "ATOM",
+}
+FOREX_TICKERS = {
+    "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD",
+    "EURGBP", "EURJPY", "GBPJPY", "USDMXN", "USDZAR", "XAUUSD", "XAGUSD",
+}
+COMMODITY_TICKERS = {
+    "GOLD", "SILVER", "OIL", "BRENT", "NATGAS", "COPPER", "PLATINUM",
+    "PALLADIUM", "WHEAT", "CORN", "SOYBEAN", "COTTON", "SUGAR", "COCOA", "COFFEE",
+}
+# Equities, ETFs, and indices stay free - only these three classes are
+# Pro-only per TIER_MATRIX.md ("Free: Equities, ETFs / Pro: + crypto, forex,
+# commodities"). Indices aren't named in the Pro-exclusive list, so they
+# stay in the free bucket alongside equities/ETFs.
+PRO_ONLY_ASSETS = CRYPTO_TICKERS | FOREX_TICKERS | COMMODITY_TICKERS
+
+FREE_WATCHLIST_LIMIT   = 10
+FREE_ALERTS_LIMIT      = 3
+FREE_AI_ANALYSIS_DAILY = 1
+FREE_JOURNAL_VISIBLE   = 10
+FREE_BACKTEST_DAILY    = 1
+# /api/backtest already hard-validates period against {6mo, 1y, 2y} for
+# everyone - "5yr Pro history" isn't achievable without new work, so Pro
+# keeps the existing max (2y) and only the daily-run cap changes for Free.
+FREE_BACKTEST_PERIODS  = {"6mo", "1y"}
+
+
+def check_timeframe_access(interval, user):
+    """403 payload matches the upgrade_required shape blHandleUpgrade() in
+    _navbar.html expects. Returns (allowed, error_payload_or_None)."""
+    if user.is_pro:
+        return True, None
+    if (interval or "").upper() not in FREE_TIMEFRAMES:
+        return False, {
+            "ok": False, "error": "upgrade_required", "feature": "timeframe",
+            "message": f"{interval} charts are a Pro feature. Free accounts get Daily and Weekly views.",
+            "cta": "/pricing",
+        }
+    return True, None
+
+
+def check_asset_access(ticker, user):
+    if user.is_pro:
+        return True, None
+    if (ticker or "").upper() in PRO_ONLY_ASSETS:
+        return False, {
+            "ok": False, "error": "upgrade_required", "feature": "asset_class",
+            "message": f"{ticker.upper()} is a Pro-only asset. Crypto, forex, and commodities require a Pro plan.",
+            "cta": "/pricing",
+        }
+    return True, None
+
+
 CALENDAR_TICKERS = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
     "NFLX", "AMD", "V", "JPM", "ADBE", "CRM",

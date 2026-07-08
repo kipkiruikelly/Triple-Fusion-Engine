@@ -39,21 +39,45 @@ except Exception:
     _build_features = None
     _ML_AVAILABLE = False
 
+import sys
+
 # Try live MT5 bridge; fall back to paper mode
-try:
-    from mt5linux import MetaTrader5 as _MT5
-    MT5_BACKEND = "mt5linux"
-except ImportError:
+if sys.platform == "win32":
     try:
         import MetaTrader5 as _MT5
         MT5_BACKEND = "native"
     except ImportError:
-        _MT5 = None
-        MT5_BACKEND = "paper"
+        try:
+            from mt5linux import MetaTrader5 as _MT5
+            MT5_BACKEND = "mt5linux"
+        except ImportError:
+            _MT5 = None
+            MT5_BACKEND = "paper"
+else:
+    try:
+        from mt5linux import MetaTrader5 as _MT5
+        MT5_BACKEND = "mt5linux"
+    except ImportError:
+        try:
+            import MetaTrader5 as _MT5
+            MT5_BACKEND = "native"
+        except ImportError:
+            _MT5 = None
+            MT5_BACKEND = "paper"
 
 # MetaApi timeframe mapping (MT5 name → MetaApi name)
 _METAAPI_TF = {"M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m",
                "H1": "1h", "H4": "4h", "D1": "1d"}
+
+# Platform Ticker -> list of possible broker-specific MT5 symbols
+_SYMBOL_SYNONYMS = {
+    "NDX": ["NAS100", "US100", "USTEC", "US Tech 100"],
+    "SPX": ["US500", "SPX500", "USA500", "US 500"],
+    "DJI": ["US30", "WallStreet", "US30Cash", "DowJones"],
+    "GOLD": ["XAUUSD", "GOLD.cx"],
+    "SILVER": ["XAGUSD", "SILVER.cx"],
+    "OIL": ["WTI", "USOUSD", "USOil", "CrudeOil"],
+}
 
 _LIVE_DISABLED_MSG = (
     "Live trading is disabled on this server. Paper mode (account=0) is "
@@ -519,12 +543,29 @@ class MT5Trader:
         try:
             mt5 = self.mt5(host=host, port=port) if self.backend == "mt5linux" else self.mt5
 
-            if not mt5.initialize():
+            init_kwargs = {}
+            if self.backend == "native" and sys.platform == "win32":
+                env_path = os.environ.get("MT5_PATH")
+                if env_path and os.path.exists(env_path):
+                    init_kwargs["path"] = env_path
+                else:
+                    default_path = r"C:\Program Files\MetaTrader 5\terminal64.exe"
+                    if os.path.exists(default_path):
+                        init_kwargs["path"] = default_path
+
+            if not mt5.initialize(**init_kwargs):
                 return {"ok": False, "error": f"MT5 initialize() failed: {mt5.last_error()}"}
 
-            if not mt5.login(account_num, password=password, server=server):
-                mt5.shutdown()
-                return {"ok": False, "error": f"Login failed: {mt5.last_error()}"}
+            active_info = mt5.account_info()
+            need_login = True
+            if active_info is not None:
+                if active_info.login == account_num:
+                    need_login = False
+
+            if need_login:
+                if not mt5.login(account_num, password=password, server=server):
+                    mt5.shutdown()
+                    return {"ok": False, "error": f"Login failed: {mt5.last_error()}"}
 
             info = mt5.account_info()
             if info is None:
@@ -572,6 +613,30 @@ class MT5Trader:
         self._mapi         = None
         self.status_msg    = "Disconnected"
         self._log("INFO", "Disconnected")
+
+    def _resolve_broker_symbol(self, symbol: str) -> str:
+        """Translate platform symbol to the broker's specific symbol name in MT5."""
+        if not self._mt5_instance:
+            return symbol
+        symbol_upper = symbol.upper()
+        try:
+            info = self._mt5_instance.symbol_info(symbol_upper)
+            if info is not None:
+                self._mt5_instance.symbol_select(symbol_upper, True)
+                return symbol_upper
+        except Exception:
+            pass
+        synonyms = _SYMBOL_SYNONYMS.get(symbol_upper, [])
+        for syn in synonyms:
+            try:
+                info = self._mt5_instance.symbol_info(syn)
+                if info is not None:
+                    self._mt5_instance.symbol_select(syn, True)
+                    self._log("INFO", f"Resolved platform symbol '{symbol}' to broker symbol '{syn}'")
+                    return syn
+            except Exception:
+                pass
+        return symbol_upper
 
     def refresh_account(self):
         if not self.connected:
@@ -876,7 +941,8 @@ class MT5Trader:
 
     def get_bars_live(self, symbol: str, timeframe, n: int = 100) -> pd.DataFrame | None:
         try:
-            rates = self._mt5_instance.copy_rates_from_pos(symbol, timeframe, 0, n)
+            resolved_symbol = self._resolve_broker_symbol(symbol)
+            rates = self._mt5_instance.copy_rates_from_pos(resolved_symbol, timeframe, 0, n)
             if rates is None or len(rates) == 0:
                 return None
             df = pd.DataFrame(rates)
@@ -897,7 +963,8 @@ class MT5Trader:
             except Exception:
                 return 0
         try:
-            positions = self._mt5_instance.positions_get(symbol=symbol)
+            resolved_symbol = self._resolve_broker_symbol(symbol)
+            positions = self._mt5_instance.positions_get(symbol=resolved_symbol)
             return len(positions) if positions else 0
         except Exception:
             return 0
@@ -912,7 +979,8 @@ class MT5Trader:
             except Exception:
                 return []
         try:
-            positions = self._mt5_instance.positions_get(symbol=symbol)
+            resolved_symbol = self._resolve_broker_symbol(symbol)
+            positions = self._mt5_instance.positions_get(symbol=resolved_symbol)
             return list(positions) if positions else []
         except Exception:
             return []
@@ -995,9 +1063,10 @@ class MT5Trader:
 
         # Direct MT5 live order
         mt5  = self._mt5_instance
-        tick = mt5.symbol_info_tick(symbol)
+        resolved_symbol = self._resolve_broker_symbol(symbol)
+        tick = mt5.symbol_info_tick(resolved_symbol)
         if tick is None:
-            return {"ok": False, "error": "No tick data"}
+            return {"ok": False, "error": f"No tick data for {resolved_symbol}"}
 
         if action == "BUY":
             order_type = mt5.ORDER_TYPE_BUY
@@ -1013,7 +1082,7 @@ class MT5Trader:
         lot = self._calc_lot(risk_pct, sl_dist, price)
         request = {
             "action"       : mt5.TRADE_ACTION_DEAL,
-            "symbol"       : symbol,
+            "symbol"       : resolved_symbol,
             "volume"       : lot,
             "type"         : order_type,
             "price"        : price,
@@ -1056,17 +1125,18 @@ class MT5Trader:
                 self._log("ERROR", f"close_all: {e}")
                 return 0
         mt5       = self._mt5_instance
-        positions = mt5.positions_get(symbol=symbol) or []
+        resolved_symbol = self._resolve_broker_symbol(symbol)
+        positions = mt5.positions_get(symbol=resolved_symbol) or []
         closed    = 0
         for pos in positions:
-            tick = mt5.symbol_info_tick(symbol)
+            tick = mt5.symbol_info_tick(resolved_symbol)
             if tick is None:
                 continue
             close_type = mt5.ORDER_TYPE_SELL if pos.type == mt5.ORDER_TYPE_BUY else mt5.ORDER_TYPE_BUY
             price      = tick.bid if close_type == mt5.ORDER_TYPE_SELL else tick.ask
             req = {
                 "action"       : mt5.TRADE_ACTION_DEAL,
-                "symbol"       : symbol,
+                "symbol"       : resolved_symbol,
                 "volume"       : pos.volume,
                 "type"         : close_type,
                 "position"     : pos.ticket,

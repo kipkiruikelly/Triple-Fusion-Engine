@@ -28,6 +28,12 @@ from tests.mock_data import sample_account, sample_ohlcv
 # ── Fixtures ──────────────────────────────────────────────────────────────────────
 
 
+@pytest.fixture(autouse=True)
+def mock_sleep(monkeypatch):
+    """Disable time.sleep for all tests in this module to speed up execution."""
+    monkeypatch.setattr("time.sleep", lambda secs: None)
+
+
 @pytest.fixture
 def ohlcv_df() -> pd.DataFrame:
     """Return a reproducible 200-bar OHLCV DataFrame with a Volume column."""
