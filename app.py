@@ -330,6 +330,15 @@ def create_app():
                     s["errors"] += 1
         except Exception:
             pass
+
+        # Browser Cache-Control configuration
+        from flask import request
+        if request.path.startswith("/static/") or request.path == "/sw.js":
+            response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
+        elif request.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+
         return response
 
     # ── Error logging to DB ───────────────────────────────────────────────────

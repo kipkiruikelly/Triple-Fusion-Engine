@@ -30,7 +30,9 @@ def register_prediction_routes(app, metrics):
     @app.route("/", methods=["GET"])
     def home():
         if current_user.is_authenticated:
-            return render_template("index.html")
+            last_ticker = request.cookies.get("bl-last-ticker", "")
+            last_interval = request.cookies.get("bl-last-interval", "1d")
+            return render_template("index.html", ticker=last_ticker, interval=last_interval)
         return render_template("landing.html")
 
     @app.route("/predict", methods=["POST"])
@@ -94,7 +96,11 @@ def register_prediction_routes(app, metrics):
                 result["track_record"] = ticker_stats(db, ticker, interval)
             except Exception:
                 result["track_record"] = None
-            return render_template("result.html", **result)
+            from flask import make_response
+            resp = make_response(render_template("result.html", **result))
+            resp.set_cookie("bl-last-ticker", ticker, max_age=30*24*60*60, samesite="Lax")
+            resp.set_cookie("bl-last-interval", interval, max_age=30*24*60*60, samesite="Lax")
+            return resp
         except ValueError as e:
             refund_quota(current_user)
             return render_template("index.html", error=str(e), interval=interval)

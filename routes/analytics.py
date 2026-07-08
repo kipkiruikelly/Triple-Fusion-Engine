@@ -17,6 +17,24 @@ from utils import (SCREENER_TICKERS, CALENDAR_TICKERS, _POSITIVE_WORDS, _NEGATIV
 # Quotes go through market_data, one shared cache and rate-limit circuit
 # breaker for the whole app.
 from market_data import get_quote as _cached_quote
+import threading
+
+_ANALYTICS_CACHE = {}
+_ANALYTICS_LOCK = threading.Lock()
+
+def _get_cached_api(key):
+    now = time.time()
+    with _ANALYTICS_LOCK:
+        if key in _ANALYTICS_CACHE:
+            exp, val = _ANALYTICS_CACHE[key]
+            if now < exp:
+                return val
+    return None
+
+def _set_cached_api(key, val, ttl=1800):
+    now = time.time()
+    with _ANALYTICS_LOCK:
+        _ANALYTICS_CACHE[key] = (now + ttl, val)
 
 
 def register_analytics_routes(app):
@@ -333,6 +351,10 @@ def register_analytics_routes(app):
     @app.route("/api/sentiment/<ticker>")
     @login_required
     def api_sentiment(ticker):
+        cache_key = f"sentiment:{ticker.upper()}"
+        cached = _get_cached_api(cache_key)
+        if cached:
+            return jsonify(cached)
         try:
             import yfinance as yf
             news = yf.Ticker(ticker.upper()).news or []
@@ -351,10 +373,12 @@ def register_analytics_routes(app):
             elif avg > 0.0:   label, color = "Slightly Bullish", "#B9F6CA"
             elif avg > -0.25: label, color = "Slightly Bearish", "#FFAB91"
             else:             label, color = "Bearish",          "#FF5252"
-            return jsonify({"ok": True, "ticker": ticker.upper(),
-                            "score": avg, "label": label, "color": color,
-                            "article_count": len(news), "analyzed": len(scores),
-                            "headlines": headlines[:8]})
+            res = {"ok": True, "ticker": ticker.upper(),
+                   "score": avg, "label": label, "color": color,
+                   "article_count": len(news), "analyzed": len(scores),
+                   "headlines": headlines[:8]}
+            _set_cached_api(cache_key, res, ttl=1800)
+            return jsonify(res)
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -391,6 +415,10 @@ def register_analytics_routes(app):
     @app.route("/api/short-interest/<ticker>")
     @login_required
     def api_short_interest(ticker):
+        cache_key = f"short-interest:{ticker.upper()}"
+        cached = _get_cached_api(cache_key)
+        if cached:
+            return jsonify(cached)
         try:
             import yfinance as yf
             t    = yf.Ticker(ticker.upper())
@@ -407,7 +435,7 @@ def register_analytics_routes(app):
                         })
             except Exception:
                 pass
-            return jsonify({
+            res = {
                 "ok": True, "ticker": ticker.upper(),
                 "short_pct":            round(float((info.get("shortPercentOfFloat") or 0) * 100), 2),
                 "short_ratio":          round(float(info.get("shortRatio") or 0), 2),
@@ -415,7 +443,9 @@ def register_analytics_routes(app):
                 "institutional_pct":    round(float((info.get("heldPercentInstitutions") or 0) * 100), 1),
                 "insider_pct":          round(float((info.get("heldPercentInsiders") or 0) * 100), 1),
                 "top_holders":          holders,
-            })
+            }
+            _set_cached_api(cache_key, res, ttl=3600)
+            return jsonify(res)
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
@@ -522,10 +552,14 @@ def register_analytics_routes(app):
     @app.route("/api/analyst-targets/<ticker>")
     @login_required
     def api_analyst_targets(ticker):
+        cache_key = f"analyst-targets:{ticker.upper()}"
+        cached = _get_cached_api(cache_key)
+        if cached:
+            return jsonify(cached)
         try:
             import yfinance as yf
             info = yf.Ticker(ticker.upper()).info
-            return jsonify({
+            res = {
                 "ok": True, "ticker": ticker.upper(),
                 "current_price":  round(float(info.get("currentPrice") or 0), 2),
                 "target_mean":    round(float(info.get("targetMeanPrice") or 0), 2),
@@ -534,7 +568,9 @@ def register_analytics_routes(app):
                 "target_median":  round(float(info.get("targetMedianPrice") or 0), 2),
                 "recommendation": str(info.get("recommendationKey") or "n/a"),
                 "analyst_count":  int(info.get("numberOfAnalystOpinions") or 0),
-            })
+            }
+            _set_cached_api(cache_key, res, ttl=3600)
+            return jsonify(res)
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 400
 
