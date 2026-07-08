@@ -99,6 +99,18 @@
     .sidebar-price-row .chg.up { color: var(--green); }
     .sidebar-price-row .chg.down { color: var(--red); }
 
+    /* Sidebar Dropdowns */
+    .sidebar-dropdown { margin-bottom: 4px; margin-top: 4px; padding: 0 16px; }
+    .sidebar-dropdown-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 6px; font-size: 8.5pt; font-weight: 700; color: var(--muted); text-transform: uppercase; cursor: pointer; transition: all 0.15s; user-select: none; }
+    .sidebar-dropdown-header:hover { background: var(--surface2); color: var(--text); }
+    .sidebar-dropdown-content { display: none; padding-left: 8px; margin-top: 4px; max-height: 180px; overflow-y: auto; border-left: 1px solid var(--border); }
+    .sidebar-dropdown.open .sidebar-dropdown-content { display: block; }
+    .sidebar-dropdown-header .caret { font-size: 7.5pt; transition: transform 0.15s; color: var(--muted); }
+    .sidebar-dropdown.open .sidebar-dropdown-header .caret { transform: rotate(180deg); color: var(--accent); }
+    
+    .sidebar-ticker-item { display: block; padding: 6px 10px; font-size: 9.5pt; color: var(--muted); text-decoration: none; cursor: pointer; border-radius: 4px; transition: all 0.15s; font-weight: 500; }
+    .sidebar-ticker-item:hover { background: var(--surface2); color: var(--accent); }
+
     /* ── Dashboard Grid ── */
     .dashboard-grid {
       display: grid;
@@ -734,45 +746,65 @@
       </div>
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-label">US Stocks</div>
-      {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','XOM'] %}
-      <div class="sidebar-price-row" onclick="goPredict('{{ sym }}')">
-        <span class="sym">{{ sym }}</span>
+    <!-- Asset Class Dropdowns -->
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>US Stocks</span>
+        <span class="caret">▼</span>
       </div>
-      {% endfor %}
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','XOM'] %}
+        <div class="sidebar-ticker-item" onclick="goPredict('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">ETFs</div>
-      {% for sym in ['SPY','QQQ','IWM','DIA','GLD','TLT','XLF'] %}
-      <div class="sidebar-price-row" onclick="goPredict('{{ sym }}')">
-        <span class="sym">{{ sym }}</span>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>ETFs</span>
+        <span class="caret">▼</span>
       </div>
-      {% endfor %}
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['SPY','QQQ','IWM','DIA','GLD','TLT','XLF'] %}
+        <div class="sidebar-ticker-item" onclick="goPredict('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Crypto</div>
-      {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE'] %}
-      <div class="sidebar-price-row" onclick="goPredict('{{ sym }}')">
-        <span class="sym">{{ sym }}</span>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Crypto</span>
+        <span class="caret">▼</span>
       </div>
-      {% endfor %}
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE'] %}
+        <div class="sidebar-ticker-item" onclick="goPredict('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Forex</div>
-      {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD'] %}
-      <div class="sidebar-price-row" onclick="goPredict('{{ sym }}')">
-        <span class="sym">{{ sym }}</span>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Forex</span>
+        <span class="caret">▼</span>
       </div>
-      {% endfor %}
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD'] %}
+        <div class="sidebar-ticker-item" onclick="goPredict('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
     </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Commodities</div>
-      {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT'] %}
-      <div class="sidebar-price-row" onclick="goPredict('{{ sym }}')">
-        <span class="sym">{{ sym }}</span>
+
+    <div class="sidebar-dropdown">
+      <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
+        <span>Commodities</span>
+        <span class="caret">▼</span>
       </div>
-      {% endfor %}
+      <div class="sidebar-dropdown-content">
+        {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT'] %}
+        <div class="sidebar-ticker-item" onclick="goPredict('{{ sym }}')">{{ sym }}</div>
+        {% endfor %}
+      </div>
     </div>
   </aside>
 
@@ -2285,6 +2317,9 @@ async function confirmLiveTrade() {
   }
 }
 
+function toggleSidebarDropdown(header) {
+  header.parentElement.classList.toggle("open");
+}
 </script>
 
 </body>
