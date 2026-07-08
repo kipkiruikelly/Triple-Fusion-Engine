@@ -234,17 +234,14 @@ def register_prediction_routes(app, metrics):
             return jsonify({"ok": False, "error": "Pro required"}), 403
         ticker = ticker.upper()
         try:
-            import yfinance as yf
+            from market_data import get_history
             _try_azure_download(ticker, "1d")
             _try_azure_download(ticker, "1h")
             with ThreadPoolExecutor(max_workers=2) as ex:
                 f1d = ex.submit(run_prediction, ticker, "1d")
                 f1h = ex.submit(run_prediction, ticker, "1h")
                 r1d, r1h = f1d.result(), f1h.result()
-            hist = yf.download(ticker, period="5d", interval="1d",
-                               auto_adjust=True, progress=False)
-            if hasattr(hist.columns, "get_level_values"):
-                hist.columns = hist.columns.get_level_values(0)
+            hist, _ = get_history(ticker, period="5d", interval="1d")
             prev_close = round(float(hist["Close"].iloc[-2]), 2) if len(hist) >= 2 else 0.0
             return jsonify({
                 "ok": True, "ticker": ticker, "prev_close": prev_close,
@@ -396,10 +393,8 @@ def register_prediction_routes(app, metrics):
         checked = 0
         for pred in unchecked:
             try:
-                hist = yf.download(pred.ticker, period="5d", interval="1d",
-                                   auto_adjust=True, progress=False)
-                if isinstance(hist.columns, pd.MultiIndex):
-                    hist.columns = hist.columns.get_level_values(0)
+                from market_data import get_history
+                hist, _ = get_history(pred.ticker, period="5d", interval="1d")
                 if len(hist) < 1:
                     continue
                 actual = float(hist["Close"].iloc[-1])

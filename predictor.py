@@ -279,19 +279,43 @@ def lw_time(ts, interval: str = "1d"):
     return int(pd.Timestamp(ts, tz="UTC").timestamp())
 
 
+import time
+import threading
+from market_data import get_history
+
+# Cache for slow earnings dates: ticker -> (timestamp, DatetimeIndex)
+_yf_earnings_cache = {}
+_yf_earnings_lock = threading.Lock()
+YF_CACHE_TTL_EARNINGS = 86400  # 1 day
+
+def _cached_yf_earnings(ticker: str) -> pd.DatetimeIndex:
+    ticker_upper = ticker.upper()
+    now = time.time()
+    with _yf_earnings_lock:
+        if ticker_upper in _yf_earnings_cache:
+            ts, val = _yf_earnings_cache[ticker_upper]
+            if now - ts < YF_CACHE_TTL_EARNINGS:
+                return val
+    try:
+        raw = yf.Ticker(ticker).earnings_dates
+        if raw is not None and not raw.empty:
+            idx = raw.index.tz_localize(None) if raw.index.tz else raw.index
+            val = idx.normalize()
+        else:
+            val = pd.DatetimeIndex([])
+    except Exception:
+        val = pd.DatetimeIndex([])
+    with _yf_earnings_lock:
+        _yf_earnings_cache[ticker_upper] = (now, val)
+    return val
+
+
 def _fetch_df(ticker: str, interval: str = "1d") -> pd.DataFrame:
-    yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
     if interval == "4h":
-        df = yf.download(yf_ticker, period="730d", interval="1h",
-                         auto_adjust=True, progress=False)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+        df, _ = get_history(ticker, period="730d", interval="1h")
         return _resample_4h(df) if not df.empty else df
     period = _FETCH_PERIOD.get(interval, "1y")
-    df = yf.download(yf_ticker, period=period, interval=interval,
-                     auto_adjust=True, progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    df, _ = get_history(ticker, period=period, interval=interval)
     return df
 
 
@@ -307,34 +331,22 @@ def _add_intraday_ict(df: pd.DataFrame) -> pd.DataFrame:
 
 def _fetch_aux(ticker: str, interval: str = "1d") -> dict:
     period = _FETCH_PERIOD.get(interval, "18mo")
-    # Use 18 months for daily so VIX 252-day rolling has enough history
     if interval == "1d":
         period = "18mo"
 
     def _dl(sym):
         try:
-            d = yf.download(sym, period=period, interval=interval,
-                            auto_adjust=True, progress=False)
-            if isinstance(d.columns, pd.MultiIndex):
-                d.columns = d.columns.get_level_values(0)
-            return d if not d.empty else None
+            df, _ = get_history(sym, period=period, interval=interval)
+            return df if not df.empty else None
         except Exception:
             return None
 
     vix    = _dl("^VIX")
-    spy    = _dl("SPY") if ticker != "SPY" else None
+    spy    = _dl("SPY") if ticker.upper() != "SPY" else None
     sec_id = _TICKER_SECTOR_MAP.get(ticker.upper())
-    sector = _dl(sec_id) if sec_id and sec_id not in (ticker, "SPY") else None
+    sector = _dl(sec_id) if sec_id and sec_id.upper() not in (ticker.upper(), "SPY") else None
 
-    earnings = pd.DatetimeIndex([])
-    if ticker.upper() in _EQUITY_TICKERS:
-        try:
-            raw = yf.Ticker(ticker).earnings_dates
-            if raw is not None and not raw.empty:
-                idx = raw.index.tz_localize(None) if raw.index.tz else raw.index
-                earnings = idx.normalize()
-        except Exception:
-            pass
+    earnings = _cached_yf_earnings(ticker)
 
     return {"vix": vix, "spy": spy, "sector": sector, "earnings": earnings}
 
@@ -652,13 +664,9 @@ def _compute_pro_features(df: pd.DataFrame, is_intraday: bool = True) -> pd.Data
 
 def _fetch_htf_for_mtf(ticker: str, htf: str) -> "pd.DataFrame | None":
     """Fetch higher-timeframe data for MTF context injection during inference."""
-    yf_ticker = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
     iv, period = _HTF_YF_PARAMS.get(htf, ("1d", "18mo"))
     try:
-        df = yf.download(yf_ticker, period=period, interval=iv,
-                         auto_adjust=True, progress=False)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
+        df, _ = get_history(ticker, period=period, interval=iv)
         if df.empty:
             return None
         if htf == "4h":

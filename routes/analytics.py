@@ -70,16 +70,12 @@ def register_analytics_routes(app):
     @app.route("/api/scanner/volume")
     @login_required
     def api_scanner_volume():
-        import yfinance as yf
-        import pandas as pd
+        from market_data import get_history
         results = []
 
         def _chk(t):
             try:
-                hist = yf.download(t, period="30d", interval="1d",
-                                   auto_adjust=True, progress=False)
-                if isinstance(hist.columns, pd.MultiIndex):
-                    hist.columns = hist.columns.get_level_values(0)
+                hist, _ = get_history(t, period="30d", interval="1d")
                 if len(hist) < 10:
                     return
                 avg_vol = float(hist["Volume"].iloc[:-1].mean())
@@ -112,10 +108,8 @@ def register_analytics_routes(app):
                 sf    = (info.get("shortPercentOfFloat") or 0) * 100
                 sr    = info.get("shortRatio") or 0
                 price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
-                hist  = yf.download(t, period="30d", interval="1d",
-                                    auto_adjust=True, progress=False)
-                if isinstance(hist.columns, pd.MultiIndex):
-                    hist.columns = hist.columns.get_level_values(0)
+                from market_data import get_history
+                hist, _ = get_history(t, period="30d", interval="1d")
                 rsi_val = None
                 if len(hist) >= 14:
                     rsi_val = round(float(_ta.momentum.rsi(hist["Close"], window=14).iloc[-1]), 1)
@@ -147,10 +141,8 @@ def register_analytics_routes(app):
         def _chk(item):
             sector, etf = item
             try:
-                hist = yf.download(etf, period="5d", interval="1d",
-                                   auto_adjust=True, progress=False)
-                if isinstance(hist.columns, pd.MultiIndex):
-                    hist.columns = hist.columns.get_level_values(0)
+                from market_data import get_history
+                hist, _ = get_history(etf, period="5d", interval="1d")
                 if len(hist) < 2:
                     return
                 d1 = round(float((hist["Close"].iloc[-1] / hist["Close"].iloc[-2] - 1) * 100), 2)
@@ -226,23 +218,17 @@ def register_analytics_routes(app):
     @login_required
     def api_fear_greed():
         try:
-            import yfinance as yf
+            from market_data import get_history
             import pandas as pd
             import ta as _ta
-            spy = yf.download("SPY", period="1y", interval="1d",
-                              auto_adjust=True, progress=False)
-            if isinstance(spy.columns, pd.MultiIndex):
-                spy.columns = spy.columns.get_level_values(0)
+            spy, _ = get_history("SPY", period="1y", interval="1d")
             spy_c = spy["Close"].dropna()
             mom_score = 50.0
             if len(spy_c) >= 125:
                 ma125     = spy_c.rolling(125).mean().iloc[-1]
                 ratio     = float(spy_c.iloc[-1]) / float(ma125)
                 mom_score = max(0.0, min(100.0, (ratio - 0.9) / 0.2 * 100))
-            vix = yf.download("^VIX", period="30d", interval="1d",
-                              auto_adjust=True, progress=False)
-            if isinstance(vix.columns, pd.MultiIndex):
-                vix.columns = vix.columns.get_level_values(0)
+            vix, _ = get_history("^VIX", period="30d", interval="1d")
             vix_level = float(vix["Close"].iloc[-1]) if not vix.empty else 20.0
             vol_score = max(0.0, min(100.0, (40 - vix_level) / 30 * 100))
             rsi_val   = float(_ta.momentum.rsi(spy_c, window=14).iloc[-1]) if len(spy_c) >= 14 else 50.0
