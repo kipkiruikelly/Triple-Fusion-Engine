@@ -193,6 +193,31 @@ def register_payment_routes(app):
 
     # ── M-Pesa ─────────────────────────────────────────────────────────────────
 
+    @app.route("/api/payment/apply_discount", methods=["POST"])
+    @login_required
+    def apply_discount():
+        data = request.get_json() or {}
+        code = data.get("code", "").strip().upper()
+        plan = data.get("plan", "monthly")
+        if not code:
+            return jsonify({"ok": False, "error": "Code required"}), 400
+        
+        gift = GiftCode.query.filter_by(code=code, used=False).first()
+        if not gift:
+            return jsonify({"ok": False, "error": "Invalid or expired promo code."}), 400
+            
+        original_price = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
+        days = gift.days or (365 if plan == "annual" else 30)
+        
+        # Currently, all GiftCodes are 100% off (gift passes)
+        return jsonify({
+            "ok": True,
+            "message": "Promo code applied! 100% discount.",
+            "original_price": original_price,
+            "new_price": 0,
+            "days": days
+        })
+
     @app.route("/mpesa/pay", methods=["POST"])
     @login_required
     def mpesa_pay():
@@ -208,8 +233,30 @@ def register_payment_routes(app):
             phone = "254" + phone[1:]
         if not phone.startswith("254") or len(phone) != 12 or not phone.isdigit():
             return jsonify({"ok": False, "error": "Enter a valid Safaricom number (07XXXXXXXX)."}), 400
+            
         amount = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
         days   = 365 if plan == "annual" else 30
+        
+        discount_code = data.get("discount_code", "").strip().upper()
+        if discount_code:
+            gift = GiftCode.query.filter_by(code=discount_code, used=False).first()
+            if not gift:
+                return jsonify({"ok": False, "error": "Invalid or expired promo code."}), 400
+            
+            # GiftCode gives 100% off for `gift.days`
+            gift.used = True
+            gift.used_by = current_user.id
+            gift.used_at = datetime.utcnow()
+            
+            current_user.plan = 'pro'
+            current_user.pro_expires = datetime.utcnow() + timedelta(days=gift.days)
+            
+            db.session.add(Payment(user_id=current_user.id, provider='promo', plan=plan,
+                                   amount=0, currency='KES', days=gift.days,
+                                   reference=f"PROMO-{discount_code}", status='paid'))
+            db.session.commit()
+            return jsonify({"ok": True, "paid": True, "message": f"Promo code applied! Pro access granted for {gift.days} days."})
+
         desc   = f"BullLogic Pro {'1 year' if plan == 'annual' else '30 days'}"
         try:
             resp = stk_push(phone, amount, "BullLogicPro", desc)

@@ -122,13 +122,12 @@
 
 {% set _bl_path = request.path.split('/')[1] %}
 {% set _bl_tab_map = {
-  'market': 'markets', 'macro': 'markets', 'screener': 'markets', 'calendar': 'markets', 'data-sources': 'markets',
-  '': 'analysis', 'research': 'analysis', 'backtest': 'analysis', 'model-metrics': 'analysis',
-    'track-record': 'analysis', 'methodology': 'analysis',
-  'paper': 'portfolio', 'watchlist': 'portfolio', 'history': 'portfolio', 'performance': 'portfolio',
+  'market': 'markets', 'macro': 'markets', 'screener': 'markets',
+  '': 'analysis', 'research': 'analysis', 'model-metrics': 'analysis', 'track-record': 'analysis',
+  'live': 'portfolio', 'paper': 'portfolio', 'watchlist': 'portfolio', 'history': 'portfolio', 'performance': 'portfolio',
     'journal': 'portfolio', 'portfolio': 'portfolio',
-  'scanner': 'tools', 'alerts': 'tools', 'pipeline': 'tools', 'risk': 'tools', 'mt5': 'tools',
-  'leaderboard': 'learn', 'resources': 'learn', 'faq': 'learn', 'risk-basics': 'learn',
+  'scanner': 'tools', 'alerts': 'tools', 'pipeline': 'tools', 'risk': 'tools', 'mt5': 'tools', 'calendar': 'tools', 'backtest': 'tools',
+  'leaderboard': 'learn', 'resources': 'learn', 'faq': 'learn', 'risk-basics': 'learn', 'data-sources': 'learn', 'methodology': 'learn',
 } %}
 {% set _bl_active = _bl_tab_map.get(_bl_path, '') %}
 
@@ -145,8 +144,6 @@
           <a href="/market">Market Overview</a>
           <a href="/macro">Market Intelligence</a>
           <a href="/screener">Screener</a>
-          <a href="/calendar">Economic Calendar</a>
-          <a href="/data-sources">Data Sources</a>
         </div>
       </li>
       <li class="bl-tab {% if _bl_active == 'analysis' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
@@ -154,15 +151,14 @@
         <div class="bl-dropdown">
           <a href="/">Predict</a>
           <a href="/research/AAPL">Research</a>
-          <a href="/backtest">Backtester</a>
           <a href="/model-metrics">Model Metrics</a>
           <a href="/track-record">Track Record</a>
-          <a href="/methodology">Methodology</a>
         </div>
       </li>
       <li class="bl-tab {% if _bl_active == 'portfolio' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
         <button class="bl-tab-btn" type="button">Portfolio <span class="bl-caret">&#9662;</span></button>
         <div class="bl-dropdown">
+          <a href="/live">Live Trading</a>
           <a href="/paper">Paper Trading</a>
           <a href="/watchlist">Watchlist</a>
           <a href="/history">Trade History</a>
@@ -179,6 +175,8 @@
           <a href="/pipeline">Pipeline</a>
           <a href="/risk">Risk Manager</a>
           <a href="/mt5">MT5 Connect</a>
+          <a href="/calendar">Economic Calendar</a>
+          <a href="/backtest">Backtester</a>
         </div>
       </li>
       <li class="bl-tab {% if _bl_active == 'learn' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
@@ -188,6 +186,8 @@
           <a href="/resources">Resources</a>
           <a href="/faq">FAQ</a>
           <a href="/risk-basics">Risk Basics</a>
+          <a href="/data-sources">Data Sources</a>
+          <a href="/methodology">Methodology</a>
         </div>
       </li>
     </ul>

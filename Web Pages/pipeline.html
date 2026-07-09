@@ -121,7 +121,7 @@
     <div class="step-card">
       <div class="step-header">
         <div class="step-icon" style="background:rgba(139,92,246,0.15)">&#9878;</div>
-        <h3>Ensemble Models<span class="badge-pro">PRO</span></h3>
+        <h3>Ensemble Models</h3>
       </div>
       <p>Three classifiers vote on each signal: Logistic Regression for linear structure, Random Forest for non-linear patterns, and XGBoost with 5-fold CV for robustness. Final confidence is ensemble-weighted.</p>
       <a class="cta" href="/backtest">Run a Backtest &rarr;</a>
@@ -132,7 +132,7 @@
         <h3>Automated Retraining</h3>
       </div>
       <p>A systemd timer fires every Sunday at 2 AM, runs the full training pipeline with the latest Alpaca data, saves model metrics, and auto-uploads artifacts to Azure Blob Storage.</p>
-      <a class="cta" href="/leaderboard">View Signal Leaderboard &rarr;</a>
+      <button id="retrainBtn" onclick="triggerRetrain()" class="cta" style="background:none;border:none;cursor:pointer;padding:0;font-family:inherit;">Run Retrain Now &rarr;</button>
     </div>
   </div>
 
@@ -179,6 +179,23 @@
   } catch(e) {}
 })();
 
+async function triggerRetrain() {
+  const btn = document.getElementById('retrainBtn');
+  btn.disabled = true;
+  btn.textContent = 'Retraining started...';
+  try {
+    const res = await fetch('/api/pipeline/retrain', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      btn.style.color = 'var(--green)';
+      btn.textContent = 'Retraining in background \u2713';
+    } else {
+      btn.textContent = 'Error starting retrain';
+    }
+  } catch (err) {
+    btn.textContent = 'Error starting retrain';
+  }
+}
 </script>
 </body>
 </html>

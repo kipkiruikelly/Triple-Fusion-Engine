@@ -108,6 +108,8 @@ async function load(days) {
     healthRow('Azure Blob Storage', h.azure, h.azure ? 'connected' : 'not configured') +
     `<tr><td>Paper trading (simulated)</td><td style="text-align:right">
       <a href="/admin/paper" style="text-decoration:none"><span class="badge ${h.paper_trading ? 'b-green' : 'b-muted'}">${h.paper_trading ? 'RUNNING' : 'paused'}</span></a></td></tr>` +
+    `<tr><td>Live trading (MT5)</td><td style="text-align:right">
+      <button onclick="pauseLiveTrading(this)" class="badge b-muted" style="padding:4px 8px;border:1px solid var(--border);cursor:pointer;background:none;color:inherit;">Pause Live Trading</button></td></tr>` +
     `<tr><td>Maintenance mode</td><td style="text-align:right">
       <span class="badge ${h.maintenance ? 'b-yellow' : 'b-muted'}">${h.maintenance ? 'ENABLED' : 'off'}</span></td></tr>`;
 }
@@ -118,5 +120,22 @@ document.querySelectorAll('.range-btn').forEach(b => b.onclick = () => {
   load(+b.dataset.d);
 });
 load(30);
+
+async function pauseLiveTrading(btn) {
+  if (confirm("Are you sure you want to pause all live trading globally?")) {
+    btn.disabled = true;
+    btn.textContent = 'Pausing...';
+    try {
+      await api('/admin/api/mt5/live-trading', { method: 'POST', body: { enabled: false } });
+      await api('/admin/api/mt5/stop', { method: 'POST' });
+      btn.textContent = 'PAUSED';
+      btn.className = 'badge b-red';
+      toast('Live trading paused globally', 'ok');
+    } catch (e) {
+      btn.textContent = 'Pause Live Trading';
+      btn.disabled = false;
+    }
+  }
+}
 </script>
 {% endblock %}

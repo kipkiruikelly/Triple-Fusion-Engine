@@ -745,6 +745,22 @@ def register_prediction_routes(app, metrics):
     def pipeline():
         return render_template("pipeline.html")
 
+    @app.route("/api/pipeline/retrain", methods=["POST"])
+    @login_required
+    def api_pipeline_retrain():
+        import subprocess
+        import threading
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        def run_job():
+            try:
+                subprocess.run([sys.executable, "train_all_tickers.py", "--fast"], cwd=BASE_DIR, check=True)
+            except Exception as e:
+                print("Retrain job failed:", e)
+        
+        threading.Thread(target=run_job, daemon=True).start()
+        return jsonify({"ok": True, "msg": "Retraining started in the background"})
+
     @app.route("/api/pipeline/stats")
     @login_required
     def api_pipeline_stats():

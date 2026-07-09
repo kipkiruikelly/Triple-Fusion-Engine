@@ -102,22 +102,7 @@
 </div>
 
 <div class="layout">
-  <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Navigation</div>
-      <a class="sidebar-item" href="/"><div class="dot"></div>Price Predictor</a>
-      <a class="sidebar-item" href="/market"><div class="dot"></div>Market Overview</a>
-      <a class="sidebar-item" href="/macro"><div class="dot"></div>Market Intelligence</a>
-      <a class="sidebar-item active" href="/watchlist"><div class="dot"></div>Watchlist</a>
-      <a class="sidebar-item" href="/history"><div class="dot"></div>Prediction History</a>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-label">Popular</div>
-      {% for t in ['AAPL','TSLA','MSFT','GOOGL','NVDA','META','AMZN','NDX','QQQ'] %}
-      <div class="sidebar-item" onclick="quickAdd('{{ t }}')"><div class="dot"></div>{{ t }}</div>
-      {% endfor %}
-    </div>
-  </aside>
+
 
   <main class="content">
     <div class="page-title">My Watchlist</div>

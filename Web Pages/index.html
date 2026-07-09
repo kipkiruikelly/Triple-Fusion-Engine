@@ -629,99 +629,7 @@
 <!-- Main layout -->
 <div class="layout">
 
-  <!-- Sidebar -->
-  <aside class="sidebar">
 
-    <!-- Search -->
-    <div class="sidebar-search">
-      <span class="icon">🔍</span>
-      <input id="sidebarSearch" type="text" placeholder="Search ticker…"
-             oninput="filterSidebar(this.value)" autocomplete="off" />
-    </div>
-
-    <!-- Asset class tabs -->
-    <div class="sb-tabs" id="sb-asset-tabs">
-      <button class="sb-tab active" data-tab="stocks" onclick="switchAssetTab('stocks')">Stocks</button>
-      <button class="sb-tab" data-tab="etfs" onclick="switchAssetTab('etfs')">ETF</button>
-      <button class="sb-tab" data-tab="crypto" onclick="switchAssetTab('crypto')">Crypto</button>
-      <button class="sb-tab" data-tab="forex" onclick="switchAssetTab('forex')">Forex</button>
-      <button class="sb-tab" data-tab="commodities" onclick="switchAssetTab('commodities')">Cmdy</button>
-      <button class="sb-tab" data-tab="indices" onclick="switchAssetTab('indices')">Index</button>
-    </div>
-
-    <div id="sb-ticker-scroll">
-      <!-- US Stocks -->
-      <div class="sidebar-section sb-asset-panel" id="sec-stocks" data-tab="stocks">
-        {% for sym in ['AAPL','MSFT','GOOGL','AMZN','META','NVDA','TSLA','AMD','NFLX','JPM','V','JNJ','XOM','WMT'] %}
-        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-          <div class="live-data" id="ld-{{ sym }}"></div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- ETFs -->
-      <div class="sidebar-section sb-asset-panel" id="sec-etfs" data-tab="etfs" style="display:none">
-        {% for sym in ['SPY','QQQ','IWM','DIA','GLD','SLV','TLT','XLF','XLE'] %}
-        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-          <div class="live-data" id="ld-{{ sym }}"></div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Crypto -->
-      <div class="sidebar-section sb-asset-panel" id="sec-crypto" data-tab="crypto" style="display:none">
-        {% for sym in ['BTC','ETH','SOL','BNB','XRP','ADA','AVAX','DOGE','LINK'] %}
-        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-          <div class="live-data" id="ld-{{ sym }}"></div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Forex -->
-      <div class="sidebar-section sb-asset-panel" id="sec-forex" data-tab="forex" style="display:none">
-        {% for sym in ['EURUSD','GBPUSD','USDJPY','AUDUSD','USDCAD','NZDUSD','EURGBP'] %}
-        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-          <div class="live-data" id="ld-{{ sym }}"></div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Commodities -->
-      <div class="sidebar-section sb-asset-panel" id="sec-commodities" data-tab="commodities" style="display:none">
-        {% for sym in ['GOLD','OIL','SILVER','NATGAS','COPPER','WHEAT','BRENT'] %}
-        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-          <div class="live-data" id="ld-{{ sym }}"></div>
-        </div>
-        {% endfor %}
-      </div>
-
-      <!-- Indices -->
-      <div class="sidebar-section sb-asset-panel" id="sec-indices" data-tab="indices" style="display:none">
-        {% for sym in ['SPX','NDX','DJI','RUT','VIX','FTSE','DAX','NIKKEI'] %}
-        <div class="sidebar-item" id="si-{{ sym }}" onclick="setTicker('{{ sym }}')" data-sym="{{ sym }}">
-          <div class="sym-name"><div class="dot"></div><span class="sym-label">{{ sym }}</span></div>
-          <div class="live-data" id="ld-{{ sym }}"></div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <!-- Models -->
-    <div class="sb-models">
-      <span class="sb-models-label">Models</span>
-      <div class="sb-models-tags">
-        <span class="sb-model-tag" onclick="showSection('lr')">LR</span>
-        <span class="sb-model-tag" onclick="showSection('rf')">RF</span>
-        <span class="sb-model-tag" onclick="showSection('lstm')">LSTM</span>
-      </div>
-    </div>
-
-  </aside>
 
   <!-- Main content -->
   <main class="content">
@@ -1192,6 +1100,44 @@
     document.getElementById('ticker').value = symbol;
     document.getElementById('predictForm').submit();
   }
+  window.setTickerAndPredict = function(symbol) {
+    setTicker(symbol);
+  };
+
+  async function refreshSignals() {
+    const status = document.getElementById('sig-status');
+    const grid = document.getElementById('pro-signals-grid');
+    if (status) status.textContent = 'loading...';
+    try {
+      const res = await fetch('/api/screener?interval=1d');
+      const data = await res.json();
+      if (data.ok && data.rows) {
+        // filter out zero confidence, sort by highest confidence, take top 10
+        const top = data.rows.filter(r => r.confidence > 0).sort((a,b) => b.confidence - a.confidence).slice(0, 10);
+        let html = '';
+        for (const r of top) {
+          const actionCls = (r.action || 'hold').toLowerCase();
+          html += `
+            <div class="pro-ticker-card" id="ptc-${r.ticker}" onclick="setTickerAndPredict('${r.ticker}')">
+              <div class="ptc-sym">${r.ticker}</div>
+              <div class="ptc-action ${actionCls}" id="ptc-action-${r.ticker}">${r.action}</div>
+              <div class="ptc-conf" id="ptc-conf-${r.ticker}">${r.confidence.toFixed(1)}%</div>
+            </div>
+          `;
+        }
+        if (html) grid.innerHTML = html;
+        if (status) {
+          status.textContent = 'updated';
+          setTimeout(() => status.textContent = '', 2000);
+        }
+      }
+    } catch (e) {
+      if (status) status.textContent = 'error';
+    }
+  }
+
+  // Load signals on page load
+  document.addEventListener('DOMContentLoaded', refreshSignals);
 
   function closeModal() {
     document.getElementById('modal').style.display = 'none';

@@ -270,6 +270,18 @@
     </div>
 
     <div id="mpesa-form-section">
+      <label style="font-size:9.5pt;color:var(--muted);display:block;margin-bottom:6px">Discount Code (Optional)</label>
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input id="mpesa-discount" type="text" placeholder="Promo code"
+          style="flex:1;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+                 color:var(--text);font-size:11pt;font-family:Inter,sans-serif;outline:none;text-transform:uppercase;">
+        <button onclick="applyMpesaDiscount()" type="button"
+          style="padding:0 16px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;
+                 font-size:10pt;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;transition:background 0.2s">
+          Apply
+        </button>
+      </div>
+
       <label style="font-size:9.5pt;color:var(--muted);display:block;margin-bottom:6px">Safaricom phone number</label>
       <input id="mpesa-phone" type="tel" placeholder="07XXXXXXXX"
         style="width:100%;padding:11px 14px;background:var(--bg);border:1px solid var(--border);border-radius:6px;
@@ -353,13 +365,14 @@ function closeMpesa() {
 
 function submitMpesa() {
   var phone = document.getElementById('mpesa-phone').value.trim();
+  var code = document.getElementById('mpesa-discount').value.trim().toUpperCase();
   var errEl = document.getElementById('mpesa-error');
   errEl.style.display = 'none';
 
   fetch('/mpesa/pay', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({phone: phone, plan: _billingMode})
+    body: JSON.stringify({phone: phone, plan: _billingMode, discount_code: code})
   })
   .then(function(r) { return r.json(); })
   .then(function(d) {
@@ -368,6 +381,13 @@ function submitMpesa() {
       errEl.style.display = 'block';
       return;
     }
+    // If the code granted 100% discount, it might not need STK push
+    if (d.paid) {
+       document.getElementById('mpesa-form-section').style.display = 'none';
+       document.getElementById('mpesa-success').style.display = 'block';
+       document.getElementById('mpesa-success-msg').textContent = d.message || 'Pro access activated!';
+       return;
+    }
     _checkoutId = d.checkout_request_id;
     document.getElementById('mpesa-form-section').style.display = 'none';
     document.getElementById('mpesa-waiting').style.display = 'block';
@@ -375,6 +395,39 @@ function submitMpesa() {
   })
   .catch(function() {
     errEl.textContent = 'Network error. Please try again.';
+    errEl.style.display = 'block';
+  });
+}
+
+function applyMpesaDiscount() {
+  var code = document.getElementById('mpesa-discount').value.trim().toUpperCase();
+  var errEl = document.getElementById('mpesa-error');
+  var sub = document.getElementById('mpesa-subtitle');
+  if (!code) return;
+  errEl.style.display = 'none';
+  
+  fetch('/api/payment/apply_discount', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({code: code, plan: _billingMode})
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.ok) {
+      errEl.textContent = d.error;
+      errEl.style.display = 'block';
+    } else {
+      errEl.style.display = 'block';
+      errEl.style.color = '#00C076';
+      errEl.textContent = d.message || 'Discount applied!';
+      if (d.new_price !== undefined) {
+         sub.innerHTML = `<s>KES ${d.original_price}</s> <strong style="color:#00C076">KES ${d.new_price}</strong> / ${d.days} days`;
+      }
+      setTimeout(() => { errEl.style.display = 'none'; errEl.style.color = '#FF4D4D'; }, 3000);
+    }
+  })
+  .catch(() => {
+    errEl.textContent = 'Network error verifying discount.';
     errEl.style.display = 'block';
   });
 }

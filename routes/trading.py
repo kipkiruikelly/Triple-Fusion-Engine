@@ -21,6 +21,65 @@ def register_trading_routes(app):
 
     # ── MT5 dashboard ──────────────────────────────────────────────────────────
 
+    @app.route("/live")
+    @login_required
+    def live_trading_page():
+        return render_template("live.html")
+
+    @app.route("/api/live/summary")
+    @login_required
+    def api_live_summary():
+        # Placeholder live metrics matching the paper trading structure
+        return jsonify({
+            "ok": True,
+            "simulated": False,
+            "currency": "USD",
+            "enabled": getattr(mt5_trader, "connected", False),
+            "started_at": None,
+            "min_trades": 10,
+            "assumptions": {
+                "note": "Real execution metrics from MT5 terminal."
+            },
+            "strategies": [
+                {
+                    "strategy": "ml_ensemble",
+                    "starting_balance": 10000,
+                    "equity": 10000,
+                    "open_positions": 0,
+                    "exposure_pct": 0,
+                    "metrics": {
+                        "trades": 0,
+                        "min_trades": 10,
+                        "sufficient": False
+                    },
+                    "by_asset_class": {},
+                    "by_model": {},
+                    "equity_curve": []
+                },
+                {
+                    "strategy": "alpha_rules",
+                    "starting_balance": 10000,
+                    "equity": 10000,
+                    "open_positions": 0,
+                    "exposure_pct": 0,
+                    "metrics": {
+                        "trades": 0,
+                        "min_trades": 10,
+                        "sufficient": False
+                    },
+                    "by_asset_class": {},
+                    "by_model": {},
+                    "equity_curve": []
+                }
+            ]
+        })
+
+    @app.route("/api/live/trades")
+    @login_required
+    def api_live_trades():
+        return jsonify({"ok": True, "simulated": False, "page": 1, "total": 0, "trades": []})
+
+
     @app.route("/mt5")
     @login_required
     def mt5_dashboard():
