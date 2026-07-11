@@ -188,6 +188,7 @@ def register_analytics_routes(app):
     @login_required
     def api_calendar_earnings():
         import yfinance as yf
+        import pandas as pd
         results = []
         today   = date.today()
 
@@ -198,13 +199,17 @@ def register_analytics_routes(app):
                 if raw is None or raw.empty:
                     return
                 idx = raw.index.tz_localize(None) if raw.index.tz else raw.index
-                for dt in idx:
+                for dt, row in zip(idx, raw.itertuples(index=False)):
                     d = dt.date()
                     if d >= today and (d - today).days <= 90:
+                        eps_est = row[0] if len(row) > 0 else None
+                        eps_rep = row[1] if len(row) > 1 else None
                         results.append({"ticker": ticker,
                                         "date": d.strftime("%Y-%m-%d"),
+                                        "eps_estimate": None if pd.isna(eps_est) else float(eps_est),
+                                        "reported_eps": None if pd.isna(eps_rep) else float(eps_rep),
                                         "days": (d - today).days})
-            except Exception:
+            except Exception as e:
                 pass
 
         with ThreadPoolExecutor(max_workers=8) as ex:

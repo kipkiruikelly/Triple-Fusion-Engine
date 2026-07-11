@@ -46,9 +46,12 @@
       <div class="event-list" id="earningsList"><div class="empty">Loading…</div></div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📊 Macro Events</div>
-      <div class="event-list" id="macroList"><div class="empty">Loading…</div></div>
+    <div class="card" style="padding:0; overflow:hidden; border:none; background:transparent;">
+      <!-- TradingView Widget BEGIN -->
+      <div class="tradingview-widget-container" id="tv-macro-container" style="border-radius:10px; overflow:hidden; border:1px solid var(--border);">
+        <div class="tradingview-widget-container__widget"></div>
+      </div>
+      <!-- TradingView Widget END -->
     </div>
   </div>
 </div>
@@ -60,7 +63,7 @@ function eventItem(date, name, sub, badge, badgeCls, days) {
   const d = new Date(date + 'T00:00:00');
   const dStr = days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days}d`;
   return `
-    <div class="event-item">
+    <div class="event-item" style="flex-wrap:wrap">
       <div class="event-date">
         <div class="day">${d.getDate()}</div>
         <div class="mon">${MONTHS[d.getMonth()]}</div>
@@ -69,31 +72,58 @@ function eventItem(date, name, sub, badge, badgeCls, days) {
         <div class="event-name">${name}</div>
         <div class="event-sub">${sub}</div>
       </div>
-      <span class="badge ${badgeCls}">${badge}</span>
-      <span class="days-chip">${dStr}</span>
+      <div style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+        <span class="badge ${badgeCls}">${badge}</span>
+        <span class="days-chip">${dStr}</span>
+      </div>
     </div>`;
+}
+
+function formatEps(val) {
+  if (val === null || val === undefined) return '--';
+  return '$' + val.toFixed(2);
 }
 
 fetch('/api/calendar/earnings').then(r=>r.json()).then(d=>{
   const el = document.getElementById('earningsList');
   if (!d.ok || !d.events.length) { el.innerHTML = '<div class="empty">No upcoming earnings found.</div>'; return; }
-  el.innerHTML = d.events.map(e =>
-    eventItem(e.date, e.ticker + ' Earnings', 'Expected earnings report', 'Earnings', 'badge-medium', e.days)
-  ).join('');
+  el.innerHTML = d.events.map(e => {
+    const epsText = `Est: <strong style="color:var(--text)">${formatEps(e.eps_estimate)}</strong> 
+                     Act: <strong style="color:var(--text)">${formatEps(e.reported_eps)}</strong>`;
+    return eventItem(e.date, e.ticker + ' Earnings', epsText, 'Earnings', 'badge-medium', e.days);
+  }).join('');
 }).catch(()=>document.getElementById('earningsList').innerHTML='<div class="empty">Could not load earnings data.</div>');
 
-fetch('/api/calendar/macro').then(r=>r.json()).then(d=>{
-  const el = document.getElementById('macroList');
-  if (!d.ok || !d.events.length) { el.innerHTML = '<div class="empty">No macro events.</div>'; return; }
-  const today = new Date(); today.setHours(0,0,0,0);
-  el.innerHTML = d.events.map(e=>{
-    const ev = new Date(e.date+'T00:00:00');
-    const days = Math.round((ev-today)/86400000);
-    const badgeCls = e.impact==='high'?'badge-high':e.impact==='medium'?'badge-medium':'badge-low';
-    const badgeTxt = e.impact.charAt(0).toUpperCase()+e.impact.slice(1)+' Impact';
-    return eventItem(e.date, e.name, e.category.charAt(0).toUpperCase()+e.category.slice(1), badgeTxt, badgeCls, days);
-  }).join('');
-}).catch(()=>document.getElementById('macroList').innerHTML='<div class="empty">Could not load macro events.</div>');
+function renderTVWidget() {
+  const container = document.getElementById('tv-macro-container');
+  if (!container) return;
+  container.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+  const script = document.createElement('script');
+  script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-events.js';
+  script.async = true;
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  script.innerHTML = JSON.stringify({
+    "colorTheme": isLight ? "light" : "dark",
+    "isTransparent": true,
+    "width": "100%",
+    "height": "600",
+    "locale": "en",
+    "importanceFilter": "-1,0,1",
+    "currencyFilter": "USD"
+  });
+  container.appendChild(script);
+}
+
+renderTVWidget();
+
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.attributeName === 'data-theme') {
+      renderTVWidget();
+    }
+  });
+});
+observer.observe(document.documentElement, { attributes: true });
 </script>
 </body>
 </html>
