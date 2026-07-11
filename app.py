@@ -204,6 +204,11 @@ def create_app():
         from flask import render_template
         return render_template("faq.html")
 
+    @app.route("/disclosures")
+    def disclosures_page():
+        from flask import render_template
+        return render_template("disclosures.html")
+
     @app.route("/privacy-policy")
     def privacy_page():
         from flask import render_template

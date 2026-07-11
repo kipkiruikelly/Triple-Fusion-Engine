@@ -36,10 +36,7 @@
   content. Links open in a new tab.</div>
   <div id="content"><div class="empty">Loading resources...</div></div>
 </div>
-<footer>
-  <a href="/track-record">Track Record</a> · <a href="/methodology">Methodology</a> ·
-  <a href="/faq">FAQ</a> · <a href="/privacy-policy">Privacy</a> · <a href="/terms">Terms</a>
-</footer>
+{% include "_footer.html" %}
 <script>
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 (async () => {
