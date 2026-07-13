@@ -11,6 +11,11 @@
     
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
     .container{max-width:1100px;margin:0 auto;padding:28px 24px}
+    /* Ticker search */
+    .search-row{display:flex;gap:10px;margin-bottom:20px;align-items:center;max-width:460px}
+    .search-row input{flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:9px 14px;font-size:10pt;font-family:inherit;outline:none;text-transform:uppercase}
+    .search-row input:focus{border-color:var(--accent)}
+    .search-row button{background:var(--accent);color:#fff;border:none;font-size:9.5pt;font-weight:600;padding:9px 18px;border-radius:6px;cursor:pointer;font-family:inherit}
     /* Header */
     .research-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:16px}
     .ticker-block .ticker{font-size:28pt;font-weight:700;color:var(--white);letter-spacing:-1px}
@@ -68,6 +73,12 @@
 {% include "_navbar.html" %}
 
 <div class="container">
+  <!-- Asset picker -->
+  <div class="search-row">
+    <input id="tickerSearch" type="text" placeholder="Enter ticker (e.g. AAPL, MSFT, TSLA)" value="{{ ticker }}" onkeydown="if(event.key==='Enter') goToTicker()" />
+    <button onclick="goToTicker()">Research</button>
+  </div>
+
   <!-- Loading state -->
   <div id="loadingState" class="loading"><div class="spinner"></div><br>Loading {{ ticker }} research…</div>
 
@@ -192,6 +203,12 @@
 <script>
 const TICKER = '{{ ticker }}';
 let _currentPrice = 0, _direction = 'Hold', _pred = null;
+
+function goToTicker() {
+  const query = document.getElementById('tickerSearch').value.trim().toUpperCase();
+  if (!query || query === TICKER) return;
+  window.location = '/research/' + encodeURIComponent(query);
+}
 
 async function load() {
   const d = await (await fetch(`/api/research/${TICKER}`)).json();

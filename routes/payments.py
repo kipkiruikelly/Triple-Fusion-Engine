@@ -22,24 +22,57 @@ except ImportError:
 STRIPE_PUB_KEY        = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 STRIPE_PRICE_MONTHLY  = os.environ.get("STRIPE_PRICE_ID_MONTHLY", "")
 STRIPE_PRICE_ANNUAL   = os.environ.get("STRIPE_PRICE_ID_ANNUAL", "")
+STRIPE_PRICE_PLUS_MONTHLY = os.environ.get("STRIPE_PRICE_ID_PLUS_MONTHLY", "")
+STRIPE_PRICE_PLUS_ANNUAL  = os.environ.get("STRIPE_PRICE_ID_PLUS_ANNUAL", "")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
+# Maps a Stripe Price ID to the plan tier it should grant. Unknown/blank
+# price ids (e.g. Plus not configured yet) fall through to 'pro' only via
+# explicit membership checks below, never by default.
+_STRIPE_TIER_PRICES = {
+    STRIPE_PRICE_PLUS_MONTHLY: 'plus',
+    STRIPE_PRICE_PLUS_ANNUAL:  'plus',
+    STRIPE_PRICE_MONTHLY:      'pro',
+    STRIPE_PRICE_ANNUAL:       'pro',
+}
+
+
+def _tier_for_price_id(price_id):
+    return _STRIPE_TIER_PRICES.get(price_id)
+
+
 try:
-    from mpesa import stk_push, query_status, MPESA_OK, PRO_MONTHLY_KES, PRO_ANNUAL_KES
+    from mpesa import (stk_push, query_status, MPESA_OK,
+                        PRO_MONTHLY_KES, PRO_ANNUAL_KES,
+                        PLUS_MONTHLY_KES, PLUS_ANNUAL_KES)
 except Exception:
-    MPESA_OK        = False
-    PRO_MONTHLY_KES = 3500
-    PRO_ANNUAL_KES  = 23000
+    MPESA_OK         = False
+    PRO_MONTHLY_KES  = 3500
+    PRO_ANNUAL_KES   = 23000
+    PLUS_MONTHLY_KES = 1450
+    PLUS_ANNUAL_KES  = 13000
     def stk_push(*a, **kw):    raise RuntimeError("M-Pesa not configured")
     def query_status(*a, **kw): raise RuntimeError("M-Pesa not configured")
 
-def _grant_pro(user, days):
-    """Grant or extend Pro access by `days`."""
-    if user.plan == 'pro' and user.pro_expires_at and user.pro_expires_at >= date.today():
+
+def _grant_plan(user, tier, days):
+    """Grant or extend Plus/Pro access by `days`. `tier` is 'plus' or 'pro' -
+    anything else is treated as 'pro' so a bad/missing value never silently
+    grants nothing."""
+    tier = tier if tier in ('plus', 'pro') else 'pro'
+    # A tier change (Plus -> Pro or vice versa) resets the expiry window to
+    # `days` from today rather than stacking onto the old tier's remaining
+    # time; staying on the same tier extends it as before.
+    if user.plan == tier and user.pro_expires_at and user.pro_expires_at >= date.today():
         user.pro_expires_at = user.pro_expires_at + timedelta(days=days)
     else:
         user.pro_expires_at = date.today() + timedelta(days=days)
-    user.plan = 'pro'
+    user.plan = tier
+
+
+def _grant_pro(user, days):
+    """Back-compat wrapper: gift codes only ever grant Pro."""
+    _grant_plan(user, 'pro', days)
 
 
 # Daraja STK Push result codes and what to tell the user.
@@ -65,7 +98,7 @@ def _settle_mpesa_payment(payment, receipt=None):
     payment.completed_at = datetime.utcnow()
     user = db.session.get(User, payment.user_id)
     if user:
-        _grant_pro(user, payment.days or 30)
+        _grant_plan(user, payment.tier or 'pro', payment.days or 30)
     db.session.commit()
     if user:
         try:
@@ -96,7 +129,13 @@ def register_payment_routes(app):
                                stripe_enabled=_STRIPE_OK,
                                mpesa_enabled=MPESA_OK,
                                pro_monthly_kes=PRO_MONTHLY_KES,
-                               pro_annual_kes=PRO_ANNUAL_KES)
+                               pro_annual_kes=PRO_ANNUAL_KES,
+                               plus_monthly_kes=PLUS_MONTHLY_KES,
+                               plus_annual_kes=PLUS_ANNUAL_KES,
+                               stripe_price_monthly=STRIPE_PRICE_MONTHLY,
+                               stripe_price_annual=STRIPE_PRICE_ANNUAL,
+                               stripe_price_plus_monthly=STRIPE_PRICE_PLUS_MONTHLY,
+                               stripe_price_plus_annual=STRIPE_PRICE_PLUS_ANNUAL)
 
     # ── Stripe ─────────────────────────────────────────────────────────────────
 
@@ -105,12 +144,15 @@ def register_payment_routes(app):
     def stripe_checkout():
         if not getattr(current_user, "email_verified", True):
             return redirect(url_for("verify_notice"))
+        form_tier = request.form.get("tier", "pro")
+        form_tier = form_tier if form_tier in ('plus', 'pro') else 'pro'
         if not _STRIPE_OK:
-            current_user.plan = 'pro'
+            current_user.plan = form_tier
             db.session.commit()
             return redirect(url_for('home'))
         price_id = request.form.get("price_id", STRIPE_PRICE_MONTHLY)
-        if price_id not in (STRIPE_PRICE_MONTHLY, STRIPE_PRICE_ANNUAL):
+        tier     = _tier_for_price_id(price_id)
+        if not price_id or tier is None:
             return redirect(url_for('pricing'))
         base_url = request.host_url.rstrip("/")
         session  = _stripe.checkout.Session.create(
@@ -120,7 +162,8 @@ def register_payment_routes(app):
             mode="subscription",
             success_url=base_url + url_for("stripe_success") + "?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=base_url + url_for("stripe_cancel"),
-            metadata={"user_id": str(current_user.id)},
+            metadata={"user_id": str(current_user.id), "tier": tier},
+            subscription_data={"metadata": {"user_id": str(current_user.id), "tier": tier}},
         )
         return redirect(session.url, code=303)
 
@@ -131,12 +174,14 @@ def register_payment_routes(app):
         if session_id and _STRIPE_OK:
             try:
                 session = _stripe.checkout.Session.retrieve(session_id)
+                tier = (session.metadata or {}).get("tier", "pro")
+                tier = tier if tier in ('plus', 'pro') else 'pro'
                 current_user.stripe_customer_id     = session.customer
                 current_user.stripe_subscription_id = session.subscription
-                current_user.plan = 'pro'
+                current_user.plan = tier
                 if not Payment.query.filter_by(reference=session_id).first():
                     db.session.add(Payment(
-                        user_id=current_user.id, provider='stripe',
+                        user_id=current_user.id, provider='stripe', tier=tier,
                         amount=(session.amount_total or 0) / 100.0,
                         currency=(session.currency or 'usd').upper(),
                         reference=session_id, status='paid',
@@ -181,7 +226,9 @@ def register_payment_routes(app):
             sub  = event["data"]["object"]
             user = User.query.filter_by(stripe_subscription_id=sub["id"]).first()
             if user:
-                user.plan = 'pro' if sub["status"] == "active" else 'free'
+                tier = (sub.get("metadata") or {}).get("tier", "pro")
+                tier = tier if tier in ('plus', 'pro') else 'pro'
+                user.plan = tier if sub["status"] == "active" else 'free'
                 db.session.commit()
         elif event["type"] == "invoice.payment_failed":
             sub_id = event["data"]["object"].get("subscription")
@@ -199,14 +246,19 @@ def register_payment_routes(app):
         data = request.get_json() or {}
         code = data.get("code", "").strip().upper()
         plan = data.get("plan", "monthly")
+        tier = data.get("tier", "pro")
+        tier = tier if tier in ('plus', 'pro') else 'pro'
         if not code:
             return jsonify({"ok": False, "error": "Code required"}), 400
-        
+
         gift = GiftCode.query.filter_by(code=code, used=False).first()
         if not gift:
             return jsonify({"ok": False, "error": "Invalid or expired promo code."}), 400
-            
-        original_price = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
+
+        if tier == 'plus':
+            original_price = PLUS_ANNUAL_KES if plan == "annual" else PLUS_MONTHLY_KES
+        else:
+            original_price = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
         days = gift.days or (365 if plan == "annual" else 30)
         
         # Currently, all GiftCodes are 100% off (gift passes)
@@ -229,43 +281,49 @@ def register_payment_routes(app):
         data  = request.get_json() or {}
         phone = data.get("phone", "").strip().replace(" ", "").replace("-", "")
         plan  = data.get("plan", "monthly")
+        tier  = data.get("tier", "pro")
+        tier  = tier if tier in ('plus', 'pro') else 'pro'
         if phone.startswith("0"):
             phone = "254" + phone[1:]
         if not phone.startswith("254") or len(phone) != 12 or not phone.isdigit():
             return jsonify({"ok": False, "error": "Enter a valid Safaricom number (07XXXXXXXX)."}), 400
-            
-        amount = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
+
+        if tier == 'plus':
+            amount = PLUS_ANNUAL_KES if plan == "annual" else PLUS_MONTHLY_KES
+        else:
+            amount = PRO_ANNUAL_KES if plan == "annual" else PRO_MONTHLY_KES
         days   = 365 if plan == "annual" else 30
-        
+
         discount_code = data.get("discount_code", "").strip().upper()
         if discount_code:
             gift = GiftCode.query.filter_by(code=discount_code, used=False).first()
             if not gift:
                 return jsonify({"ok": False, "error": "Invalid or expired promo code."}), 400
-            
-            # GiftCode gives 100% off for `gift.days`
+
+            # GiftCode gives 100% off for `gift.days`, for whichever tier was
+            # being purchased.
             gift.used = True
             gift.used_by = current_user.id
             gift.used_at = datetime.utcnow()
-            
-            current_user.plan = 'pro'
-            current_user.pro_expires = datetime.utcnow() + timedelta(days=gift.days)
-            
-            db.session.add(Payment(user_id=current_user.id, provider='promo', plan=plan,
+
+            _grant_plan(current_user, tier, gift.days)
+
+            db.session.add(Payment(user_id=current_user.id, provider='promo', plan=plan, tier=tier,
                                    amount=0, currency='KES', days=gift.days,
                                    reference=f"PROMO-{discount_code}", status='paid'))
             db.session.commit()
-            return jsonify({"ok": True, "paid": True, "message": f"Promo code applied! Pro access granted for {gift.days} days."})
+            return jsonify({"ok": True, "paid": True,
+                            "message": f"Promo code applied! {tier.capitalize()} access granted for {gift.days} days."})
 
-        desc   = f"BullLogic Pro {'1 year' if plan == 'annual' else '30 days'}"
+        desc   = f"BullLogic {tier.capitalize()} {'1 year' if plan == 'annual' else '30 days'}"
         try:
-            resp = stk_push(phone, amount, "BullLogicPro", desc)
+            resp = stk_push(phone, amount, f"BullLogic{tier.capitalize()}", desc)
         except Exception as e:
             return jsonify({"ok": False, "error": str(e)}), 500
         if resp.get("ResponseCode") != "0":
             return jsonify({"ok": False, "error": resp.get("ResponseDescription", "STK push failed")}), 400
         checkout_id = resp["CheckoutRequestID"]
-        db.session.add(Payment(user_id=current_user.id, provider='mpesa', plan=plan,
+        db.session.add(Payment(user_id=current_user.id, provider='mpesa', plan=plan, tier=tier,
                                amount=float(amount), currency='KES', days=days,
                                phone=phone, reference=checkout_id, status='pending'))
         db.session.commit()
@@ -289,8 +347,9 @@ def register_payment_routes(app):
                 return jsonify({"ok": False, "paid": False,
                                 "error": "Payment record not found. Contact support with your M-Pesa receipt."}), 404
             _settle_mpesa_payment(payment)
+            tier_label = (payment.tier or 'pro').capitalize()
             return jsonify({"ok": True, "paid": True,
-                            "message": f"Payment confirmed! Pro access granted for {payment.days or 30} days."})
+                            "message": f"Payment confirmed! {tier_label} access granted for {payment.days or 30} days."})
         elif result_code in MPESA_RESULT_CODES:
             message = _fail_mpesa_payment(payment, result_code)
             return jsonify({"ok": True, "paid": False,

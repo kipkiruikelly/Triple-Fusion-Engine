@@ -339,3 +339,191 @@ def test_trades_api_labels_simulated(client, clean_paper):
 def test_admin_toggle_requires_admin(client, clean_paper):
     r = client.post("/admin/api/paper/toggle", json={"enabled": True})
     assert r.status_code in (401, 403)
+
+
+# ── Phase 2: per-user portfolio isolation ─────────────────────────────────────
+
+def test_portfolio_isolation_between_users_and_demo(app, db, clean_paper, make_user):
+    """Two users and the platform demo stream trade the same ticker
+    concurrently; each owner's open positions and realized equity must be
+    fully independent."""
+    uid_a = make_user("papertrader_iso_a")
+    uid_b = make_user("papertrader_iso_b")
+    with app.app_context():
+        cfg = paper_engine.load_config(db)
+
+        t_demo = paper_engine.try_open(db, "ml_ensemble", "BTC", "LONG",
+                                       _quote(100.0), atr=2.0, cfg=cfg)
+        assert not isinstance(t_demo, str), f"demo rejected: {t_demo}"
+
+        t_a = paper_engine.try_open(db, "ml_ensemble", "ETH", "LONG",
+                                    _quote(50.0), atr=1.0, cfg=cfg, user_id=uid_a)
+        assert not isinstance(t_a, str), f"A rejected: {t_a}"
+
+        # Same ticker as A - must not collide, these are different owners.
+        t_b = paper_engine.try_open(db, "ml_ensemble", "ETH", "SHORT",
+                                    _quote(50.0), atr=1.0, cfg=cfg, user_id=uid_b)
+        assert not isinstance(t_b, str), f"B rejected: {t_b}"
+
+        demo_open = paper_engine.open_positions(db, "ml_ensemble")
+        a_open    = paper_engine.open_positions(db, "ml_ensemble", user_id=uid_a)
+        b_open    = paper_engine.open_positions(db, "ml_ensemble", user_id=uid_b)
+        assert [p.ticker for p in demo_open] == ["BTC"]
+        assert [p.ticker for p in a_open] == ["ETH"]
+        assert [p.ticker for p in b_open] == ["ETH"]
+        assert a_open[0].id != b_open[0].id
+
+        # A wins, B loses (short against a rising price).
+        paper_engine.close_trade(db, t_a, 55.0, "target", cfg)
+        paper_engine.close_trade(db, t_b, 55.0, "stop", cfg)
+
+        eq_a    = paper_engine.realized_equity(db, "ml_ensemble", cfg, user_id=uid_a)
+        eq_b    = paper_engine.realized_equity(db, "ml_ensemble", cfg, user_id=uid_b)
+        eq_demo = paper_engine.realized_equity(db, "ml_ensemble", cfg)
+        assert eq_a > cfg["starting_balance"]      # A's win
+        assert eq_b < cfg["starting_balance"]      # B's loss
+        # Demo's only position (BTC) is still open with no realized P&L -
+        # A/B's trades must not have leaked into its equity.
+        assert eq_demo == cfg["starting_balance"]
+
+        # Each owner's audit trail only contains their own events.
+        from models import PaperTradeEvent
+        a_events = PaperTradeEvent.query.filter_by(user_id=uid_a).all()
+        b_events = PaperTradeEvent.query.filter_by(user_id=uid_b).all()
+        assert {e.event for e in a_events} == {"open", "close"}
+        assert all(e.trade_id in (t_a.id,) for e in a_events)
+        assert all(e.trade_id in (t_b.id,) for e in b_events)
+
+
+def test_reset_paper_account_now_clears_only_that_user(app, db, clean_paper, make_user):
+    """The admin reset-paper-account route (routes/admin_power.py) was a
+    documented no-op before user_id existed on these tables. It needed no
+    code change - confirm it now actually isolates and clears one user."""
+    from models import PaperTrade, PaperTradeEvent, PaperEquitySnapshot
+    uid_a = make_user("papertrader_reset_a")
+    uid_b = make_user("papertrader_reset_b")
+    with app.app_context():
+        cfg = paper_engine.load_config(db)
+        paper_engine.try_open(db, "ml_ensemble", "BTC", "LONG", _quote(100.0),
+                              2.0, cfg, user_id=uid_a)
+        paper_engine.try_open(db, "ml_ensemble", "ETH", "LONG", _quote(50.0),
+                              1.0, cfg, user_id=uid_b)
+
+        n = 0
+        for model in (PaperTradeEvent, PaperEquitySnapshot, PaperTrade):
+            n += model.query.filter_by(user_id=uid_a).delete()
+        db.session.commit()
+
+        assert n > 0
+        assert PaperTrade.query.filter_by(user_id=uid_a).count() == 0
+        assert PaperTrade.query.filter_by(user_id=uid_b).count() == 1
+
+
+# ── Phase 2: XP integration ───────────────────────────────────────────────────
+
+def test_xp_awarded_on_open_and_close(app, db, clean_paper, make_user):
+    from models import User
+    uid = make_user("papertrader_xp")
+    with app.app_context():
+        cfg = paper_engine.load_config(db)
+        u = db.session.get(User, uid)
+        assert (u.xp or 0) == 0
+
+        t = paper_engine.try_open(db, "ml_ensemble", "BTC", "LONG",
+                                  _quote(100.0), 2.0, cfg, user_id=uid)
+        assert not isinstance(t, str)
+        db.session.refresh(u)
+        assert u.xp == 3   # +3 for opening
+
+        paper_engine.close_trade(db, t, 110.0, "target", cfg)  # profitable close
+        db.session.refresh(u)
+        assert u.xp == 3 + 15   # +15 for a profitable close
+
+        t2 = paper_engine.try_open(db, "ml_ensemble", "ETH", "LONG",
+                                   _quote(50.0), 1.0, cfg, user_id=uid)
+        assert not isinstance(t2, str)
+        paper_engine.close_trade(db, t2, 10.0, "stop", cfg)     # losing close
+        db.session.refresh(u)
+        assert u.xp == 3 + 15 + 3 + 3   # +3 open, +3 losing close
+
+
+def test_demo_stream_trades_never_award_xp(app, db, clean_paper):
+    """user_id=None (the platform demo) has no account to credit - this
+    must be a safe no-op, not an error."""
+    with app.app_context():
+        cfg = paper_engine.load_config(db)
+        t = paper_engine.try_open(db, "ml_ensemble", "BTC", "LONG",
+                                  _quote(100.0), 2.0, cfg)
+        assert not isinstance(t, str)
+        paper_engine.close_trade(db, t, 110.0, "target", cfg)  # must not raise
+
+
+# ── Phase 2: leaderboard ranking ──────────────────────────────────────────────
+
+def _seed_closed_trades(db, user_id, strategy, pnls):
+    """Directly insert closed PaperTrade rows with given P&Ls - a targeted
+    unit of the ranking logic, not a re-test of try_open/close_trade's own
+    mechanics (already covered above)."""
+    from models import PaperTrade
+    now = datetime.utcnow()
+    for i, pnl in enumerate(pnls):
+        db.session.add(PaperTrade(
+            user_id=user_id, strategy=strategy, ticker="BTC", asset_class="crypto",
+            side="LONG", qty=1.0, entry_time=now, entry_price=100.0, entry_mkt=100.0,
+            stop_price=95.0, target_price=110.0, max_hold_hours=240,
+            commission=0.0, status="closed", exit_time=now, exit_price=100.0 + pnl,
+            exit_mkt=100.0 + pnl, exit_reason="target", pnl=pnl))
+    db.session.commit()
+
+
+def _seed_equity_curve(db, user_id, strategy, equities):
+    from models import PaperEquitySnapshot
+    for i, eq in enumerate(equities):
+        db.session.add(PaperEquitySnapshot(
+            user_id=user_id, strategy=strategy, equity=eq, open_count=0,
+            taken_at=datetime.utcnow() - timedelta(days=len(equities) - i)))
+    db.session.commit()
+
+
+def test_leaderboard_ranks_by_sharpe_not_raw_return(app, db, clean_paper, make_user):
+    """A steady, low-volatility performer must outrank a choppier one with
+    a higher raw return - proving the leaderboard rewards risk-adjusted
+    performance, not the biggest number, per PAPER_TRADING_PHASE2_DESIGN.md."""
+    from routes.api import _trader_leaderboard
+    uid_steady   = make_user("trader_steady")
+    uid_volatile = make_user("trader_volatile")
+    uid_newbie   = make_user("trader_newbie")
+    with app.app_context():
+        from models import User
+        db.session.get(User, uid_steady).paper_trading_opted_in = True
+        db.session.get(User, uid_volatile).paper_trading_opted_in = True
+        db.session.get(User, uid_newbie).paper_trading_opted_in = True
+        db.session.commit()
+
+        # Steady: 10 small, consistent wins; gentle, low-variance equity climb.
+        _seed_closed_trades(db, uid_steady, "ml_ensemble", [1000.0] * 10)
+        _seed_equity_curve(db, uid_steady, "ml_ensemble",
+                           [1_010_000.0, 1_020_000.0, 1_030_000.0])
+
+        # Volatile: also 10 trades, higher total return, but a wild equity
+        # swing (up 30%, down 31%, up 22%) - much higher variance.
+        _seed_closed_trades(db, uid_volatile, "ml_ensemble", [5000.0] * 6 + [-2000.0] * 4)
+        _seed_equity_curve(db, uid_volatile, "ml_ensemble",
+                           [1_300_000.0, 900_000.0, 1_100_000.0])
+
+        # Newbie: only 5 closed trades - below MIN_TRADES, must be excluded.
+        _seed_closed_trades(db, uid_newbie, "ml_ensemble", [1000.0] * 5)
+        _seed_equity_curve(db, uid_newbie, "ml_ensemble", [1_010_000.0, 1_020_000.0])
+
+        rows = _trader_leaderboard(limit=10)
+        usernames = [r["username"] for r in rows]
+
+        assert "trader_newbie" not in usernames, "below MIN_TRADES must be excluded"
+        assert "trader_steady" in usernames and "trader_volatile" in usernames
+
+        steady_row   = next(r for r in rows if r["username"] == "trader_steady")
+        volatile_row = next(r for r in rows if r["username"] == "trader_volatile")
+        assert steady_row["sharpe"] > volatile_row["sharpe"]
+        assert steady_row["rank"] < volatile_row["rank"]
+        # Sanity check this is a genuine risk-adjusted flip, not a return tie.
+        assert volatile_row["return_pct"] > steady_row["return_pct"]

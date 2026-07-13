@@ -1,24 +1,43 @@
-# BullLogic — Free vs Pro Tier Matrix
+# BullLogic — Free / Plus / Pro Tier Matrix
 
-This is the source of truth for what Free and Pro accounts get. Two
+This is the source of truth for what Free, Plus, and Pro accounts get. Two
 columns matter for every row: **Enforced today** (what the running code
 actually does, verified against the routes below) and **Planned** (what
 we intend to build toward). Do not treat "Planned" as already true —
 several rows below started life as assumptions that turned out not to
 match the code, which is why this file insists on the distinction.
 
+`User.plan` is `free|plus|pro|enterprise`. `User.is_plus` is true for
+`plus`, `pro`, and `enterprise` (i.e. "at least Plus"); `User.is_pro` is
+true only for `pro` and `enterprise`, unchanged from before Plus existed -
+features gated on `is_pro` stay Pro/Enterprise-exclusive even for Plus
+subscribers.
+
 ## Currently enforced (verified against the code)
 
-| Feature | Free | Pro | Enforced in |
-|---|---|---|---|
-| Daily predictions | 5/day (`FREE_DAILY_LIMIT`) | Unlimited | `utils.consume_quota`, `models.User.predictions_remaining` |
-| Multi-timeframe confluence (`/api/mtf/<ticker>`) | Blocked | Yes | `routes/predictions.py` (`is_pro` check) |
-| Backtester (`/api/backtest`) | **Blocked entirely** | Yes, capped at `1d`/`1h` interval and `6mo`/`1y`/`2y` history for everyone, Pro or Free | `routes/trading.py` |
-| MT5 connect/start/stop/status | Blocked | Yes | `routes/trading.py` (`@pro_required`) |
-| Paper trading (`/paper`) | Full read/write access | Full access | `routes/paper.py` (no gate at all - paper mode is simulated money, open to everyone) |
-| Admin console | N/A - separate `role` field, unrelated to `plan` | N/A | `routes/admin.py` |
+| Feature | Free | Plus | Pro | Enforced in |
+|---|---|---|---|---|
+| Daily predictions | 5/day (`FREE_DAILY_LIMIT`) | Unlimited | Unlimited | `utils.consume_quota`, `models.User.predictions_remaining` (`is_plus`) |
+| Multi-timeframe confluence (`/api/mtf/<ticker>`) | Blocked | Yes | Yes | `routes/predictions.py` (`is_plus` check) |
+| Backtester (`/api/backtest`) | **Blocked entirely** | 1 run/day, `6mo`/`1y` history only (`PLUS_BACKTEST_DAILY`, `PLUS_BACKTEST_PERIODS` in `utils.py`) | Unlimited runs, `1d`/`1h` interval and `6mo`/`1y`/`2y` history | `routes/trading.py` |
+| MT5 connect/start/stop/status, REST API keys, Quick-Trade API | Blocked | **Blocked** (Plus does not include MT5/API access) | Yes | `routes/trading.py` (`@pro_required` / inline `is_pro`), `routes/auth.py` |
+| Paper trading, platform demo (`/paper`) | Full read/write access | Full access | Full access | `routes/paper.py` (no gate at all - paper mode is simulated money, open to everyone) |
+| Paper trading, own portfolio (opt-in, `/api/paper/opt-in`) | Open, login only | Open, login only | Open, login only | `routes/paper.py` - no plan gate, deliberately (see `PAPER_TRADING_PHASE2_DESIGN.md`) |
+| Trader leaderboard (`/traders`, `/api/leaderboard/users`) | Open, login only | Open, login only | Open, login only | `routes/paper.py`, `routes/api.py` - real per-user Sharpe ranking, no plan gate |
+| Admin console | N/A - separate `role` field, unrelated to `plan` | N/A | N/A | `routes/admin.py` |
 
-## Currently NOT restricted by plan at all (open to every logged-in user, Free or Pro)
+Billing: `routes/payments.py` grants/extends a tier via `_grant_plan(user,
+tier, days)`, called from Stripe checkout/webhook and M-Pesa
+settlement/promo-code redemption. Stripe distinguishes Plus vs Pro by
+which of the four `STRIPE_PRICE_ID_*` env vars was used (mapped in
+`_STRIPE_TIER_PRICES`) and threads the tier through via checkout/session
+metadata (`subscription_data.metadata.tier`) since Stripe subscription
+webhook events don't otherwise carry it. M-Pesa distinguishes tiers by a
+`tier` field in the `/mpesa/pay` request body, persisted on `Payment.tier`
+so the async callback/status-poll settlement path knows which plan to
+grant. Gift codes (`GiftCode`/`_grant_pro`) still only ever grant Pro.
+
+## Currently NOT restricted by plan at all (open to every logged-in user, any tier)
 
 Verified by absence of any `is_pro`/`pro_required` check in the route:
 
@@ -71,8 +90,11 @@ Candidate caps, not yet implemented:
 | Scanner | Current filters | + saved presets |
 | API key creation | Not allowed | Allowed, rate limited |
 | `/history/export` | Not allowed | Allowed |
-| Backtester | 1 run/day, 1yr history (a *loosening* from today's total block, not a new restriction) | Unlimited runs, up to 2yr history (5yr is not achievable without new work - `/api/backtest` hard-validates period against `{6mo, 1y, 2y}` today) |
 | Chart indicators | SMA, EMA | + Bollinger Bands, Volume (already free today - would need to become a genuine new restriction to change) |
+
+The backtester row that used to live here shipped: Free stays blocked
+(unchanged, not loosened), Plus gets 1 run/day up to 1yr history, Pro keeps
+unlimited runs up to 2yr - see the enforced table above.
 
 ## Pricing
 

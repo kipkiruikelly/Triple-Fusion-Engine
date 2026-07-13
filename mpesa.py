@@ -29,8 +29,11 @@ CALLBACK_URL    = os.environ.get("MPESA_CALLBACK_URL", "")
 MPESA_OK = bool(CONSUMER_KEY and CONSUMER_SECRET and PASSKEY and CALLBACK_URL)
 
 # Monthly Pro price in KES (≈ $29 at 130 KES/USD)
-PRO_MONTHLY_KES = int(os.environ.get("PRO_MONTHLY_KES", "3500"))
-PRO_ANNUAL_KES  = int(os.environ.get("PRO_ANNUAL_KES",  "23000"))
+PRO_MONTHLY_KES  = int(os.environ.get("PRO_MONTHLY_KES", "3500"))
+PRO_ANNUAL_KES   = int(os.environ.get("PRO_ANNUAL_KES",  "23000"))
+# Plus tier, same ~121 KES/USD rate as Pro above (≈ $12 / $9-equivalent annual)
+PLUS_MONTHLY_KES = int(os.environ.get("PLUS_MONTHLY_KES", "1450"))
+PLUS_ANNUAL_KES  = int(os.environ.get("PLUS_ANNUAL_KES",  "13000"))
 
 
 def _get_token() -> str:

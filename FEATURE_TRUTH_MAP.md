@@ -24,7 +24,7 @@ A 200 response was not accepted as proof of anything.
 | 9 | `sentiment.py` | **PARTIAL** | Lexicon scoring is real and tested (probe: +0.87 bullish text, -0.95 bearish text). NewsAPI path is real code but **no NEWSAPI_KEY is configured**, so it returns nothing. The Reddit component is **simulated** - hardcoded per-ticker popularity plus random noise (`_reddit_mention_count`). Fail-safed in this audit: payloads now carry `simulated: true` and a warning whenever no live source is behind the number. |
 | 10 | `economic_calendar.py` | **PARTIAL** | Executed: 23 curated real 2026 events (FOMC/NFP/CPI), `get_upcoming_events(30d)=4`, `event_volatility_warning` returns a real recommendation. It is a **static hand-maintained list**, not a live feed - accurate for 2026, stale after. Tests pass. |
 | 11 | `data_quality.py` | **WORKING (library)** | 16/16 tests pass after this audit fixed weekend spacing being counted as data gaps (a valid business-day frame scored 83/100) and empty-frame checks not being logged. Caveat: **nothing imports it** outside tests - the data pipeline does not call it yet. |
-| 12 | `gamification.py` | **PARTIAL** | The engine (competitions, leaderboards, 12-achievement catalog, checker) works in memory and passes its tests. BUT: state is in-memory only (verified: engine attrs are two dicts), nothing ever writes `UserAchievement` rows (repo-wide grep: zero writers), and the `/api/competitions` + `/api/leaderboard/users` endpoints do NOT use this engine - they return hardcoded mocks (now labeled `simulated`). |
+| 12 | `gamification.py` | **PARTIAL, unchanged** | The engine (competitions, 12-achievement catalog, checker) still works in memory and passes its tests, still unwired. State is in-memory only (engine attrs are two dicts), nothing ever writes `UserAchievement` rows, and `/api/competitions`/`/api/competitions/<id>/leaderboard`/`/api/achievements/user` still return hardcoded mocks (labeled `simulated`) - deliberately out of scope for the per-user paper trading work below, not forgotten (see `PAPER_TRADING_PHASE2_DESIGN.md`). **`/api/leaderboard/users` is no longer part of this module's gap** - it moved to real, DB-backed per-user data (see new section below) rather than being wired to this engine, because `CompetitionEngine` computes Sharpe from raw trade-PnL arrays, a different formula than `paper_engine.compute_metrics()`'s equity-curve-return Sharpe already used platform-wide - wiring it in would have meant two disagreeing "Sharpe" numbers in the same app. |
 | 13 | `db_utils.py` | **PARTIAL / SCAFFOLD** | `run_migrations()` works (verified against a temp SQLite DB → True). Model **versioning is scaffold**: `create_model_version` builds a dict and logs it but persists nothing (the "version" is the wall-clock HHMM), `get_model_versions` just lists files in `Saved Models/`, and rollback does not exist. |
 
 ## New API endpoints (`routes/api.py`)
@@ -35,7 +35,7 @@ A 200 response was not accepted as proof of anything.
 | `GET /api/predictions/recent` | WORKING | Real `PredictionHistory` query (field names fixed in this audit). |
 | `POST /api/predictions/signal` | WORKING | Calls the real `run_prediction`; sentiment/calendar enrichment attached (sentiment carries its simulated flag through). |
 | `GET /api/watchlist` | WORKING | Real `WatchlistItem` rows + yfinance prices. |
-| `GET /api/leaderboard/users` | SCAFFOLD | Hardcoded five fake traders - now labeled `simulated`. (The real model-accuracy leaderboard is `GET /api/leaderboard` in routes/predictions.py.) |
+| `GET /api/leaderboard/users` | **WORKING** (was SCAFFOLD) | Fixed 2026-07-11: real per-`(user, strategy)` ranking by Sharpe ratio from actual `PaperTrade`/`PaperEquitySnapshot` rows, gated to users with >= `paper_engine.MIN_TRADES` closed trades. No `simulated` flag - it's real data. All-time only, no weekly/monthly slicing yet. See "Per-user paper trading" section below. (The unrelated model-accuracy leaderboard is still `GET /api/leaderboard` in routes/predictions.py.) |
 | `GET /api/competitions`, `GET /api/competitions/<id>/leaderboard` | SCAFFOLD | Hardcoded competitions; not connected to `gamification.CompetitionEngine`. Now labeled `simulated`. |
 | `GET /api/achievements/user` | PARTIAL | Real DB query, but no code ever awards achievements, so it always returns empty. Response now says so. |
 | `GET /api/notifications` | WORKING | Served by routes/notifications.py from the real Notification table (it registers before the blueprint). The shadowed mock in routes/api.py was dead code and was removed in this audit. |
@@ -97,7 +97,7 @@ Three fixed guards, by design, not bugs:
 | User management: ban with reason | **WORKING** | `User.ban_reason` column added; banning without a reason is refused (400); the reason is stored on the user and included in the audit detail; unbanning clears it. Tested. |
 | User management: grant/revoke Pro | **WORKING** | Pre-existing (`/admin/api/users/<id>/pro`), unchanged this session. |
 | User management: resend verification | **WORKING** | New admin route reuses the exact same `_send_verification_email` helper the self-service `/verify/resend` route uses (exposed via `app.extensions`), so behavior (including "no mailer configured" handling) is identical, not reimplemented. Refuses if already verified. Tested. |
-| User management: reset paper account | **PARTIAL** | The route runs and returns a `cleared` count, but the paper trading engine's tables (`PaperTrade`, `PaperTradeEvent`, `PaperEquitySnapshot`) have **no `user_id` column at all** - the engine is a shared/global simulation, not per-user. So this action is currently a safe no-op (`cleared: 0`) against real data; it only does real work if those tables ever gain a `user_id` column. Documented here rather than silently claimed as working. |
+| User management: reset paper account | **WORKING** (was PARTIAL, fixed 2026-07-11) | `PaperTrade`/`PaperTradeEvent`/`PaperEquitySnapshot` gained a nullable `user_id` for the per-user paper trading work (see below); this route's `hasattr(model, "user_id")` check meant it needed **zero code changes** to start doing real work - it now genuinely clears one user's own paper rows, tested (`test_reset_paper_account_now_clears_only_that_user`). |
 | User management: force logout | **WORKING** | Rotates `User.session_token`, which `get_id()` mixes into the Flask-Login session id, invalidating every existing session at once. Tested. |
 | User management: view sessions | **PARTIAL, by design** | This app has one rotating session token per user, not a per-device session table, so there is no such thing as "list of currently active sessions" to show. The console instead shows **login history** (time, IP, device) from `ActivityLog`, and the API response says so explicitly. Regular `/login` now also writes an `ActivityLog("login")` row (it previously only did on Google login), so this history is populated for password logins too. Tested. |
 | Impersonation | **WORKING** | Read-only flag set in session, refuses to impersonate another admin, start/stop both audited. Tested. |
@@ -113,6 +113,58 @@ Three fixed guards, by design, not bugs:
 | Security: failed logins / IP lockouts | **WORKING** | Reads the in-memory rate limiter state and recent `login.failed` audit rows. Tested (shape smoke test). |
 | Security: admin-only 2FA | **WORKING** | Enrollment is the existing self-service TOTP flow (`/api/2fa/setup`, `/api/2fa/enable`, on the regular `/profile` page) - there is no separate admin enrollment system. Once an `admin`-role account has 2FA enabled, both the password `/admin/login` form and the Google `/auth/google?admin=1` path stop short of completing the session and require a valid TOTP code as a second round trip; accounts without 2FA enrolled are unaffected. Tested: blocked without code, succeeds with a valid code, unaffected accounts log in directly. |
 | Security: audit log as a filterable timeline | **WORKING** (pre-existing, not new this session) | `GET /admin/api/audit` filters by free text, exact action, admin id, and date range; the existing `audit.html` renders it as a timeline. Tested (filter smoke test added this session). |
+
+## Per-user paper trading + trader leaderboard (added 2026-07-11)
+
+Full design rationale in `PAPER_TRADING_PHASE2_DESIGN.md`. Summary of what
+changed and what's still out of scope:
+
+- **`paper_engine.py` is now multi-tenant.** `PaperTrade`,
+  `PaperTradeEvent`, `PaperEquitySnapshot` gained a nullable `user_id`
+  (`NULL` = the original platform-wide demo stream on `/paper`, unaffected
+  and unchanged - all 27 pre-existing tests pass without modification).
+  Every portfolio-state function (`open_positions`, `realized_equity`,
+  `mark_to_market`, `class_exposure`, `breaker_tripped`, `try_open`,
+  `strategy_report`, `snapshot_equity`) takes an optional `user_id=None`.
+  Signal generation (`ml_signals`/`alpha_signals`) is still computed once
+  per ops cycle and shared; only portfolio bookkeeping is per-owner
+  (`_run_owner_cycle`, called once for the demo and once per opted-in
+  user). **WORKING**, tested (`test_portfolio_isolation_between_users_and_demo`
+  and 5 other new tests in `tests/test_paper_engine.py`).
+- **Opt-in, not automatic**: `User.paper_trading_opted_in`
+  (`/api/paper/opt-in`, `/api/paper/opt-out`). Opting out pauses new
+  entries only - open positions still get exit-checked normally so nothing
+  gets stranded. No plan-tier gate (open to Free through Enterprise).
+- **XP integration** (ties into the Phase 1 streak/XP system, not a second
+  scoring system): `utils.award_xp()` called directly from `try_open`
+  (+3 on open) and `close_trade` (+15 profitable close, +3 losing close).
+  Position size is never user-chosen (sized off a shared `risk_pct` config
+  and each user's own equity), so this can't be gamed by oversized bets.
+  **WORKING**, tested (`test_xp_awarded_on_open_and_close`,
+  `test_demo_stream_trades_never_award_xp`).
+- **`GET /api/leaderboard/users`** now returns real `(user, strategy)`
+  rankings by Sharpe ratio (`routes/api.py:_trader_leaderboard`), reusing
+  `paper_engine.compute_metrics()` - the same function, not a second
+  formula. Rows need >= `MIN_TRADES` (10) closed trades to appear, the
+  same honesty gate the engine already used everywhere else. **WORKING**,
+  tested (`test_leaderboard_ranks_by_sharpe_not_raw_return` - confirms a
+  low-volatility performer outranks a choppier one with a *higher* raw
+  return, proving the ranking can't be won by reckless variance).
+- **New page**: `/traders` (`Web Pages/traders.html`) - opt-in control,
+  the user's own per-strategy portfolio summary, and the top-10 board.
+  Requires login (matches the pre-existing gate on
+  `/api/leaderboard/users`), no plan-tier gate. Linked from the navbar's
+  Learn menu alongside (not replacing) the existing model-accuracy
+  `/leaderboard`, relabeled "Model Leaderboard" there to disambiguate.
+- **`/api/paper/trades`** (the public demo trade-log endpoint) was
+  explicitly scoped to `user_id IS NULL` so it keeps meaning exactly what
+  it meant before - the platform demo's log, not a feed mixing in
+  individual users' own trades.
+- **Deliberately not done this phase**: `gamification.py`'s
+  `CompetitionEngine` (time-boxed contests) and `ACHIEVEMENTS` remain
+  unwired - see module #12 above. `mt5_trading.py`'s MT5 Paper tab (a
+  separate, singleton-based simulator with its own known concurrency bug)
+  is untouched. No weekly/monthly leaderboard slicing - all-time only.
 
 ## Trained model coverage (updated 2026-07-06)
 

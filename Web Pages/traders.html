@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en"{{ theme_attr }}>
+<head>
+  {% include "_theme.html" %}
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Trader Leaderboard, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/index.css" />
+  <style>
+    .container{max-width:1100px;margin:0 auto;padding:32px 24px}
+    h1{font-size:20pt;font-weight:700;color:var(--white);margin-bottom:6px}
+    .subtitle{font-size:10.5pt;color:var(--muted);margin-bottom:24px;max-width:70ch;line-height:1.6}
+
+    /* My portfolio card */
+    .my-portfolio{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin-bottom:28px}
+    .my-portfolio-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+    .my-portfolio-title{font-size:12pt;font-weight:700;color:var(--white)}
+    .opt-btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:9.5pt;font-weight:700;cursor:pointer;font-family:inherit}
+    .opt-btn.out{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+    .my-strategies{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    @media(max-width:640px){.my-strategies{grid-template-columns:1fr}}
+    .my-strat-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px 16px}
+    .my-strat-name{font-size:9pt;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .my-strat-stats{display:flex;gap:18px;flex-wrap:wrap}
+    .my-stat-label{font-size:7.5pt;color:var(--muted);font-weight:600;text-transform:uppercase}
+    .my-stat-value{font-size:12pt;font-weight:700;color:var(--white);margin-top:2px}
+    .empty-note{color:var(--muted);font-size:9.5pt;line-height:1.6}
+
+    /* Leaderboard */
+    .lb-section-title{font-size:13pt;font-weight:700;color:var(--white);margin-bottom:4px}
+    .lb-note{font-size:9pt;color:var(--muted);margin-bottom:18px}
+    .cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    @media(max-width:640px){.cards-grid{grid-template-columns:1fr}}
+    .lb-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
+    .lb-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .lb-rank{font-size:9pt;font-weight:700;color:var(--muted)}
+    .lb-rank.r1{color:#FFD700}
+    .lb-rank.r2{color:#C0C0C0}
+    .lb-rank.r3{color:#CD7F32}
+    .lb-user{font-size:13pt;font-weight:700;color:var(--white)}
+    .lb-strategy-badge{display:inline-block;font-size:8pt;font-weight:700;padding:3px 9px;border-radius:5px;margin-bottom:12px}
+    .badge-ml{background:rgba(59,130,246,0.12);color:#60A5FA}
+    .badge-alpha{background:rgba(139,92,246,0.12);color:#A78BFA}
+    .lb-stats{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .stat{background:var(--bg);border-radius:5px;padding:6px 10px}
+    .stat-label{font-size:7.5pt;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+    .stat-value{font-size:10pt;font-weight:700;color:var(--white);margin-top:2px}
+
+    .loading{text-align:center;padding:60px;color:var(--muted);font-size:10pt}
+    .spinner{display:inline-block;width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+{% include "_navbar.html" %}
+
+<div class="container">
+  <h1>&#127942; Trader Leaderboard</h1>
+  <p class="subtitle">Ranked by Sharpe ratio (return relative to volatility) from real paper-trading portfolios,
+    not raw P&amp;L - a lucky oversized bet won't top this board, and position size is never something you
+    control here: every trade is sized off a fixed % of your own equity by the same risk engine for everyone.
+    A trader needs at least {{ min_trades if min_trades is defined else 10 }} closed trades before they're ranked.</p>
+
+  <div class="my-portfolio">
+    <div class="my-portfolio-head">
+      <div class="my-portfolio-title">My Paper Portfolio</div>
+      <button id="optBtn" class="opt-btn" onclick="toggleOptIn()">Loading…</button>
+    </div>
+    <div id="myStrategies"><div class="empty-note">Loading your portfolio…</div></div>
+  </div>
+
+  <div class="lb-section-title">Top 10</div>
+  <div class="lb-note">One row per trader per strategy - your ML and alpha-rules performance are ranked separately.</div>
+  <div id="grid" class="cards-grid">
+    <div class="loading"><div class="spinner"></div><br>Loading leaderboard…</div>
+  </div>
+</div>
+
+<script>
+let _optedIn = false;
+
+async function loadMyPortfolio() {
+  const r = await fetch('/api/paper/my-portfolio');
+  if (r.status === 401) {
+    document.getElementById('optBtn').textContent = 'Log in to start';
+    document.getElementById('optBtn').onclick = () => location.href = '/login';
+    document.getElementById('myStrategies').innerHTML = '<div class="empty-note">Log in to start your own paper portfolio.</div>';
+    return;
+  }
+  const d = await r.json();
+  if (!d.ok) return;
+  _optedIn = d.opted_in;
+  renderOptBtn();
+  if (!_optedIn) {
+    document.getElementById('myStrategies').innerHTML =
+      '<div class="empty-note">You haven\'t started a paper portfolio yet. Opt in to trade both strategies with your own virtual '
+      + d.currency + ' balance, sized and risk-managed the same way the platform demo is.</div>';
+    return;
+  }
+  document.getElementById('myStrategies').innerHTML = '<div class="my-strategies">' +
+    d.strategies.map(s => `
+      <div class="my-strat-card">
+        <div class="my-strat-name">${s.strategy.replace('_', ' ')}</div>
+        <div class="my-strat-stats">
+          <div><div class="my-stat-label">Equity</div><div class="my-stat-value">${s.currency ? '' : ''}${s.equity.toLocaleString()}</div></div>
+          <div><div class="my-stat-label">Return</div><div class="my-stat-value" style="color:${(s.metrics.total_return_pct||0)>=0?'var(--green)':'var(--red)'}">${s.metrics.sufficient ? (s.metrics.total_return_pct>=0?'+':'')+s.metrics.total_return_pct+'%' : '-'}</div></div>
+          <div><div class="my-stat-label">Trades</div><div class="my-stat-value">${s.metrics.trades}</div></div>
+        </div>
+        ${!s.metrics.sufficient ? '<div class="empty-note" style="margin-top:8px">Needs '+s.metrics.min_trades+' closed trades to show ratio metrics ('+s.metrics.trades+' so far).</div>' : ''}
+      </div>`).join('') + '</div>';
+}
+
+function renderOptBtn() {
+  const btn = document.getElementById('optBtn');
+  if (_optedIn) {
+    btn.textContent = 'Opted in - stop new trades';
+    btn.className = 'opt-btn out';
+  } else {
+    btn.textContent = 'Start my paper portfolio';
+    btn.className = 'opt-btn';
+  }
+}
+
+async function toggleOptIn() {
+  const btn = document.getElementById('optBtn');
+  btn.disabled = true;
+  const url = _optedIn ? '/api/paper/opt-out' : '/api/paper/opt-in';
+  await fetch(url, {method: 'POST'});
+  btn.disabled = false;
+  await loadMyPortfolio();
+}
+
+async function loadLeaderboard() {
+  const d = await (await fetch('/api/leaderboard/users')).json();
+  const grid = document.getElementById('grid');
+  if (!d.ok || !d.leaderboard.length) {
+    grid.innerHTML = '<div class="loading">No traders have enough closed trades yet - be the first.</div>';
+    return;
+  }
+  const rankEmoji = ['🥇','🥈','🥉'];
+  grid.innerHTML = d.leaderboard.map((e, i) => {
+    const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+    const badgeClass = e.strategy === 'ml_ensemble' ? 'badge-ml' : 'badge-alpha';
+    const badgeLabel = e.strategy === 'ml_ensemble' ? 'ML Ensemble' : 'Alpha Rules';
+    return `
+    <div class="lb-card">
+      <div class="lb-top">
+        <div class="lb-rank ${rankClass}">${i < 3 ? rankEmoji[i] : '#' + (i+1)}</div>
+        <div class="lb-user">${e.username}</div>
+      </div>
+      <span class="lb-strategy-badge ${badgeClass}">${badgeLabel}</span>
+      <div class="lb-stats">
+        <div class="stat"><div class="stat-label">Sharpe</div><div class="stat-value">${e.sharpe != null ? e.sharpe.toFixed(2) : '-'}</div></div>
+        <div class="stat"><div class="stat-label">Return</div><div class="stat-value" style="color:${e.return_pct>=0?'var(--green)':'var(--red)'}">${e.return_pct>=0?'+':''}${e.return_pct}%</div></div>
+        <div class="stat"><div class="stat-label">Win Rate</div><div class="stat-value">${e.win_rate != null ? e.win_rate+'%' : '-'}</div></div>
+        <div class="stat"><div class="stat-label">Trades</div><div class="stat-value">${e.trades}</div></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+loadMyPortfolio();
+loadLeaderboard();
+</script>
+</body>
+</html>

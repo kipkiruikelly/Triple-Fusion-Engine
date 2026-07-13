@@ -302,9 +302,13 @@
           <input id="bt-risk" type="number" value="1" min="0.1" max="10" step="0.1" />
         </div>
         <button class="run-btn" id="run-btn" onclick="runBacktest()">Run Backtest</button>
-        {% if not current_user.is_pro %}
+        {% if not current_user.is_plus %}
         <div style="font-size:8.5pt;color:var(--muted);text-align:center;line-height:1.5;">
-          Requires <a href="/pricing" style="color:var(--accent);">Pro plan</a>
+          Requires <a href="/pricing" style="color:var(--accent);">Plus or Pro plan</a>
+        </div>
+        {% elif not current_user.is_pro %}
+        <div style="font-size:8.5pt;color:var(--muted);text-align:center;line-height:1.5;">
+          Plus plan: 1 run/day, up to 1yr history. <a href="/pricing" style="color:var(--accent);">Upgrade to Pro</a> for unlimited runs and 2yr history.
         </div>
         {% endif %}
       </div>
@@ -319,8 +323,8 @@
       <div class="empty-icon">📈</div>
       <div class="empty-title">Strategy Backtesting</div>
       <div class="empty-sub">Configure a ticker and period on the left, then run the backtest to see exactly how BullLogic's ML + ICT strategy would have performed.</div>
-      {% if not current_user.is_pro %}
-      <a href="/pricing" class="upgrade-btn" style="margin-top:8px;">Upgrade to Pro</a>
+      {% if not current_user.is_plus %}
+      <a href="/pricing" class="upgrade-btn" style="margin-top:8px;">Upgrade to Plus</a>
       {% endif %}
     </div>
 
@@ -516,7 +520,7 @@
 <div id="toast"></div>
 
 <script>
-  const _isPro = {{ current_user.is_pro | tojson }};
+  const _isPlus = {{ current_user.is_plus | tojson }};
   const ROWS_PER_PAGE = 25;
   let _allTrades  = [];
   let _filtTrades = [];
@@ -561,7 +565,7 @@
 
   /* ── Run ─────────────────────────────────────────────────────── */
   function runBacktest() {
-    if (!_isPro) { showToast('Backtesting requires a Pro plan.'); return; }
+    if (!_isPlus) { showToast('Backtesting requires a Plus or Pro plan.'); return; }
     const ticker   = document.getElementById('bt-ticker').value.trim().toUpperCase();
     const interval = document.getElementById('bt-interval').value;
     const period   = document.getElementById('bt-period').value;

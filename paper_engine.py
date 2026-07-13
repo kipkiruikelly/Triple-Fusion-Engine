@@ -10,6 +10,13 @@ Two strategies run side by side so ML and quant rules can be compared:
   alpha_rules  - consumes the alphas.py composite with cross-sectional
                  ranking and the Pyth confidence filter
 
+Every portfolio-state function takes an optional user_id (default None).
+None is the original platform-wide demo stream (public /paper page,
+unaffected); a real id is that user's own isolated portfolio, opted into
+via User.paper_trading_opted_in. Signal generation is computed once per
+cycle and shared; only position/equity bookkeeping is per-owner. See
+PAPER_TRADING_PHASE2_DESIGN.md for the full design rationale.
+
 Honesty rules, same as the accuracy engine:
   - trades are append-only; exits are written exactly once, never edited
   - every fill applies configurable spread/slippage and commission
@@ -239,29 +246,33 @@ def trade_pnl(side: str, qty: float, entry_fill: float, exit_fill: float,
 
 # ── Portfolio state ───────────────────────────────────────────────────────────
 
-def realized_equity(db, strategy: str, cfg: dict) -> float:
-    """Starting balance plus the sum of all closed-trade P&L. VIRTUAL."""
+def realized_equity(db, strategy: str, cfg: dict, user_id=None) -> float:
+    """Starting balance plus the sum of all closed-trade P&L. VIRTUAL.
+    user_id=None is the platform demo stream; pass a real id for a user's
+    own isolated portfolio."""
     from models import PaperTrade
     from extensions import db as _db
     total = (_db.session.query(_db.func.coalesce(_db.func.sum(PaperTrade.pnl), 0.0))
              .filter(PaperTrade.strategy == strategy,
-                     PaperTrade.status == "closed").scalar())
+                     PaperTrade.status == "closed",
+                     PaperTrade.user_id == user_id).scalar())
     return cfg["starting_balance"] + float(total or 0.0)
 
 
-def open_positions(db, strategy: str = None):
+def open_positions(db, strategy: str = None, user_id=None):
     from models import PaperTrade
-    q = PaperTrade.query.filter(PaperTrade.status == "open")
+    q = PaperTrade.query.filter(PaperTrade.status == "open",
+                                PaperTrade.user_id == user_id)
     if strategy:
         q = q.filter(PaperTrade.strategy == strategy)
     return q.order_by(PaperTrade.entry_time).all()
 
 
-def mark_to_market(db, strategy: str, cfg: dict, quotes: dict) -> float:
+def mark_to_market(db, strategy: str, cfg: dict, quotes: dict, user_id=None) -> float:
     """Realized equity plus unrealized P&L of open positions at current
     quotes. Positions with no live quote are marked at entry (flat)."""
-    eq = realized_equity(db, strategy, cfg)
-    for p in open_positions(db, strategy):
+    eq = realized_equity(db, strategy, cfg, user_id=user_id)
+    for p in open_positions(db, strategy, user_id=user_id):
         q = quotes.get(p.ticker)
         if not q or not q.get("price"):
             continue
@@ -271,13 +282,14 @@ def mark_to_market(db, strategy: str, cfg: dict, quotes: dict) -> float:
     return eq
 
 
-def class_exposure(db, strategy: str, asset_cls: str) -> float:
+def class_exposure(db, strategy: str, asset_cls: str, user_id=None) -> float:
     """Total open notional (entry basis) in one asset class."""
-    return sum(p.qty * p.entry_price for p in open_positions(db, strategy)
+    return sum(p.qty * p.entry_price
+               for p in open_positions(db, strategy, user_id=user_id)
                if p.asset_class == asset_cls)
 
 
-def breaker_tripped(db, strategy: str, cfg: dict, quotes: dict) -> bool:
+def breaker_tripped(db, strategy: str, cfg: dict, quotes: dict, user_id=None) -> bool:
     """Daily loss circuit breaker: True when today's mark-to-market equity
     has fallen more than daily_loss_breaker_pct below today's first
     snapshot. New entries pause; exits keep running."""
@@ -286,22 +298,43 @@ def breaker_tripped(db, strategy: str, cfg: dict, quotes: dict) -> bool:
                                           microsecond=0)
     first = (PaperEquitySnapshot.query
              .filter(PaperEquitySnapshot.strategy == strategy,
+                     PaperEquitySnapshot.user_id == user_id,
                      PaperEquitySnapshot.taken_at >= day_start)
              .order_by(PaperEquitySnapshot.taken_at).first())
     if not first or first.equity <= 0:
         return False
-    now_eq = mark_to_market(db, strategy, cfg, quotes)
+    now_eq = mark_to_market(db, strategy, cfg, quotes, user_id=user_id)
     dd_pct = (first.equity - now_eq) / first.equity * 100.0
     return dd_pct >= cfg["daily_loss_breaker_pct"]
 
 
 # ── Open / close ──────────────────────────────────────────────────────────────
 
+def _award_paper_xp(user_id, amount):
+    """Best-effort XP award for a paper-trading outcome; never lets an XP
+    hiccup break the trade that earned it. No-op for the platform demo
+    stream (user_id=None - there's no account to credit)."""
+    if user_id is None:
+        return
+    from extensions import db as _db
+    try:
+        from models import User
+        from utils import award_xp
+        u = _db.session.get(User, user_id)
+        if u:
+            award_xp(u, amount)
+    except Exception:
+        _db.session.rollback()
+
+
 def try_open(db, strategy: str, ticker: str, side: str, quote: dict,
              atr: float, cfg: dict, model: str = None, confidence=None,
-             rationale: str = None, quotes_all: dict = None, now=None):
+             rationale: str = None, quotes_all: dict = None, now=None,
+             user_id=None):
     """Open a VIRTUAL position if every risk gate passes. Returns the
-    PaperTrade or a string describing why the entry was rejected."""
+    PaperTrade or a string describing why the entry was rejected.
+    user_id=None is the platform demo stream; a real id opens that user's
+    own isolated position, sized off their own equity."""
     from models import PaperTrade, PaperTradeEvent
     now = now or datetime.utcnow()
     quotes_all = quotes_all or {ticker: quote}
@@ -317,20 +350,20 @@ def try_open(db, strategy: str, ticker: str, side: str, quote: dict,
     if not market_open(cls, now):
         return "market closed"
 
-    opens = open_positions(db, strategy)
+    opens = open_positions(db, strategy, user_id=user_id)
     if any(p.ticker == ticker for p in opens):
         return "already open"
     if len(opens) >= cfg["max_positions"]:
         return "max positions"
-    if breaker_tripped(db, strategy, cfg, quotes_all):
+    if breaker_tripped(db, strategy, cfg, quotes_all, user_id=user_id):
         db.session.add(PaperTradeEvent(
-            event="breaker",
+            user_id=user_id, event="breaker",
             detail=f"{strategy}: daily loss breaker active, {ticker} entry skipped"))
         db.session.commit()
         return "daily loss breaker"
 
     mkt = float(quote["price"])
-    equity = realized_equity(db, strategy, cfg)
+    equity = realized_equity(db, strategy, cfg, user_id=user_id)
     stop_dist = atr * cfg["stop_atr_mult"]
     qty = position_size(equity, cfg["risk_pct"], stop_dist)
     if qty <= 0:
@@ -338,9 +371,9 @@ def try_open(db, strategy: str, ticker: str, side: str, quote: dict,
 
     notional = qty * mkt
     max_class = equity * cfg["max_class_exposure_pct"] / 100.0
-    if class_exposure(db, strategy, cls) + notional > max_class:
+    if class_exposure(db, strategy, cls, user_id=user_id) + notional > max_class:
         # scale down to the remaining class budget instead of rejecting
-        room = max_class - class_exposure(db, strategy, cls)
+        room = max_class - class_exposure(db, strategy, cls, user_id=user_id)
         if room < equity * 0.001:
             return "class exposure cap"
         qty = room / mkt
@@ -353,7 +386,7 @@ def try_open(db, strategy: str, ticker: str, side: str, quote: dict,
               else fill - atr * cfg["target_atr_mult"])
 
     trade = PaperTrade(
-        strategy=strategy, model=model, ticker=ticker.upper(),
+        user_id=user_id, strategy=strategy, model=model, ticker=ticker.upper(),
         asset_class=cls, side=side, qty=round(qty, 6),
         entry_time=now, entry_price=round(fill, 6), entry_mkt=round(mkt, 6),
         price_source=quote.get("source"), stop_price=round(stop, 6),
@@ -364,11 +397,12 @@ def try_open(db, strategy: str, ticker: str, side: str, quote: dict,
     db.session.add(trade)
     db.session.flush()
     db.session.add(PaperTradeEvent(
-        trade_id=trade.id, event="open",
+        user_id=user_id, trade_id=trade.id, event="open",
         detail=f"{strategy} {side} {ticker} qty={qty:.4f} mkt={mkt:.4f} "
                f"fill={fill:.4f} stop={stop:.4f} target={target:.4f} "
                f"src={quote.get('source')}"))
     db.session.commit()
+    _award_paper_xp(user_id, 3)
     return trade
 
 
@@ -390,10 +424,11 @@ def close_trade(db, trade, mkt_price: float, reason: str, cfg: dict, now=None):
     trade.commission = round(trade.commission + exit_comm, 6)
     trade.pnl = round(pnl, 4)
     db.session.add(PaperTradeEvent(
-        trade_id=trade.id, event="close",
+        user_id=trade.user_id, trade_id=trade.id, event="close",
         detail=f"{reason} mkt={float(mkt_price):.4f} fill={fill:.4f} "
                f"pnl={pnl:+.2f} VIRTUAL"))
     db.session.commit()
+    _award_paper_xp(trade.user_id, 15 if pnl > 0 else 3)
     return trade
 
 
@@ -464,15 +499,18 @@ def compute_metrics(closed_pnls: list, equity_series: list,
     return out
 
 
-def strategy_report(db, strategy: str, cfg: dict) -> dict:
-    """Everything the results page needs for one strategy."""
+def strategy_report(db, strategy: str, cfg: dict, user_id=None) -> dict:
+    """Everything the results page needs for one strategy. user_id=None is
+    the platform demo stream; a real id is that user's own portfolio."""
     from models import PaperTrade, PaperEquitySnapshot
     closed = (PaperTrade.query
               .filter(PaperTrade.strategy == strategy,
-                      PaperTrade.status == "closed")
+                      PaperTrade.status == "closed",
+                      PaperTrade.user_id == user_id)
               .order_by(PaperTrade.exit_time).all())
     snaps = (PaperEquitySnapshot.query
-             .filter(PaperEquitySnapshot.strategy == strategy)
+             .filter(PaperEquitySnapshot.strategy == strategy,
+                     PaperEquitySnapshot.user_id == user_id)
              .order_by(PaperEquitySnapshot.taken_at).all())
     # one equity point per day (last snapshot of the day) for ratio math
     daily = {}
@@ -484,8 +522,8 @@ def strategy_report(db, strategy: str, cfg: dict) -> dict:
     metrics = compute_metrics(pnls, eq_series)
 
     exposure_notional = sum(p.qty * p.entry_price
-                            for p in open_positions(db, strategy))
-    eq_now = realized_equity(db, strategy, cfg)
+                            for p in open_positions(db, strategy, user_id=user_id))
+    eq_now = realized_equity(db, strategy, cfg, user_id=user_id)
     turnover = sum(abs(t.qty * t.entry_price) for t in closed)
 
     by_class, by_model = {}, {}
@@ -507,7 +545,7 @@ def strategy_report(db, strategy: str, cfg: dict) -> dict:
         "equity": round(eq_now, 2),
         "starting_balance": cfg["starting_balance"],
         "currency": SIM_CURRENCY,
-        "open_positions": len(open_positions(db, strategy)),
+        "open_positions": len(open_positions(db, strategy, user_id=user_id)),
         "exposure_pct": round(exposure_notional / eq_now * 100, 2) if eq_now > 0 else 0.0,
         "turnover": round(turnover, 2),
         "metrics": metrics,
@@ -518,12 +556,12 @@ def strategy_report(db, strategy: str, cfg: dict) -> dict:
     }
 
 
-def snapshot_equity(db, strategy: str, cfg: dict, quotes: dict):
+def snapshot_equity(db, strategy: str, cfg: dict, quotes: dict, user_id=None):
     from models import PaperEquitySnapshot
     db.session.add(PaperEquitySnapshot(
-        strategy=strategy,
-        equity=round(mark_to_market(db, strategy, cfg, quotes), 4),
-        open_count=len(open_positions(db, strategy))))
+        user_id=user_id, strategy=strategy,
+        equity=round(mark_to_market(db, strategy, cfg, quotes, user_id=user_id), 4),
+        open_count=len(open_positions(db, strategy, user_id=user_id))))
     db.session.commit()
 
 
@@ -623,30 +661,17 @@ def ml_signals(cfg: dict) -> dict:
 
 # ── Cycle runner (called from the ops thread) ─────────────────────────────────
 
-def run_cycle(app, db):
-    """One full engine cycle: exits first, then entries, then snapshots.
-    Safe to call every ops tick; does nothing when the engine is paused."""
-    if not engine_enabled(db):
-        return {"ran": False, "reason": "paused"}
+def _run_owner_cycle(db, cfg, quotes, sig_ml, sig_alpha, user_id=None):
+    """One exits+entries+snapshots pass for a single owner (None = the
+    platform demo stream; a real id = that user's own portfolio). Signals
+    are precomputed once per cycle and shared across every owner - they
+    depend only on the ticker, not on who might trade it."""
+    result = {"opened": 0, "closed": 0, "rejected": 0}
 
-    from market_data import get_quotes_verified
-    cfg = load_config(db)
-    result = {"ran": True, "opened": 0, "closed": 0, "rejected": 0}
-
-    open_all = open_positions(db)
-    need_quotes = sorted({p.ticker for p in open_all} | set(cfg["tickers"]))
-    quotes = get_quotes_verified(need_quotes)
-
-    # signals (used for both reversal exits and entries)
-    sig_ml = {}
-    sig_alpha = {}
-    if strategy_enabled(db, "ml_ensemble"):
-        sig_ml = ml_signals(cfg)
-    if strategy_enabled(db, "alpha_rules"):
-        sig_alpha = alpha_signals(db, cfg, quotes)
+    owned = open_positions(db, user_id=user_id)
 
     # 1) exits
-    for p in open_all:
+    for p in owned:
         sig = (sig_ml if p.strategy == "ml_ensemble" else sig_alpha).get(p.ticker) or {}
         # only act on exits while that market trades (stops use live quotes)
         if not market_open(p.asset_class):
@@ -680,7 +705,7 @@ def run_cycle(app, db):
             side = "LONG" if action == "BUY" else "SHORT"
             r = try_open(db, strategy, t, side, quotes.get(t), atr, cfg,
                          model=model, confidence=conf, rationale=rationale,
-                         quotes_all=quotes)
+                         quotes_all=quotes, user_id=user_id)
             if isinstance(r, str):
                 result["rejected"] += 1
             else:
@@ -688,8 +713,62 @@ def run_cycle(app, db):
 
     # 3) snapshots
     for s in STRATEGIES:
-        snapshot_equity(db, s, cfg, quotes)
+        snapshot_equity(db, s, cfg, quotes, user_id=user_id)
 
-    log.info("paper cycle: opened=%s closed=%s rejected=%s",
-             result["opened"], result["closed"], result["rejected"])
+    return result
+
+
+def run_cycle(app, db):
+    """One full engine cycle for the platform demo stream, then again for
+    every opted-in user's own portfolio, all sharing one signal computation.
+    Safe to call every ops tick. The demo stream does nothing while paused
+    (engine_enabled); opted-in users still get their own cycle even then -
+    it's their own portfolio, not the demo (see
+    PAPER_TRADING_PHASE2_DESIGN.md)."""
+    from market_data import get_quotes_verified
+    from models import User
+
+    cfg = load_config(db)
+    demo_enabled = engine_enabled(db)
+    opted_in = User.query.filter_by(paper_trading_opted_in=True).all()
+
+    if not demo_enabled and not opted_in:
+        return {"ran": False, "reason": "paused"}
+
+    open_all = list(open_positions(db))
+    for u in opted_in:
+        open_all += open_positions(db, user_id=u.id)
+    need_quotes = sorted({p.ticker for p in open_all} | set(cfg["tickers"]))
+    quotes = get_quotes_verified(need_quotes)
+
+    # signals (used for both reversal exits and entries), computed once and
+    # shared across the demo stream and every opted-in user this cycle.
+    sig_ml = {}
+    sig_alpha = {}
+    if strategy_enabled(db, "ml_ensemble"):
+        sig_ml = ml_signals(cfg)
+    if strategy_enabled(db, "alpha_rules"):
+        sig_alpha = alpha_signals(db, cfg, quotes)
+
+    result = {"ran": False, "opened": 0, "closed": 0, "rejected": 0, "users": 0}
+
+    if demo_enabled:
+        demo = _run_owner_cycle(db, cfg, quotes, sig_ml, sig_alpha, user_id=None)
+        result["ran"] = True
+        result["opened"]   += demo["opened"]
+        result["closed"]   += demo["closed"]
+        result["rejected"] += demo["rejected"]
+
+    for u in opted_in:
+        try:
+            _run_owner_cycle(db, cfg, quotes, sig_ml, sig_alpha, user_id=u.id)
+            result["users"] += 1
+            result["ran"] = True
+        except Exception:
+            db.session.rollback()
+            log.exception("paper cycle failed for user %s", u.id)
+
+    log.info("paper cycle: demo=%s users=%s opened=%s closed=%s rejected=%s",
+             demo_enabled, result["users"], result["opened"],
+             result["closed"], result["rejected"])
     return result
