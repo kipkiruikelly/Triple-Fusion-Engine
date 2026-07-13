@@ -37,6 +37,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 _APP_START = time.time()
+APP_VERSION = "1.0.0"
 _metrics   = {"requests": 0, "predictions": 0, "total_latency": 0.0}
 
 # Per-endpoint request stats since process start (in-memory, resets on restart).
@@ -56,7 +57,7 @@ except ImportError:
 # ── App factory ───────────────────────────────────────────────────────────────
 
 def create_app():
-    app = Flask(__name__, template_folder="Web Pages", static_folder="Static Files")
+    app = Flask(__name__, template_folder="Web Pages", static_folder="Static Files", static_url_path="/static")
     secret_key = os.environ.get("SECRET_KEY")
     if not secret_key:
         if os.environ.get("FLASK_DEBUG", "false").lower() == "true":
@@ -253,7 +254,8 @@ def create_app():
 
     @app.route("/health")
     def health():
-        return jsonify({"status": "ok", "uptime_s": round(time.time() - _APP_START, 1)})
+        return jsonify({"status": "ok", "version": APP_VERSION,
+                        "uptime_s": round(time.time() - _APP_START, 1)})
 
     @app.route("/metrics")
     def app_metrics():
@@ -323,6 +325,14 @@ def create_app():
             except Exception:
                 db.session.rollback()
 
+            # Daily activity streak - checked at most once per calendar day.
+            try:
+                if current_user.last_active_date != datetime.utcnow().date():
+                    from utils import update_daily_streak
+                    update_daily_streak(current_user)
+            except Exception:
+                db.session.rollback()
+
     @app.after_request
     def _track_endpoint(response):
         try:
@@ -340,12 +350,20 @@ def create_app():
 
         # Browser Cache-Control configuration
         from flask import request
-        if request.path.startswith("/static/") or request.path == "/sw.js":
+        if response.status_code < 400 and (request.path.startswith("/static/") or request.path == "/sw.js"):
             response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
         elif request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
             response.headers["Pragma"] = "no-cache"
 
+        return response
+
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         return response
 
     # ── Error logging to DB ───────────────────────────────────────────────────
@@ -514,6 +532,15 @@ def _run_migrations(db):
         ("user",                "last_ai_analysis_date", "DATE"),
         ("user",                "backtests_today",   "INTEGER DEFAULT 0"),
         ("user",                "last_backtest_date", "DATE"),
+        ("payment",             "tier",              "VARCHAR(10)"),
+        ("user",                "xp",                "INTEGER DEFAULT 0"),
+        ("user",                "current_streak",    "INTEGER DEFAULT 0"),
+        ("user",                "longest_streak",    "INTEGER DEFAULT 0"),
+        ("user",                "last_active_date",  "DATE"),
+        ("user",                "paper_trading_opted_in", "BOOLEAN DEFAULT 0"),
+        ("paper_trade",         "user_id",           "INTEGER"),
+        ("paper_trade_event",   "user_id",           "INTEGER"),
+        ("paper_equity_snapshot", "user_id",         "INTEGER"),
     ]
     with engine.connect() as conn:
         for table, column, coltype in migrations:

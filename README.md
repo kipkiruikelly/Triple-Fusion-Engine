@@ -1,5 +1,9 @@
 # BullLogic
 
+BullLogic — AI-powered trading intelligence platform for retail traders.
+Freemium subscriptions, M-Pesa payments, MT5 algorithmic trading, and
+multi-model ML predictions across 76 tickers.
+
 Stock market prediction and paper-trading platform, powered by the
 Triple Fusion prediction engine (ICT structure + machine learning +
 technical analysis). Built as a Flask web application with user
@@ -25,11 +29,20 @@ execution. The full per-feature audit lives in
 - **Paper trading engine**: virtual portfolio trading two signal streams
   head to head with realistic spread/slippage/commission, risk limits,
   a daily loss circuit breaker, and an append-only audit trail. It has
-  produced real (simulated-money) trades on this install.
+  produced real (simulated-money) trades on this install. Any user can
+  also opt into their own isolated version of the same engine (own
+  balance, own positions, own risk gates) and appear on a real, Sharpe-
+  ranked trader leaderboard at `/traders` - see
+  PAPER_TRADING_PHASE2_DESIGN.md.
+- **XP, levels, and daily streaks**: predictions, backtests, and paper
+  trade outcomes award XP (`utils.award_xp`); level is derived from XP,
+  never stored. A daily activity streak advances on any authenticated
+  request, once per calendar day, with a bonus every 7th consecutive day.
 - **User accounts and billing**: registration with email verification,
-  Google OAuth sign-in, password reset, Free/Pro tiers, Stripe checkout,
-  and M-Pesa Daraja STK Push (verified live in the sandbox end to end:
-  push, PIN entry, callback, receipt, Pro activation).
+  Google OAuth sign-in, password reset, Free/Plus/Pro tiers, Stripe
+  checkout, and M-Pesa Daraja STK Push (verified live in the sandbox end
+  to end: push, PIN entry, callback, receipt, Pro activation). See
+  TIER_MATRIX.md for exactly what each tier is gated to in code.
 - **Risk management library** (`risk_manager.py`): Kelly-criterion
   sizing, ATR trailing stops, tiered drawdown reduction with a 20% halt,
   daily-loss breaker with cooling-off, correlation checks. 74/74 tests.
