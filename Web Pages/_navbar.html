@@ -8,8 +8,12 @@
 <style>
   .bl-nav {
     position: sticky; top: 0; z-index: 200;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    height: 48px;
+    background: rgba(var(--surface-rgb), 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(var(--border-rgb), 0.5);
+    height: 54px;
+    transition: background 0.3s ease;
   }
   .bl-nav-inner {
     display: flex; align-items: center; gap: 8px;
@@ -25,8 +29,8 @@
   .bl-tab { position: relative; }
   .bl-tab-btn {
     background: none; border: none; color: var(--muted);
-    font-size: 10.5pt; font-weight: 500; padding: 0 12px; height: 48px;
-    cursor: pointer; white-space: nowrap; transition: color 0.15s;
+    font-size: 0.95rem; font-weight: 500; padding: 0 14px; height: 54px;
+    cursor: pointer; white-space: nowrap; transition: all 0.2s ease;
     font-family: inherit; display: flex; align-items: center; gap: 4px;
   }
   .bl-tab-btn:hover { color: var(--text); }
@@ -34,17 +38,17 @@
   .bl-caret { font-size: 8pt; }
 
   .bl-dropdown {
-    display: none; position: absolute; top: 48px; left: 0;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    display: none; position: absolute; top: 54px; left: 0;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     padding: 8px 0; min-width: 200px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); z-index: 300;
   }
   .bl-dropdown-right { left: auto; right: 0; }
   .bl-tab:hover .bl-dropdown, .bl-tab.open .bl-dropdown { display: block; }
   .bl-dropdown a {
-    display: block; padding: 8px 18px; color: var(--muted); text-decoration: none;
-    font-size: 10pt; white-space: nowrap; transition: background 0.1s, color 0.1s;
+    display: block; padding: 10px 20px; color: var(--muted); text-decoration: none;
+    font-size: 0.9rem; white-space: nowrap; transition: all 0.2s ease;
   }
-  .bl-dropdown a:hover { background: var(--surface2); color: var(--text); }
+  .bl-dropdown a:hover { background: var(--surface2); color: var(--text); padding-left: 24px; }
   .bl-dropdown-divider { border: none; border-top: 1px solid var(--border); margin: 6px 0; }
   .bl-admin-link { color: var(--accent) !important; }
 
@@ -92,14 +96,20 @@
   .bl-upgrade-card h3 { color: var(--text); margin-bottom: 10px; font-size: 14pt; }
   #bl-upgrade-message { color: var(--muted); font-size: 10pt; margin-bottom: 20px; line-height: 1.5; }
   .bl-upgrade-btn {
-    display: block; background: var(--accent); color: #fff;
-    padding: 10px; border-radius: 6px; text-decoration: none;
-    font-weight: 700; margin-bottom: 10px; font-size: 10pt;
+    display: block; background: linear-gradient(135deg, var(--accent), var(--accent-gradient)); color: #fff;
+    padding: 12px; border-radius: 8px; text-decoration: none;
+    font-weight: 700; margin-bottom: 12px; font-size: 0.95rem;
+    transition: all 0.2s ease; box-shadow: 0 4px 15px rgba(var(--accent-rgb), 0.2);
+  }
+  .bl-upgrade-btn:hover {
+    transform: translateY(-2px); box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.4);
   }
   .bl-upgrade-dismiss {
     background: none; border: none; color: var(--muted);
-    font-size: 9pt; cursor: pointer; text-decoration: underline; font-family: inherit;
+    font-size: 0.85rem; cursor: pointer; text-decoration: underline; font-family: inherit;
+    transition: color 0.2s ease;
   }
+  .bl-upgrade-dismiss:hover { color: var(--text); }
 
   .bl-hamburger { display: none; }
 
@@ -122,12 +132,13 @@
 
 {% set _bl_path = request.path.split('/')[1] %}
 {% set _bl_tab_map = {
+  '': 'home',
   'market': 'markets', 'macro': 'markets', 'screener': 'markets',
-  '': 'analysis', 'research': 'analysis', 'model-metrics': 'analysis', 'track-record': 'analysis',
+  'predict': 'analysis', 'research': 'analysis', 'model-metrics': 'analysis', 'track-record': 'analysis',
   'live': 'portfolio', 'paper': 'portfolio', 'watchlist': 'portfolio', 'history': 'portfolio', 'performance': 'portfolio',
     'journal': 'portfolio', 'portfolio': 'portfolio',
   'scanner': 'tools', 'alerts': 'tools', 'pipeline': 'tools', 'risk': 'tools', 'mt5': 'tools', 'calendar': 'tools', 'backtest': 'tools',
-  'leaderboard': 'learn', 'resources': 'learn', 'faq': 'learn', 'risk-basics': 'learn', 'data-sources': 'learn', 'methodology': 'learn',
+  'leaderboard': 'learn', 'traders': 'learn', 'resources': 'learn', 'faq': 'learn', 'risk-basics': 'learn', 'data-sources': 'learn', 'methodology': 'learn',
 } %}
 {% set _bl_active = _bl_tab_map.get(_bl_path, '') %}
 
@@ -138,6 +149,11 @@
     <button class="bl-hamburger bl-icon-btn" onclick="blToggleMobileNav()" title="Menu">&#9776;</button>
 
     <ul class="bl-nav-tabs" id="blNavTabs">
+      {% if current_user.is_authenticated %}
+      <li class="bl-tab {% if _bl_active == 'home' %}active{% endif %}">
+        <a href="/" class="bl-tab-btn" style="text-decoration:none;">Home</a>
+      </li>
+      {% endif %}
       <li class="bl-tab {% if _bl_active == 'markets' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
         <button class="bl-tab-btn" type="button">Markets <span class="bl-caret">&#9662;</span></button>
         <div class="bl-dropdown">
@@ -149,7 +165,7 @@
       <li class="bl-tab {% if _bl_active == 'analysis' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
         <button class="bl-tab-btn" type="button">Analysis <span class="bl-caret">&#9662;</span></button>
         <div class="bl-dropdown">
-          <a href="/">Predict</a>
+          <a href="/predict">Predict</a>
           <a href="/research/AAPL">Research</a>
           <a href="/model-metrics">Model Metrics</a>
           <a href="/track-record">Track Record</a>
@@ -182,7 +198,8 @@
       <li class="bl-tab {% if _bl_active == 'learn' %}active{% endif %}" onclick="blToggleTabMobile(this, event)">
         <button class="bl-tab-btn" type="button">Learn <span class="bl-caret">&#9662;</span></button>
         <div class="bl-dropdown">
-          <a href="/leaderboard">Leaderboard</a>
+          <a href="/leaderboard">Model Leaderboard</a>
+          <a href="/traders">Trader Leaderboard</a>
           <a href="/resources">Resources</a>
           <a href="/faq">FAQ</a>
           <a href="/risk-basics">Risk Basics</a>
@@ -210,6 +227,8 @@
           <span>{{ current_user.username }}</span>
           {% if current_user.is_pro %}
             <span class="bl-pro-badge">PRO</span>
+          {% elif current_user.is_plus %}
+            <span class="bl-pro-badge">PLUS</span>
           {% else %}
             <span class="bl-free-left">{{ current_user.predictions_remaining }}/5</span>
           {% endif %}

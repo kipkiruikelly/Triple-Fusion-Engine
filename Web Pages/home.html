@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en"{{ theme_attr }}>
+<head>
+  {% include "_theme.html" %}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home, BullLogic</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+
+    .content { flex: 1; max-width: 1100px; width: 100%; margin: 0 auto; padding: 28px 32px 48px; }
+
+    /* Welcome header */
+    .hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+    .page-title { font-size: 17pt; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .page-subtitle { font-size: 10pt; color: var(--muted); }
+    .plan-badge { display: inline-block; vertical-align: middle; margin-left: 8px; padding: 2px 10px; border-radius: 12px; font-size: 8.5pt; font-weight: 700; }
+    .plan-badge.paid { background: var(--accent); color: #fff; }
+    .plan-badge.free { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); }
+    .hero-meta { text-align: right; font-size: 9pt; color: var(--muted); line-height: 1.7; }
+    .hero-meta b { color: var(--text); font-weight: 600; }
+
+    .verify-banner { background: rgba(234,179,8,0.1); border: 1px solid var(--yellow); border-radius: 8px; padding: 12px 18px; font-size: 9.5pt; color: var(--text); margin-bottom: 24px; }
+    .verify-banner a { color: var(--yellow); font-weight: 600; }
+
+    /* Stats */
+    .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px 18px; }
+    .stat-label { font-size: 8.5pt; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .stat-value { font-size: 18pt; font-weight: 700; color: var(--white); }
+    .stat-sub { font-size: 9pt; color: var(--muted); margin-top: 2px; }
+
+    /* Quick access */
+    .section-title { font-size: 11pt; font-weight: 700; color: var(--white); margin-bottom: 12px; }
+    .quick-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-bottom: 32px; }
+    .quick-card { display: block; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; text-decoration: none; transition: all 0.15s; }
+    .quick-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+    .quick-icon { font-size: 16pt; margin-bottom: 8px; }
+    .quick-name { font-size: 10.5pt; font-weight: 700; color: var(--white); margin-bottom: 3px; }
+    .quick-desc { font-size: 8.5pt; color: var(--muted); line-height: 1.4; }
+    .quick-card.admin { border-color: rgba(var(--accent-rgb), 0.5); }
+    .quick-card.admin .quick-name { color: var(--accent); }
+
+    /* Two-column activity area */
+    .activity-grid { display: grid; grid-template-columns: 3fr 2fr; gap: 20px; align-items: start; }
+    @media (max-width: 860px) { .activity-grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: repeat(2, 1fr); } }
+
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .panel-title { font-size: 10.5pt; font-weight: 700; color: var(--white); }
+    .panel-link { font-size: 9pt; color: var(--accent); text-decoration: none; font-weight: 600; }
+    .panel-link:hover { text-decoration: underline; }
+    .panel-body { padding: 16px 20px; }
+
+    /* Recent predictions rows */
+    .pred-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr 1.4fr; align-items: center; padding: 11px 20px; border-bottom: 1px solid rgba(42,49,80,0.5); }
+    .pred-row:last-child { border-bottom: none; }
+    .pred-ticker { font-size: 10.5pt; font-weight: 700; color: var(--white); }
+    .pred-ivl { font-size: 8pt; color: var(--muted); margin-left: 6px; font-weight: 500; }
+    .signal-pill { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 8.5pt; font-weight: 700; }
+    .signal-buy { background: rgba(0,192,118,0.15); color: var(--green); }
+    .signal-sell { background: rgba(255,77,77,0.15); color: var(--red); }
+    .pred-conf { font-size: 9.5pt; color: var(--text); font-weight: 600; }
+    .pred-date { font-size: 8.5pt; color: var(--muted); text-align: right; }
+
+    /* Watchlist chips */
+    .wl-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .wl-chip { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; font-size: 9pt; font-weight: 600; color: var(--text); text-decoration: none; transition: all 0.15s; }
+    .wl-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Paper summary */
+    .paper-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .paper-stat .v { font-size: 13pt; font-weight: 700; color: var(--white); }
+    .paper-stat .l { font-size: 8pt; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+    .sim-note { font-size: 8pt; color: var(--muted); margin-top: 10px; }
+
+    /* Empty states / onboarding */
+    .empty-state { text-align: center; padding: 32px 24px; color: var(--muted); }
+    .empty-icon { font-size: 26pt; margin-bottom: 10px; }
+    .empty-title { font-size: 11pt; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+    .empty-sub { font-size: 9.5pt; line-height: 1.5; }
+    .onboard-list { text-align: left; max-width: 380px; margin: 16px auto 0; display: flex; flex-direction: column; gap: 8px; }
+    .onboard-step { display: flex; align-items: center; gap: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; text-decoration: none; transition: border-color 0.15s; }
+    .onboard-step:hover { border-color: var(--accent); }
+    .onboard-num { width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 9pt; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .onboard-text { font-size: 9.5pt; color: var(--text); font-weight: 600; }
+    .onboard-text small { display: block; font-weight: 400; color: var(--muted); font-size: 8.5pt; margin-top: 1px; }
+
+    /* Upgrade card (house ad, same language as the navbar upgrade modal) */
+    .upgrade-card { background: var(--surface); border: 1px solid var(--accent); border-radius: 10px; padding: 22px; text-align: center; margin-top: 20px; }
+    .upgrade-card h3 { color: var(--white); font-size: 12pt; margin-bottom: 8px; }
+    .upgrade-card p { color: var(--muted); font-size: 9.5pt; line-height: 1.5; margin-bottom: 16px; }
+    .upgrade-btn { display: inline-block; background: linear-gradient(135deg, var(--accent), var(--accent-gradient)); color: #fff; padding: 10px 26px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 10pt; transition: all 0.2s ease; box-shadow: 0 4px 15px rgba(var(--accent-rgb), 0.2); }
+    .upgrade-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(var(--accent-rgb), 0.4); }
+
+    .side-col { display: flex; flex-direction: column; gap: 20px; }
+  </style>
+</head>
+<body>
+
+{% include "_navbar.html" %}
+
+<main class="content">
+
+  <!-- Welcome header -->
+  <div class="hero">
+    <div>
+      <div class="page-title">
+        Welcome back, {{ current_user.username }}
+        {% if current_user.is_pro %}
+          <span class="plan-badge paid">PRO</span>
+        {% elif current_user.is_plus %}
+          <span class="plan-badge paid">PLUS</span>
+        {% else %}
+          <span class="plan-badge free">FREE</span>
+        {% endif %}
+      </div>
+      <div class="page-subtitle">
+        {% if current_user.is_plus %}
+          Unlimited predictions on your plan.
+        {% else %}
+          {{ current_user.predictions_remaining }} of 5 free predictions left today.
+        {% endif %}
+      </div>
+    </div>
+    <div class="hero-meta">
+      Level <b>{{ current_user.level }}</b> &middot; <b>{{ current_user.xp or 0 }}</b> XP<br>
+      Streak: <b>{{ current_user.current_streak or 0 }}</b> day{{ '' if (current_user.current_streak or 0) == 1 else 's' }}
+      (best {{ current_user.longest_streak or 0 }})
+    </div>
+  </div>
+
+  {% if not current_user.email_verified %}
+  <div class="verify-banner">
+    &#9993;&#65039; Your email is not verified yet, predictions are locked until it is.
+    <a href="/verify-notice">Verify now &rarr;</a>
+  </div>
+  {% endif %}
+
+  <!-- Account stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Predictions Made</div>
+      <div class="stat-value">{{ total_predictions }}</div>
+      <div class="stat-sub">{{ predictions_today }} today &middot; all time</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Watching</div>
+      <div class="stat-value">{{ watchlist_tickers|length }}</div>
+      <div class="stat-sub">Instruments</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Paper Balance</div>
+      {% if paper_balance is not none %}
+      <div class="stat-value">{{ '{:,.0f}'.format(paper_balance) }}</div>
+      <div class="stat-sub">Virtual {{ paper_currency }} &middot; {{ paper_open }} open, {{ paper_closed }} closed</div>
+      {% else %}
+      <div class="stat-value" style="color:var(--muted)">&ndash;</div>
+      <div class="stat-sub">No paper activity yet</div>
+      {% endif %}
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Plan</div>
+      <div class="stat-value">{{ 'Pro' if current_user.is_pro else ('Plus' if current_user.is_plus else 'Free') }}</div>
+      <div class="stat-sub">{{ 'Unlimited predictions' if current_user.is_plus else (current_user.predictions_remaining|string + ' left today') }}</div>
+    </div>
+  </div>
+
+  <!-- Quick access -->
+  <div class="section-title">Jump in</div>
+  <div class="quick-grid">
+    <a class="quick-card" href="/predict">
+      <div class="quick-icon">&#128302;</div>
+      <div class="quick-name">Predict</div>
+      <div class="quick-desc">Run ML price predictions with charts and signals</div>
+    </a>
+    <a class="quick-card" href="/watchlist">
+      <div class="quick-icon">&#128203;</div>
+      <div class="quick-name">Watchlist</div>
+      <div class="quick-desc">Track instruments and get signals at a glance</div>
+    </a>
+    <a class="quick-card" href="/paper">
+      <div class="quick-icon">&#129514;</div>
+      <div class="quick-name">Paper Trading</div>
+      <div class="quick-desc">Simulated trading, virtual money only</div>
+    </a>
+    <a class="quick-card" href="/mt5">
+      <div class="quick-icon">&#129302;</div>
+      <div class="quick-name">MT5 Trading</div>
+      <div class="quick-desc">Algorithmic trading bridge{{ '' if current_user.is_pro else ', Pro plan' }}</div>
+    </a>
+    <a class="quick-card" href="/traders">
+      <div class="quick-icon">&#127942;</div>
+      <div class="quick-name">Leaderboard</div>
+      <div class="quick-desc">Sharpe-ranked paper trading leaderboard</div>
+    </a>
+    <a class="quick-card" href="/track-record">
+      <div class="quick-icon">&#9989;</div>
+      <div class="quick-name">Track Record</div>
+      <div class="quick-desc">Our live, ungraded-nothing prediction accuracy</div>
+    </a>
+    {% if not current_user.is_plus %}
+    <a class="quick-card" href="/pricing">
+      <div class="quick-icon">&#11088;</div>
+      <div class="quick-name">Upgrade</div>
+      <div class="quick-desc">Unlimited predictions, more timeframes and tools</div>
+    </a>
+    {% endif %}
+    {% if current_user.role in ('viewer', 'support', 'admin') %}
+    <a class="quick-card admin" href="/admin">
+      <div class="quick-icon">&#128737;&#65039;</div>
+      <div class="quick-name">Admin Console</div>
+      <div class="quick-desc">Users, payments, system health and settings</div>
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Activity -->
+  <div class="activity-grid">
+
+    <!-- Recent predictions -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">Recent Predictions</span>
+        {% if recent_predictions %}<a class="panel-link" href="/history">View all &rarr;</a>{% endif %}
+      </div>
+      {% if recent_predictions %}
+        {% for p in recent_predictions %}
+        <div class="pred-row">
+          <div><span class="pred-ticker">{{ p.ticker }}</span><span class="pred-ivl">{{ p.interval }}</span></div>
+          <div>
+            <span class="signal-pill {{ 'signal-buy' if p.direction == 'Up' else 'signal-sell' }}">
+              {{ 'UP' if p.direction == 'Up' else 'DOWN' }}
+            </span>
+          </div>
+          <div class="pred-conf">{{ '%.1f'|format(p.confidence) }}%</div>
+          <div class="pred-date">{{ p.predicted_at.strftime('%b %d, %H:%M') if p.predicted_at else '' }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state">
+          <div class="empty-icon">&#128075;</div>
+          <div class="empty-title">New here? Get set up in three steps</div>
+          <div class="empty-sub">No predictions yet, here's how to start:</div>
+          <div class="onboard-list">
+            <a class="onboard-step" href="/risk-basics">
+              <span class="onboard-num">1</span>
+              <span class="onboard-text">Read the risk basics
+                <small>A two-minute intro shown before your first prediction</small></span>
+            </a>
+            <a class="onboard-step" href="/predict">
+              <span class="onboard-num">2</span>
+              <span class="onboard-text">Run your first prediction
+                <small>Try AAPL, MSFT or NVDA on the daily timeframe</small></span>
+            </a>
+            <a class="onboard-step" href="/watchlist">
+              <span class="onboard-num">3</span>
+              <span class="onboard-text">Build your watchlist
+                <small>Track the instruments you care about</small></span>
+            </a>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="side-col">
+
+      <!-- Watchlist snapshot -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Watchlist</span>
+          <a class="panel-link" href="/watchlist">Manage &rarr;</a>
+        </div>
+        <div class="panel-body">
+          {% if watchlist_tickers %}
+          <div class="wl-chips">
+            {% for t in watchlist_tickers %}
+            <a class="wl-chip" href="/research/{{ t }}">{{ t }}</a>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="empty-state" style="padding: 16px 8px;">
+            <div class="empty-sub">Your watchlist is empty.
+              <a class="panel-link" href="/watchlist">Add tickers &rarr;</a></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Paper trading summary -->
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">Paper Trading</span>
+          <a class="panel-link" href="/paper">Open &rarr;</a>
+        </div>
+        <div class="panel-body">
+          {% if current_user.paper_trading_opted_in or paper_open + paper_closed > 0 %}
+          <div class="paper-stats">
+            <div class="paper-stat"><div class="v">{{ paper_open }}</div><div class="l">Open</div></div>
+            <div class="paper-stat"><div class="v">{{ paper_closed }}</div><div class="l">Closed</div></div>
+            <div class="paper-stat">
+              {% if paper_pnl is not none %}
+              <div class="v" style="color: {{ 'var(--green)' if paper_pnl >= 0 else 'var(--red)' }}">
+                {{ '%+.2f'|format(paper_pnl) }}</div>
+              <div class="l">{{ paper_currency }} P&amp;L</div>
+              {% else %}
+              <div class="v" style="color: var(--muted)">&ndash;</div>
+              <div class="l">No closed trades</div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="sim-note">All virtual money, nothing here is a real order.</div>
+          {% else %}
+          <div class="empty-state" style="padding: 16px 8px;">
+            <div class="empty-sub">You haven't opted in to paper trading yet.
+              Practice with virtual money, no risk.
+              <a class="panel-link" href="/paper">Learn more &rarr;</a></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Upgrade prompt (free tier only) -->
+      {% if not current_user.is_plus %}
+      <div class="upgrade-card">
+        <h3>&#11088; Go further with Plus or Pro</h3>
+        <p>Free gives you {{ current_user.predictions_remaining if current_user.predictions_remaining is not none else 5 }}
+          of 5 predictions today. Paid plans add unlimited predictions,
+          intraday timeframes and more tools.</p>
+        <a href="/pricing" class="upgrade-btn">See Plans</a>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+</main>
+
+{% include "_footer.html" %}
+
+</body>
+</html>

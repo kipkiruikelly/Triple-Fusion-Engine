@@ -6,10 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Profile, BullLogic</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/index.css" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    
-    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
 
     .ticker-strip { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 36px; display: flex; align-items: center; gap: 32px; overflow: hidden; }
     .ticker-item { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 9.5pt; }
@@ -59,6 +57,12 @@
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 22px; }
     .section-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; }
     .section-title { font-size: 12pt; font-weight: 700; color: var(--white); margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+
+    /* Gamification: level/XP bar + streak */
+    .xp-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 10px; width: 100%; overflow: hidden; }
+    .xp-fill { height: 6px; border-radius: 3px; background: var(--accent); }
+    .xp-caption { font-size: 8.5pt; color: var(--muted); margin-top: 6px; }
+    .streak-flame { font-size: 18pt; }
 
     /* Form fields */
     .field { margin-bottom: 16px; }
@@ -111,7 +115,7 @@
   <aside class="sidebar">
     <div class="sidebar-section">
       <div class="sidebar-label">Navigation</div>
-      <a class="sidebar-item" href="/"><div class="dot"></div>Price Predictor</a>
+      <a class="sidebar-item" href="/predict"><div class="dot"></div>Price Predictor</a>
       <a class="sidebar-item" href="/market"><div class="dot"></div>Market Overview</a>
       <a class="sidebar-item" href="/macro"><div class="dot"></div>Market Intelligence</a>
       <a class="sidebar-item" href="/watchlist"><div class="dot"></div>Watchlist</a>
@@ -139,17 +143,17 @@
         <div class="profile-name">{{ current_user.username }}</div>
         <div class="profile-email">{{ current_user.email }}</div>
         <div class="profile-badges">
-          <span class="badge {{ 'badge-pro' if current_user.is_pro else 'badge-free' }}">
-            {{ 'Pro' if current_user.is_pro else 'Free Plan' }}
+          <span class="badge {{ 'badge-pro' if current_user.is_pro else ('badge-pro' if current_user.is_plus else 'badge-free') }}">
+            {{ 'Pro' if current_user.is_pro else ('Plus' if current_user.is_plus else 'Free Plan') }}
           </span>
           <span class="badge badge-member">BullLogic Member</span>
         </div>
       </div>
       <div class="profile-header-right">
         <div class="quota-label">Predictions today</div>
-        {% if current_user.is_pro %}
+        {% if current_user.is_plus %}
         <div class="quota-value">∞</div>
-        <div class="quota-sub">Unlimited (Pro)</div>
+        <div class="quota-sub">Unlimited ({{ 'Pro' if current_user.is_pro else 'Plus' }})</div>
         {% else %}
         <div class="quota-value">{{ current_user.predictions_remaining }}</div>
         <div class="quota-sub">of 5 remaining</div>
@@ -166,13 +170,36 @@
       </div>
       <div class="stat-card">
         <div class="stat-label">Account Plan</div>
-        <div class="stat-value" style="color:var(--accent)">{{ 'Pro' if current_user.is_pro else 'Free' }}</div>
-        <div class="stat-sub">{{ 'Unlimited access' if current_user.is_pro else '5 predictions / day' }}</div>
+        <div class="stat-value" style="color:var(--accent)">{{ 'Pro' if current_user.is_pro else ('Plus' if current_user.is_plus else 'Free') }}</div>
+        <div class="stat-sub">{{ 'Unlimited access' if current_user.is_plus else '5 predictions / day' }}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">MT5 Trading</div>
         <div class="stat-value" style="font-size:13pt">{{ 'Enabled' if current_user.is_pro else 'Pro only' }}</div>
         <div class="stat-sub">{{ 'Auto-trading active' if current_user.is_pro else 'Upgrade to unlock' }}</div>
+      </div>
+    </div>
+
+    <!-- Level/XP + Streak -->
+    <div class="two-col">
+      <div class="section-card">
+        <div class="section-title">Level {{ current_user.level }}</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-size:9.5pt;color:var(--muted);">{{ current_user.xp or 0 }} XP total</span>
+          <span style="font-size:9.5pt;color:var(--muted);">{{ current_user.xp_into_level }} / 100</span>
+        </div>
+        <div class="xp-bar"><div class="xp-fill" style="width:{{ current_user.xp_progress_pct }}%"></div></div>
+        <div class="xp-caption">{{ 100 - current_user.xp_into_level }} XP to Level {{ current_user.level + 1 }}</div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">Activity Streak</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="streak-flame">🔥</span>
+          <div>
+            <div style="font-size:18pt;font-weight:700;color:var(--white);">{{ current_user.current_streak or 0 }} day{{ '' if current_user.current_streak == 1 else 's' }}</div>
+            <div class="xp-caption" style="margin-top:2px;">Best: {{ current_user.longest_streak or 0 }} days</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -195,7 +222,7 @@
         </div>
         <div class="field">
           <label>Subscription Plan</label>
-          <input type="text" value="{{ 'Pro, Unlimited access' if current_user.is_pro else 'Free, 5 predictions/day' }}" readonly />
+          <input type="text" value="{{ 'Pro, unlimited access' if current_user.is_pro else ('Plus, unlimited access' if current_user.is_plus else 'Free, 5 predictions/day') }}" readonly />
         </div>
       </div>
 
@@ -236,14 +263,29 @@
       </div>
       <ul class="plan-features">
         <li>Unlimited price predictions daily</li>
-        <li>Daily (1d) and Intraday (1h) intervals</li>
-        <li>All 9 trained instruments (AAPL, QQQ, NDX, TSLA, MSFT, GOOGL, NVDA, META, AMZN)</li>
-        <li>MT5 / MetaApi automated trading engine</li>
+        <li>Multi-timeframe confluence signal</li>
+        <li>Unlimited backtesting, up to 2yr history</li>
+        <li>REST API access</li>
+        <li>MT5 / MetaApi broker connectivity</li>
         <li>Triple-fusion ICT + ML signal scoring</li>
         <li>Prediction history &amp; watchlist</li>
-        <li>Azure cloud model storage</li>
       </ul>
       <div class="btn-pro-active">✓ Pro Plan Active</div>
+      {% elif current_user.is_plus %}
+      <div class="plan-current">
+        <div><div class="plan-name">Plus Plan</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Unlimited signals, without the broker/API toolkit</div></div>
+        <div class="plan-price">Active</div>
+      </div>
+      <ul class="plan-features">
+        <li>Unlimited price predictions daily</li>
+        <li>Multi-timeframe confluence signal</li>
+        <li>Backtesting: 1 run/day, up to 1yr history</li>
+        <li>Priority email support</li>
+        <li class="na">REST API access</li>
+        <li class="na">MT5 broker connectivity</li>
+      </ul>
+      <div class="btn-pro-active">✓ Plus Plan Active</div>
+      <a href="/pricing" class="btn-upgrade-big" style="margin-top:10px;">Upgrade to Pro →</a>
       {% else %}
       <div class="plan-current">
         <div><div class="plan-name">Free Plan</div><div style="font-size:9.5pt;color:var(--muted);margin-top:4px;">Upgrade for unlimited access and advanced features</div></div>
@@ -251,14 +293,13 @@
       </div>
       <ul class="plan-features">
         <li>5 price predictions per day</li>
-        <li>Daily (1d) interval predictions</li>
-        <li>Access to all 9 pre-trained instruments</li>
-        <li class="na">1h intraday predictions</li>
-        <li class="na">MT5 automated trading engine</li>
-        <li class="na">Triple-fusion ICT signal scoring</li>
-        <li class="na">Unlimited prediction history</li>
+        <li>76+ tickers, 8 timeframes</li>
+        <li class="na">Unlimited predictions</li>
+        <li class="na">Multi-timeframe confluence</li>
+        <li class="na">Backtesting engine</li>
+        <li class="na">MT5 broker connectivity</li>
       </ul>
-      <a href="/pricing" class="btn-upgrade-big">Upgrade to Pro →</a>
+      <a href="/pricing" class="btn-upgrade-big">Upgrade to Plus or Pro →</a>
       {% endif %}
     </div>
 

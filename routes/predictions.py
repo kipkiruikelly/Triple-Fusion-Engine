@@ -16,7 +16,7 @@ from models import (
     User, PredictionHistory, WatchlistItem, PredictionAccuracy, FREE_DAILY_LIMIT,
 )
 from utils import (consume_quota, refund_quota, _try_azure_download,
-                   VALID_INTERVALS, PRO_TICKERS)
+                   VALID_INTERVALS, PRO_TICKERS, award_xp)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
@@ -29,15 +29,78 @@ def register_prediction_routes(app, metrics):
 
     @app.route("/", methods=["GET"])
     def home():
-        if current_user.is_authenticated:
-            last_ticker = request.cookies.get("bl-last-ticker", "")
-            last_interval = request.cookies.get("bl-last-interval", "1d")
-            return render_template("index.html", ticker=last_ticker, interval=last_interval)
-        return render_template("landing.html")
+        """Logged-in: the dashboard. Logged-out: the marketing landing page.
+        The Predict workstation lives at GET /predict."""
+        if not current_user.is_authenticated:
+            return render_template("landing.html")
+        from models import PaperTrade, PaperEquitySnapshot
+        recent_predictions = (PredictionHistory.query
+                              .filter_by(user_id=current_user.id)
+                              .order_by(PredictionHistory.predicted_at.desc())
+                              .limit(5).all())
+        total_predictions = PredictionHistory.query.filter_by(
+            user_id=current_user.id).count()
+        predictions_today = (current_user.predictions_today or 0
+                             if current_user.last_prediction_date == date.today()
+                             else 0)
+        watchlist_items = (WatchlistItem.query
+                           .filter_by(user_id=current_user.id)
+                           .order_by(WatchlistItem.added_at).all())
+        paper_open = PaperTrade.query.filter_by(
+            user_id=current_user.id, status="open").count()
+        paper_closed = PaperTrade.query.filter_by(
+            user_id=current_user.id, status="closed").count()
+        paper_pnl = None
+        if paper_closed:
+            paper_pnl = round(db.session.query(
+                db.func.coalesce(db.func.sum(PaperTrade.pnl), 0.0))
+                .filter(PaperTrade.user_id == current_user.id,
+                        PaperTrade.status == "closed").scalar() or 0.0, 2)
+        # Virtual paper balance: the latest mark-to-market equity snapshot
+        # per strategy, summed. None until the engine has snapshotted.
+        paper_balance = None
+        latest = (db.session.query(
+                      PaperEquitySnapshot.strategy,
+                      db.func.max(PaperEquitySnapshot.taken_at))
+                  .filter(PaperEquitySnapshot.user_id == current_user.id)
+                  .group_by(PaperEquitySnapshot.strategy).all())
+        if latest:
+            total_equity = 0.0
+            for strategy, taken_at in latest:
+                snap = (PaperEquitySnapshot.query
+                        .filter_by(user_id=current_user.id, strategy=strategy,
+                                   taken_at=taken_at).first())
+                if snap:
+                    total_equity += snap.equity
+            paper_balance = round(total_equity, 2)
+        from paper_engine import SIM_CURRENCY
+        return render_template(
+            "home.html",
+            recent_predictions=recent_predictions,
+            total_predictions=total_predictions,
+            predictions_today=predictions_today,
+            watchlist_tickers=[i.ticker for i in watchlist_items],
+            paper_open=paper_open,
+            paper_closed=paper_closed,
+            paper_pnl=paper_pnl,
+            paper_balance=paper_balance,
+            paper_currency=SIM_CURRENCY,
+        )
 
-    @app.route("/predict", methods=["POST"])
+    @app.route("/dashboard", methods=["GET"])
+    @login_required
+    def dashboard():
+        """Stable alias for the authenticated homepage at /."""
+        return home()
+
+    @app.route("/predict", methods=["GET", "POST"])
     @login_required
     def predict():
+        if request.method == "GET":
+            last_ticker = request.cookies.get("bl-last-ticker", "")
+            last_interval = request.cookies.get("bl-last-interval", "1d")
+            return render_template("index.html", ticker=last_ticker,
+                                   interval=last_interval)
         ticker   = request.form.get("ticker", "").upper().strip()
         interval = request.form.get("interval", "1d").strip()
         if interval not in VALID_INTERVALS:
@@ -88,6 +151,7 @@ def register_prediction_routes(app, metrics):
                 )
                 db.session.add(ph)
                 db.session.commit()
+                award_xp(current_user, 5)
             except Exception:
                 db.session.rollback()
             # Honest track record for this exact model, shown on the result.
@@ -236,8 +300,8 @@ def register_prediction_routes(app, metrics):
     @app.route("/api/mtf/<ticker>", methods=["GET"])
     @login_required
     def api_mtf(ticker):
-        if not current_user.is_pro:
-            return jsonify({"ok": False, "error": "Pro required"}), 403
+        if not current_user.is_plus:
+            return jsonify({"ok": False, "error": "Plus plan required"}), 403
         ticker = ticker.upper()
         try:
             from market_data import get_history
@@ -456,9 +520,9 @@ def register_prediction_routes(app, metrics):
                 db.session.add(pref)
             pref.risk_intro_seen = True
             db.session.commit()
-            return redirect(url_for("home"))
+            return redirect(url_for("predict"))
         if pref and pref.risk_intro_seen:
-            return redirect(url_for("home"))
+            return redirect(url_for("predict"))
         return render_template("risk_basics.html")
 
     # ── Account data export and deletion (easy exit, no dark patterns) ─────────
