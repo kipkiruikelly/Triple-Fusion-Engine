@@ -2,6 +2,13 @@
 
 Comprehensive test suite covering all Phase 1-4 modules with pytest.
 
+## Current status
+
+- Total tests: 435
+- Result: 435 passed, 0 failed
+- Last full run: 2026-07-13
+- How to run: `python run_tests.py` (or `pytest tests/ -q`)
+
 ## Quick Start
 
 ```bash
