@@ -103,6 +103,7 @@
 {% include "_navbar.html" %}
 
 <div class="ticker-strip">
+  <span title="Static demonstration values, not live quotes" style="background:rgba(234,179,8,0.14);color:var(--yellow);font-size:7.5pt;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;">DEMO DATA</span>
   <div class="ticker-item"><span class="name">S&P 500</span><span class="price">5,308.15</span><span class="up">+0.51%</span></div>
   <div class="ticker-item"><span class="name">NASDAQ</span><span class="price">16,742.39</span><span class="up">+0.78%</span></div>
   <div class="ticker-item"><span class="name">DOW</span><span class="price">38,996.39</span><span class="dn">-0.12%</span></div>
@@ -113,17 +114,6 @@
 
 <div class="layout">
   <aside class="sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-label">Navigation</div>
-      <a class="sidebar-item" href="/"><div class="dot"></div>Price Predictor</a>
-      <a class="sidebar-item active" href="/macro"><div class="dot"></div>Market Intelligence</a>
-      <a class="sidebar-item" href="/watchlist"><div class="dot"></div>Watchlist</a>
-      <a class="sidebar-item" href="/history"><div class="dot"></div>Prediction History</a>
-      {% if current_user.is_pro %}
-      <a class="sidebar-item" href="/mt5"><div class="dot"></div>MT5 Trading</a>
-      {% endif %}
-    </div>
-
     <!-- Asset Class Dropdowns -->
     <div class="sidebar-dropdown">
       <div class="sidebar-dropdown-header" onclick="toggleSidebarDropdown(this)">
@@ -310,6 +300,7 @@
           <span>Insider Trading Transactions Log</span>
           <span class="section-date">Last 25 filings (via SEC Form 4)</span>
         </div>
+        {% if current_user.is_pro %}
         <div style="max-height: 400px; overflow-y: auto;">
           <table class="market-table">
             <thead>
@@ -323,10 +314,18 @@
               </tr>
             </thead>
             <tbody id="insiders-tbody">
-              <!-- Filled dynamically -->
+              <tr><td colspan="6" style="text-align:center; color:var(--muted)">Loading...</td></tr>
             </tbody>
           </table>
         </div>
+        {% else %}
+        <div style="text-align: center; padding: 40px 20px;">
+          <div style="font-size: 32px; margin-bottom: 16px;">🔒</div>
+          <h3 style="margin-bottom: 8px;">Pro Feature</h3>
+          <p style="color: var(--muted); margin-bottom: 24px;">Unlock the Insider Trading Transactions Log and see exactly what executives and major shareholders are buying or selling.</p>
+          <a href="/pricing" class="btn btn-primary">Upgrade to Pro</a>
+        </div>
+        {% endif %}
       </div>
 
     </div>

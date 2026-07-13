@@ -235,11 +235,13 @@ def get_sentiment(ticker: str, use_cache: bool = True) -> dict:
     reddit_score = _reddit_sentiment(ticker)
     reddit_mentions = _reddit_mention_count(ticker)
     if reddit_mentions > 0:
+        # NOTE: returns simulated data - replace with live source
         components["reddit"] = {
             "score": round(reddit_score, 3),
             "mentions": reddit_mentions,
             "magnitude": round(min(1.0, reddit_mentions / 50), 2),
             "simulated": True,
+            "data_source": "simulated",
         }
         sources += 1
 

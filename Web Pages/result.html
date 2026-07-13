@@ -693,6 +693,7 @@
 
 <!-- Ticker strip -->
 <div class="ticker-strip">
+  <span title="Static demonstration values, not live quotes" style="background:rgba(234,179,8,0.14);color:var(--yellow);font-size:7.5pt;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;">DEMO DATA</span>
   <div class="ticker-item">
     <span class="name">S&P 500</span>
     <span class="price">5,308.15</span>
@@ -1256,11 +1257,11 @@
     <div class="mtf-panel">
       <div class="mtf-header">
         Multi-Timeframe Predictions
-        {% if not current_user.is_pro %}<span class="mtf-pro-badge">PRO</span>{% endif %}
+        {% if not current_user.is_plus %}<span class="mtf-pro-badge">PLUS</span>{% endif %}
       </div>
       <div class="mtf-body">
-        {% if current_user.is_pro %}<div id="mtf-loading" class="mtf-loading">Fetching multi-timeframe analysis&hellip;</div>{% endif %}
-        <table class="mtf-table" id="mtf-table" {% if current_user.is_pro %}style="display:none;"{% endif %}>
+        {% if current_user.is_plus %}<div id="mtf-loading" class="mtf-loading">Fetching multi-timeframe analysis&hellip;</div>{% endif %}
+        <table class="mtf-table" id="mtf-table" {% if current_user.is_plus %}style="display:none;"{% endif %}>
           <thead>
             <tr>
               <th>Timeframe</th>
@@ -1290,13 +1291,13 @@
             </tr>
           </tbody>
         </table>
-        {% if not current_user.is_pro %}
+        {% if not current_user.is_plus %}
         <div class="mtf-lock-overlay">
           <div class="mtf-lock-content">
             <div style="font-size:26px;margin-bottom:8px;">&#128274;</div>
-            <div style="font-weight:700;font-size:12pt;color:var(--white);margin-bottom:6px;">Pro Feature</div>
-            <div style="color:var(--muted);font-size:9.5pt;max-width:300px;margin:0 auto 14px;">Real-time multi-timeframe predictions (1D &amp; 1H) with previous day close reference require Pro.</div>
-            <a href="/pricing" class="trade-conn-btn" style="display:inline-block;text-decoration:none;">Upgrade to Pro</a>
+            <div style="font-weight:700;font-size:12pt;color:var(--white);margin-bottom:6px;">Plus Feature</div>
+            <div style="color:var(--muted);font-size:9.5pt;max-width:300px;margin:0 auto 14px;">Real-time multi-timeframe predictions (1D &amp; 1H) with previous day close reference require a Plus or Pro plan.</div>
+            <a href="/pricing" class="trade-conn-btn" style="display:inline-block;text-decoration:none;">Upgrade to Plus</a>
           </div>
         </div>
         {% endif %}
@@ -1985,7 +1986,7 @@ if (_isPro) {
 }
 
 /* ── Multi-Timeframe Predictions ────────────────────────────────────────────*/
-{% if current_user.is_pro %}
+{% if current_user.is_plus %}
 (function(){
   fetch('/api/mtf/{{ ticker }}')
     .then(function(r){ return r.json(); })

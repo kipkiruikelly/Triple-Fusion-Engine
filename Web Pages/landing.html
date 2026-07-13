@@ -9,23 +9,8 @@
   <meta name="theme-color" content="#FF6B35"/>
   <meta name="description" content="ML-powered trading signals fused with ICT concepts. Predict market direction across stocks, ETFs, and indices." />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/index.css" />
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root{--bg:#0A0D14;--surface:#111520;--surface2:#1A1F2E;--surface3:#222840;--accent2:#FF8C5A}
-
-    html { scroll-behavior: smooth; }
-
-    body {
-      font-family: 'Inter', sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    a { text-decoration: none; color: inherit; }
-
     /* ── NAV ── */
     nav {
       position: fixed;
@@ -36,9 +21,9 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(10, 13, 20, 0.85);
+      background: rgba(var(--bg-rgb, 10, 13, 20), 0.85);
       backdrop-filter: blur(16px);
-      border-bottom: 1px solid rgba(42, 49, 80, 0.6);
+      border-bottom: 1px solid rgba(var(--border-rgb, 42, 49, 80), 0.6);
       transition: background 0.3s;
     }
 
@@ -72,47 +57,26 @@
       gap: 10px;
     }
 
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 9px 20px;
-      border-radius: 7px;
-      font-size: 10pt;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.15s;
-      border: none;
-    }
-
-    .btn-ghost {
-      background: transparent;
-      color: var(--text);
-      border: 1px solid var(--border);
-    }
-    .btn-ghost:hover { border-color: var(--muted); background: var(--surface2); }
-
-    .btn-primary {
-      background: var(--accent);
-      color: #fff;
-    }
-    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(255, 107, 53, 0.35); }
-
     .btn-lg {
       padding: 14px 32px;
       font-size: 11pt;
-      border-radius: 8px;
     }
 
     .btn-outline-lg {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       padding: 13px 32px;
       font-size: 11pt;
+      font-weight: 600;
       border-radius: 8px;
       background: transparent;
       color: var(--text);
       border: 1px solid var(--border);
+      transition: all 0.2s ease;
+      cursor: pointer;
     }
-    .btn-outline-lg:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-outline-lg:hover { border-color: var(--accent); color: var(--accent); background: rgba(var(--accent-rgb, 255,107,53), 0.1); }
 
     /* ── HERO ── */
     .hero {
@@ -863,6 +827,7 @@
 <div class="ticker-strip">
   <div class="ticker-track">
     <!-- duplicated for infinite scroll -->
+    <div class="ticker-item"><span title="Static demonstration values, not live quotes or signals" style="background:rgba(234,179,8,0.14);color:var(--yellow);font-size:7.5pt;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;white-space:nowrap;">DEMO DATA</span></div>
     <div class="ticker-item"><span class="ticker-symbol">QQQ</span><span class="ticker-price">$484.20</span><span class="ticker-change up">+1.24%</span><span class="ticker-signal bull">BULLISH</span></div>
     <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$212.49</span><span class="ticker-change up">+0.87%</span><span class="ticker-signal bull">BULLISH</span></div>
     <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$138.85</span><span class="ticker-change up">+2.31%</span><span class="ticker-signal bull">BULLISH</span></div>
@@ -874,6 +839,7 @@
     <div class="ticker-item"><span class="ticker-symbol">NDX</span><span class="ticker-price">$21,480</span><span class="ticker-change up">+1.18%</span><span class="ticker-signal bull">BULLISH</span></div>
     <div class="ticker-item"><span class="ticker-symbol">DIA</span><span class="ticker-price">$424.60</span><span class="ticker-change up">+0.29%</span><span class="ticker-signal bull">BULLISH</span></div>
     <!-- duplicate -->
+    <div class="ticker-item"><span title="Static demonstration values, not live quotes or signals" style="background:rgba(234,179,8,0.14);color:var(--yellow);font-size:7.5pt;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;white-space:nowrap;">DEMO DATA</span></div>
     <div class="ticker-item"><span class="ticker-symbol">QQQ</span><span class="ticker-price">$484.20</span><span class="ticker-change up">+1.24%</span><span class="ticker-signal bull">BULLISH</span></div>
     <div class="ticker-item"><span class="ticker-symbol">AAPL</span><span class="ticker-price">$212.49</span><span class="ticker-change up">+0.87%</span><span class="ticker-signal bull">BULLISH</span></div>
     <div class="ticker-item"><span class="ticker-symbol">NVDA</span><span class="ticker-price">$138.85</span><span class="ticker-change up">+2.31%</span><span class="ticker-signal bull">BULLISH</span></div>

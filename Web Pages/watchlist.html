@@ -92,6 +92,7 @@
 
 <!-- Ticker strip -->
 <div class="ticker-strip">
+  <span title="Static demonstration values, not live quotes" style="background:rgba(234,179,8,0.14);color:var(--yellow);font-size:7.5pt;font-weight:700;padding:2px 8px;border-radius:10px;letter-spacing:0.5px;white-space:nowrap;flex-shrink:0;">DEMO DATA</span>
   <div class="ticker-item"><span class="name">S&P 500</span><span class="price">5,308.15</span><span class="change up">+0.51%</span></div>
   <div class="ticker-item"><span class="name">NASDAQ</span><span class="price">16,742.39</span><span class="change up">+0.78%</span></div>
   <div class="ticker-item"><span class="name">DOW</span><span class="price">38,996.39</span><span class="change down">-0.12%</span></div>
@@ -141,8 +142,8 @@
       </div>
       <div class="stat-card">
         <div class="stat-label">Plan</div>
-        <div class="stat-value">{{ 'Pro' if current_user.is_pro else 'Free' }}</div>
-        <div class="stat-sub">{{ 'Unlimited predictions' if current_user.is_pro else (current_user.predictions_remaining|string + ' left today') }}</div>
+        <div class="stat-value">{{ 'Pro' if current_user.is_pro else ('Plus' if current_user.is_plus else 'Free') }}</div>
+        <div class="stat-sub">{{ 'Unlimited predictions' if current_user.is_plus else (current_user.predictions_remaining|string + ' left today') }}</div>
       </div>
     </div>
 

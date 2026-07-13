@@ -13,7 +13,6 @@ SIMULATED_ENDPOINTS = [
     "/api/portfolio/equity-curve",
     "/api/market/movers",
     "/api/activity/recent",
-    "/api/leaderboard/users",
     "/api/competitions",
 ]
 
@@ -23,6 +22,8 @@ REAL_ENDPOINTS = [
     "/api/notifications",
     "/api/notifications/count",
     "/api/predictions/recent",
+    "/api/leaderboard/users",
+    "/api/achievements/user",
 ]
 
 
@@ -37,6 +38,8 @@ class TestSimulatedFlags:
             body = resp.get_json()
             assert body.get("simulated") is True, (
                 f"{ep} serves demonstration data but does not say so")
+            assert body.get("data_source") == "simulated", (
+                f"{ep} must carry data_source=simulated")
 
     def test_real_endpoints_are_not_labeled(self, client, make_user):
         make_user("flaguser2")

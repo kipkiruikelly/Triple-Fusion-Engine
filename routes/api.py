@@ -51,7 +51,8 @@ def _json_simulated(data=None, **kwargs):
     Every payload that is not driven by real user/market state MUST go
     through this helper so no client can mistake it for live data.
     """
-    resp = {"ok": True, "simulated": True,
+    # NOTE: returns simulated data - replace with live source
+    resp = {"ok": True, "simulated": True, "data_source": "simulated",
             "note": "Demonstration data - not live account or market state."}
     if data is not None:
         resp["data"] = data
@@ -66,7 +67,9 @@ def _json_simulated(data=None, **kwargs):
 def dashboard():
     """Return aggregated dashboard data: portfolio, positions, win rate."""
     try:
-        # Portfolio snapshot (from paper or live account)
+        # NOTE: returns simulated data - replace with live source
+        # Portfolio snapshot defaults are placeholders; real numbers are
+        # filled in below only when a trading engine is connected.
         portfolio = {
             "equity": 10_000.0,  # would come from mt5_trading or paper_engine
             "balance": 10_000.0,
@@ -221,50 +224,62 @@ def watchlist_get():
 
 # ── Leaderboard ─────────────────────────────────────────────────────────────────
 
+def _trader_leaderboard(limit=10):
+    """Rank real (user, strategy) paper-trading portfolios by Sharpe ratio,
+    using the exact same compute_metrics() the platform's own public
+    strategy reports use - not a second, disconnected formula. Only
+    opted-in users with >= paper_engine.MIN_TRADES closed trades for a
+    given strategy are eligible, the same "insufficient data" honesty gate
+    the engine already enforces everywhere else. See
+    PAPER_TRADING_PHASE2_DESIGN.md for why Sharpe (not raw return) is the
+    ranking metric."""
+    import paper_engine
+    from models import User
+    from extensions import db
+
+    cfg = paper_engine.load_config(db)
+    rows = []
+    for u in User.query.filter_by(paper_trading_opted_in=True).all():
+        for strategy in paper_engine.STRATEGIES:
+            report = paper_engine.strategy_report(db, strategy, cfg, user_id=u.id)
+            m = report["metrics"]
+            if not m["sufficient"]:
+                continue
+            rows.append({
+                "username": u.username,
+                "strategy": strategy,
+                "sharpe": m["sharpe"],
+                "return_pct": m["total_return_pct"],
+                "win_rate": m["win_rate_pct"],
+                "trades": m["trades"],
+                "equity": report["equity"],
+            })
+    # Sharpe primary, return_pct as tiebreak; a None Sharpe (zero-variance
+    # equity curve, an edge case compute_metrics already handles honestly)
+    # sorts last rather than crashing or being mistaken for a zero score.
+    rows.sort(key=lambda r: (r["sharpe"] if r["sharpe"] is not None else float("-inf"),
+                             r["return_pct"] or 0), reverse=True)
+    for i, r in enumerate(rows):
+        r["rank"] = i + 1
+    return rows[:limit]
+
+
 @api_bp.route("/leaderboard/users")
 @login_required
 def leaderboard_users():
-    """Return global trader rankings.
+    """Real per-user, per-strategy paper-trading rankings by Sharpe ratio.
+    All-time only - no weekly/monthly slicing yet (would need per-period
+    trade filtering, not built in this phase).
 
     (/api/leaderboard without a suffix is the model-accuracy leaderboard
-    in routes/predictions.py.)
+    in routes/predictions.py - a different, unrelated ranking.)
     """
     try:
-        period = request.args.get("period", "all-time")  # weekly, monthly, all-time
-        limit = request.args.get("limit", 50, type=int)
-        metric = request.args.get("metric", "return_pct")  # return_pct, sharpe, win_rate
-
-        # In production, query CompetitionEntry + UserPortfolio tables
-        # For now, return mock data
-        mock_entries = [
-            {"rank": 1, "username": "AlphaTrader", "return_pct": 34.5, "sharpe": 2.1,
-             "win_rate": 68.0, "trades": 156, "equity": 13450.0},
-            {"rank": 2, "username": "BullRider", "return_pct": 28.2, "sharpe": 1.9,
-             "win_rate": 62.0, "trades": 98, "equity": 12820.0},
-            {"rank": 3, "username": "QuantKing", "return_pct": 22.8, "sharpe": 1.7,
-             "win_rate": 59.0, "trades": 210, "equity": 12280.0},
-            {"rank": 4, "username": "MarketWiz", "return_pct": 18.5, "sharpe": 1.5,
-             "win_rate": 55.0, "trades": 72, "equity": 11850.0},
-            {"rank": 5, "username": "TradeBot3000", "return_pct": 15.2, "sharpe": 1.3,
-             "win_rate": 53.0, "trades": 340, "equity": 11520.0},
-        ]
-
-        # Add current user if not in top 5
-        cu = getattr(current_user, "username", "You")
-        user_in_list = any(e["username"] == cu for e in mock_entries)
-        if not user_in_list:
-            mock_entries.append({
-                "rank": 15, "username": cu, "return_pct": 8.5, "sharpe": 0.8,
-                "win_rate": 48.0, "trades": 24, "equity": 10850.0,
-                "is_current_user": True,
-            })
-
-        return _json_simulated({
-            "leaderboard": mock_entries[:limit],
-            "period": period,
-            "metric": metric,
-            "total_participants": 342,
-        })
+        limit = request.args.get("limit", 10, type=int)
+        import paper_engine
+        rows = _trader_leaderboard(limit=limit)
+        return _json_ok(leaderboard=rows, min_trades=paper_engine.MIN_TRADES,
+                        total_ranked=len(rows))
     except Exception as e:
         logger.exception("Leaderboard API error")
         return _json_error(str(e), 500)
