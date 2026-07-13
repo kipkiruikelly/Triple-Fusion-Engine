@@ -405,6 +405,15 @@ def create_app():
         from ops import start_ops_thread
         start_ops_thread(app, db)
 
+    # Make the live-trading mode unmistakable in the startup log.
+    from mt5_trading import live_trading_enabled
+    if live_trading_enabled():
+        logger.warning("Live trading is ENABLED (ENABLE_LIVE_TRADING=true). "
+                       "Real orders can be placed.")
+    else:
+        logger.warning("Live trading is DISABLED. Set ENABLE_LIVE_TRADING=true "
+                       "to enable.")
+
     return app
 
 

@@ -101,6 +101,17 @@
 
 {% include "_navbar.html" %}
 
+{% if live_enabled %}
+<div style="background:rgba(255,77,77,0.12);border-bottom:1px solid var(--red);padding:9px 24px;font-size:9.5pt;color:var(--red);font-weight:600;">
+  &#9888;&#65039; LIVE TRADING ENABLED, orders placed from this page go to a real broker account.
+</div>
+{% else %}
+<div style="background:rgba(234,179,8,0.1);border-bottom:1px solid var(--yellow);padding:9px 24px;font-size:9.5pt;color:var(--yellow);font-weight:600;">
+  Live trading is DISABLED on this server, paper mode only. An operator must set
+  ENABLE_LIVE_TRADING=true to allow real order execution.
+</div>
+{% endif %}
+
 <div class="layout">
 
   <!-- Sidebar: connection + trading controls -->

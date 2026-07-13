@@ -7,7 +7,8 @@ from datetime import date, datetime
 from flask import render_template, request, jsonify, redirect, url_for
 from flask_login import login_required, current_user
 
-from utils import pro_required
+from extensions import db
+from utils import pro_required, PLUS_BACKTEST_DAILY, PLUS_BACKTEST_PERIODS, award_xp
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,9 @@ def register_trading_routes(app):
     def mt5_dashboard():
         if not current_user.is_pro:
             return redirect(url_for('pricing'))
-        return render_template("mt5.html", backend=mt5_trader.backend)
+        from mt5_trading import live_trading_enabled
+        return render_template("mt5.html", backend=mt5_trader.backend,
+                               live_enabled=live_trading_enabled())
 
     @app.route("/mt5/connect", methods=["POST"])
     @pro_required
@@ -355,8 +358,8 @@ def register_trading_routes(app):
     @app.route("/api/backtest", methods=["POST"])
     @login_required
     def api_backtest():
-        if not current_user.is_pro:
-            return jsonify({"ok": False, "error": "Backtesting requires a Pro plan."}), 403
+        if not current_user.is_plus:
+            return jsonify({"ok": False, "error": "Backtesting requires a Plus or Pro plan."}), 403
         data     = request.get_json() or {}
         ticker   = data.get("ticker", "AAPL").upper()
         interval = data.get("interval", "1d")
@@ -367,6 +370,22 @@ def register_trading_routes(app):
             return jsonify({"ok": False, "error": "interval must be 1d or 1h"}), 400
         if period not in ("6mo", "1y", "2y"):
             return jsonify({"ok": False, "error": "period must be 6mo, 1y, or 2y"}), 400
+        if not current_user.is_pro:
+            # Plus tier: capped history range and one run/day. Pro/Enterprise
+            # keep the full range and unlimited runs checked above.
+            if period not in PLUS_BACKTEST_PERIODS:
+                return jsonify({"ok": False,
+                                "error": "The Plus plan supports 6mo or 1y of history. Upgrade to Pro for 2y."}), 403
+            today = date.today()
+            if current_user.last_backtest_date != today:
+                current_user.backtests_today    = 0
+                current_user.last_backtest_date = today
+            if current_user.backtests_today >= PLUS_BACKTEST_DAILY:
+                return jsonify({"ok": False,
+                                "error": f"The Plus plan allows {PLUS_BACKTEST_DAILY} backtest run per day. "
+                                         "Upgrade to Pro for unlimited runs."}), 429
+            current_user.backtests_today += 1
+            db.session.commit()
         if not (100 <= capital <= 10_000_000):
             return jsonify({"ok": False, "error": "Capital must be between $100 and $10,000,000"}), 400
         if not (0.1 <= risk_pct <= 10):
@@ -375,6 +394,10 @@ def register_trading_routes(app):
             from backtester import run_backtest
             result = run_backtest(ticker, interval, period, capital, risk_pct)
             result["ok"] = True
+            try:
+                award_xp(current_user, 10)
+            except Exception:
+                db.session.rollback()
             return jsonify(result)
         except ValueError as e:
             return jsonify({"ok": False, "error": str(e)}), 400

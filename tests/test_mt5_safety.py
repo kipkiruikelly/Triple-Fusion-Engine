@@ -77,3 +77,25 @@ class TestLiveTradingGate:
         assert t.is_paper is True
         assert t.is_metaapi is False
         assert t._mt5_instance is None
+
+
+class TestDashboardModeBanner:
+    """The /mt5 page must always show whether the server allows real
+    order execution, so a user can never mistake paper for live."""
+
+    def test_disabled_banner_shown_by_default(self, client, make_user):
+        from conftest import login
+        make_user("mt5banner", plan="pro")
+        login(client, "mt5banner")
+        r = client.get("/mt5")
+        assert r.status_code == 200
+        assert b"Live trading is DISABLED" in r.data
+
+    def test_enabled_banner_when_flag_set(self, client, make_user, monkeypatch):
+        from conftest import login
+        monkeypatch.setenv("ENABLE_LIVE_TRADING", "true")
+        make_user("mt5banner2", plan="pro")
+        login(client, "mt5banner2")
+        r = client.get("/mt5")
+        assert r.status_code == 200
+        assert b"LIVE TRADING ENABLED" in r.data
