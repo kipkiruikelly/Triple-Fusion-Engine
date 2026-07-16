@@ -42,6 +42,23 @@ class User(UserMixin, db.Model):
     last_ai_analysis_date   = db.Column(db.Date, nullable=True)
     backtests_today         = db.Column(db.Integer, default=0)
     last_backtest_date      = db.Column(db.Date, nullable=True)
+    xp                      = db.Column(db.Integer, default=0)
+    current_streak          = db.Column(db.Integer, default=0)
+    longest_streak          = db.Column(db.Integer, default=0)
+    last_active_date        = db.Column(db.Date, nullable=True)
+    paper_trading_opted_in  = db.Column(db.Boolean, default=False)
+
+    @property
+    def level(self):
+        return (self.xp or 0) // 100 + 1
+
+    @property
+    def xp_into_level(self):
+        return (self.xp or 0) % 100
+
+    @property
+    def xp_progress_pct(self):
+        return (self.xp or 0) % 100
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -390,6 +407,7 @@ class PaperTrade(db.Model):
     written exactly once at close. Nothing here is ever a real order.
     """
     id             = db.Column(db.Integer, primary_key=True)
+    user_id        = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     strategy       = db.Column(db.String(20), nullable=False, index=True)   # 'ml_ensemble' | 'alpha_rules'
     model          = db.Column(db.String(40), nullable=True)                # e.g. 'lr+rf', 'alpha_composite'
     ticker         = db.Column(db.String(12), nullable=False, index=True)
@@ -418,6 +436,7 @@ class PaperTrade(db.Model):
 class PaperTradeEvent(db.Model):
     """Append-only audit trail for the paper trading engine."""
     id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     trade_id   = db.Column(db.Integer, db.ForeignKey('paper_trade.id'), nullable=True, index=True)
     event      = db.Column(db.String(20), nullable=False)   # open|close|reject|breaker|toggle|config
     detail     = db.Column(db.String(400), nullable=True)
@@ -427,6 +446,7 @@ class PaperTradeEvent(db.Model):
 class PaperEquitySnapshot(db.Model):
     """Mark-to-market VIRTUAL equity per strategy, taken every engine cycle."""
     id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     strategy   = db.Column(db.String(20), nullable=False, index=True)
     equity     = db.Column(db.Float, nullable=False)
     open_count = db.Column(db.Integer, nullable=False, default=0)

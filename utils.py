@@ -59,10 +59,12 @@ FREE_ALERTS_LIMIT      = 3
 FREE_AI_ANALYSIS_DAILY = 1
 FREE_JOURNAL_VISIBLE   = 10
 FREE_BACKTEST_DAILY    = 1
+PLUS_BACKTEST_DAILY    = 1
 # /api/backtest already hard-validates period against {6mo, 1y, 2y} for
 # everyone - "5yr Pro history" isn't achievable without new work, so Pro
 # keeps the existing max (2y) and only the daily-run cap changes for Free.
 FREE_BACKTEST_PERIODS  = {"6mo", "1y"}
+PLUS_BACKTEST_PERIODS  = {"6mo", "1y"}
 
 
 def check_timeframe_access(interval, user):
@@ -297,3 +299,42 @@ def _try_azure_download(ticker: str, interval: str = "1d"):
     if not os.path.exists(os.path.join(models_dir, needed)):
         if azure_enabled():
             download_models_from_azure(ticker)
+
+
+def award_xp(user, amount):
+    """Add experience points to the user and commit to database."""
+    if not user:
+        return
+    user.xp = (user.xp or 0) + amount
+    db.session.commit()
+
+
+def update_daily_streak(user):
+    """Advance or reset the user's daily activity streak, awarding a bonus on every 7th day."""
+    if not user:
+        return
+    from datetime import date, timedelta
+    today = date.today()
+    last = user.last_active_date
+
+    # Calculate streak changes
+    if last is None:
+        user.current_streak = 1
+    elif last == today - timedelta(days=1):
+        user.current_streak = (user.current_streak or 0) + 1
+        # 7-day streak bonus
+        if user.current_streak % 7 == 0:
+            user.xp = (user.xp or 0) + 50
+            _add_notification(
+                user.id,
+                "achievement",
+                f"{user.current_streak}-Day Streak Bonus!",
+                f"You logged in {user.current_streak} days in a row! Earned 50 bonus XP.",
+                None
+            )
+    elif last != today:
+        user.current_streak = 1
+
+    user.last_active_date = today
+    user.longest_streak = max(user.longest_streak or 0, user.current_streak or 0)
+    db.session.commit()
