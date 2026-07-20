@@ -2,6 +2,11 @@ version: "3"
 
 # ============================================================
 #  Triple Fusion Engine — ngrok tunnel config
+#
+#  ONE tunnel on port 5000 (React + Vite proxy).
+#  Vite already forwards /api/* /auth/* /mt5/* to Django :8001
+#  internally, so no separate Django tunnel is needed.
+#
 #  Run with: ngrok start --all --config ngrok.yml
 # ============================================================
 
@@ -10,18 +15,11 @@ agent:
   api_key: 3FumPSscTh04elkS9BuPs1Dik8K_jRicYq8tDQjZ6n9NYHbP
 
 tunnels:
-  # Public-facing app tunnel (React frontend → internet)
-  frontend:
+  # Single public-facing tunnel → Vite dev server
+  # Vite proxies /api /auth /mt5 internally to Django :8001
+  app:
     proto: http
     addr: 5000
-    schemes:
-      - https
-    inspect: true
-
-  # Django API tunnel (optional — useful for Postman/webhook testing)
-  backend:
-    proto: http
-    addr: 8001
     schemes:
       - https
     inspect: true

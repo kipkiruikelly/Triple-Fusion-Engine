@@ -1,13 +1,20 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
 from users import views as users_views
 
 def api_root(request):
+    # If a browser hits the Django root directly, send them to the React app
+    accept = request.META.get('HTTP_ACCEPT', '')
+    if 'text/html' in accept:
+        return HttpResponseRedirect('http://localhost:5000')
+    # API clients (Postman, curl, etc.) get a JSON status response
     return JsonResponse({
         'name': 'BullLogic API',
         'status': 'running',
-        'frontend_url': 'http://localhost:5173'
+        'version': '2.0',
+        'frontend_url': 'http://localhost:5000',
+        'docs': '/api/'
     })
 
 urlpatterns = [

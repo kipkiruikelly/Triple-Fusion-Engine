@@ -444,7 +444,7 @@ class AdminPillarsActionView(APIView):
         AdminAuditLog.objects.create(
             admin=request.user,
             action=f"pillar_action_{action_type}",
-            details=f"Target ID: {target_id}, Status: {status}"
+            detail=f"Target ID: {target_id}, Status: {status}"
         )
         
         if action_type == 'bot_toggle':
