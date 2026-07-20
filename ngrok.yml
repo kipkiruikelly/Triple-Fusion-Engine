@@ -1,0 +1,27 @@
+version: "3"
+
+# ============================================================
+#  Triple Fusion Engine — ngrok tunnel config
+#  Run with: ngrok start --all --config ngrok.yml
+# ============================================================
+
+agent:
+  authtoken: 3FueDMAlY6XakQsCfIgJ4dNGLwV_7jXHHp8FzAd2JQtvYmoGt
+  api_key: 3FumPSscTh04elkS9BuPs1Dik8K_jRicYq8tDQjZ6n9NYHbP
+
+tunnels:
+  # Public-facing app tunnel (React frontend → internet)
+  frontend:
+    proto: http
+    addr: 5000
+    schemes:
+      - https
+    inspect: true
+
+  # Django API tunnel (optional — useful for Postman/webhook testing)
+  backend:
+    proto: http
+    addr: 8001
+    schemes:
+      - https
+    inspect: true
