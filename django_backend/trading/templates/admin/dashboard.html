@@ -1,0 +1,181 @@
+{% extends 'admin/base.html' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 class="mt-4"><span class="gt">BullLogic</span> Admin Dashboard</h1>
+<ol class="breadcrumb mb-4">
+    <li class="breadcrumb-item active">Platform Overview & Metrics</li>
+</ol>
+
+<div class="row">
+    <!-- Total Users -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="horizon-metric-card">
+                <div class="horizon-icon-wrapper" style="background-color: rgba(67, 24, 255, 0.1); color: #7551ff;">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div class="horizon-metric-info">
+                    <div class="horizon-metric-label">Total Users</div>
+                    <div class="horizon-metric-val">{{ total_users }}</div>
+                </div>
+            </div>
+            <div class="card-footer py-2 bg-transparent border-0 d-flex align-items-center justify-content-between">
+                <a class="small text-white stretched-link text-decoration-none" href="{% url 'admin-users' %}">Manage Users</a>
+                <div class="small text-muted"><i class="fas fa-angle-right"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Bots -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="horizon-metric-card">
+                <div class="horizon-icon-wrapper" style="background-color: rgba(0, 192, 118, 0.1); color: #00c076;">
+                    <i class="fas fa-robot"></i>
+                </div>
+                <div class="horizon-metric-info">
+                    <div class="horizon-metric-label">Active Bots</div>
+                    <div class="horizon-metric-val">{{ active_bots }}</div>
+                </div>
+            </div>
+            <div class="card-footer py-2 bg-transparent border-0 d-flex align-items-center justify-content-between">
+                <span class="small text-muted">Algorithmic execution</span>
+                <div class="small text-muted"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total API Requests -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="horizon-metric-card">
+                <div class="horizon-icon-wrapper" style="background-color: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+                    <i class="fas fa-brain"></i>
+                </div>
+                <div class="horizon-metric-info">
+                    <div class="horizon-metric-label">API Predictions</div>
+                    <div class="horizon-metric-val">{{ total_predictions }}</div>
+                </div>
+            </div>
+            <div class="card-footer py-2 bg-transparent border-0 d-flex align-items-center justify-content-between">
+                <span class="small text-muted">System models</span>
+                <div class="small text-muted"><i class="fas fa-chart-line"></i></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Errors -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card">
+            <div class="horizon-metric-card">
+                <div class="horizon-icon-wrapper" style="background-color: rgba(239, 68, 68, 0.1); color: #ef4444;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="horizon-metric-info">
+                    <div class="horizon-metric-label">System Logs / Errors</div>
+                    <div class="horizon-metric-val">{{ error_count }}</div>
+                </div>
+            </div>
+            <div class="card-footer py-2 bg-transparent border-0 d-flex align-items-center justify-content-between">
+                <span class="small text-muted">Issues logged by handlers</span>
+                <div class="small text-muted"><i class="fas fa-shield-alt"></i></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <!-- Recent Users Table -->
+    <div class="col-xl-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-users me-1"></i>
+                Recent Signups
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in recent_users %}
+                            <tr>
+                                <td><strong>{{ u.username }}</strong></td>
+                                <td>{{ u.email }}</td>
+                                <td>
+                                    {% if u.plan == 'pro' or u.plan == 'enterprise' %}
+                                        <span class="badge bg-warning text-dark">{{ u.plan|upper }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ u.plan }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if u.status == 'active' %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{{ u.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ u.created_at|date:"Y-m-d H:i" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No recent signups.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent System Errors -->
+    <div class="col-xl-6">
+        <div class="card mb-4">
+            <div class="card-header bg-dark text-white">
+                <i class="fas fa-bug me-1"></i>
+                Recent System Exceptions
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Method/Path</th>
+                                <th>Message</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for err in recent_errors %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-secondary">{{ err.method|default:"GET" }}</span>
+                                    <code>{{ err.endpoint|default:"/" }}</code>
+                                </td>
+                                <td class="text-danger small">{{ err.message }}</td>
+                                <td class="small text-muted">{{ err.created_at|date:"H:i:s" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center text-success small py-3"><i class="fas fa-check-circle"></i> No errors logged in the system.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

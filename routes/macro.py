@@ -14,10 +14,7 @@ _HEATMAP_CACHE = {}
 _HEATMAP_CACHE_TIMEOUT = 12 * 3600  # 12 hour cache
 
 def register_macro_routes(app):
-    @app.route("/macro")
-    @login_required
-    def macro_page():
-        return render_template("macro.html")
+
 
     @app.route("/api/macro/data")
     @login_required

@@ -22,10 +22,7 @@ def register_trading_routes(app):
 
     # ── MT5 dashboard ──────────────────────────────────────────────────────────
 
-    @app.route("/live")
-    @login_required
-    def live_trading_page():
-        return render_template("live.html")
+
 
     @app.route("/api/live/summary")
     @login_required
@@ -81,14 +78,7 @@ def register_trading_routes(app):
         return jsonify({"ok": True, "simulated": False, "page": 1, "total": 0, "trades": []})
 
 
-    @app.route("/mt5")
-    @login_required
-    def mt5_dashboard():
-        if not current_user.is_pro:
-            return redirect(url_for('pricing'))
-        from mt5_trading import live_trading_enabled
-        return render_template("mt5.html", backend=mt5_trader.backend,
-                               live_enabled=live_trading_enabled())
+
 
     @app.route("/mt5/connect", methods=["POST"])
     @pro_required
@@ -269,8 +259,8 @@ def register_trading_routes(app):
 
     # ── Performance / backtest ─────────────────────────────────────────────────
 
-    @app.route("/performance")
-    def performance():
+    @app.route("/api/performance")
+    def api_performance():
         import sqlite3
         import json as _json
         import numpy as _np
@@ -303,8 +293,8 @@ def register_trading_routes(app):
                     stats["equity"]       = round(float(eq_s.iloc[-1]), 2)
                     stats["total_ret"]    = round((eq_s.iloc[-1] - 10_000) / 10_000 * 100, 2)
                     stats["started"]      = eq_rows[0]["date"]
-                    stats["equity_dates"] = _json.dumps([r["date"] for r in eq_rows])
-                    stats["equity_vals"]  = _json.dumps([round(r["equity"], 2) for r in eq_rows])
+                    stats["equity_dates"] = [r["date"] for r in eq_rows]
+                    stats["equity_vals"]  = [round(r["equity"], 2) for r in eq_rows]
                     dr    = eq_s.pct_change().dropna()
                     if dr.std() > 0:
                         stats["sharpe"]   = round(float(dr.mean() / dr.std() * _np.sqrt(252)), 3)
@@ -330,8 +320,8 @@ def register_trading_routes(app):
                     bt = _json.load(f)
                 combined = bt.get("combined", [])
                 if combined:
-                    stats["backtest_dates"] = _json.dumps([p["date"] for p in combined])
-                    stats["backtest_vals"]  = _json.dumps([p["value"] for p in combined])
+                    stats["backtest_dates"] = [p["date"] for p in combined]
+                    stats["backtest_vals"]  = [p["value"] for p in combined]
                 ticker_rows = []
                 for t, td in bt.get("tickers", {}).items():
                     m = td.get("metrics", {})
@@ -348,12 +338,7 @@ def register_trading_routes(app):
                 stats["backtest_tickers"] = ticker_rows
             except Exception:
                 pass
-        return render_template("performance.html", **stats)
-
-    @app.route("/backtest")
-    @login_required
-    def backtest():
-        return render_template("backtest.html")
+        return jsonify({"ok": True, "stats": stats})
 
     @app.route("/api/backtest", methods=["POST"])
     @login_required

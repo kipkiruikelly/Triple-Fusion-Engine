@@ -2,8 +2,8 @@
 train_professional.py
 Multi-timeframe ICT-enhanced ensemble training pipeline for BullLogic.
 
-Pulls 1-minute OHLCV from Alpaca → resamples to 7 timeframes → engineers
-comprehensive TA + ICT features with multi-timeframe (MTF) context → trains
+Pulls 1-minute OHLCV from Alpaca -> resamples to 7 timeframes -> engineers
+comprehensive TA + ICT features with multi-timeframe (MTF) context -> trains
 LR + RF + XGBoost direction classifiers for every ticker × timeframe.
 
 Usage:
@@ -106,7 +106,7 @@ MTF_SOURCES = {
     "1d":  [],
 }
 
-# HTF columns pulled into lower TF as context (source_col → short suffix)
+# HTF columns pulled into lower TF as context (source_col -> short suffix)
 MTF_COLS = {
     "Structure_Bullish": "Struct",
     "PD_Position":       "PD",
@@ -139,7 +139,7 @@ log = logging.getLogger(__name__)
 def fetch_1min(ticker: str) -> pd.DataFrame:
     """Pull 1-min OHLCV from Alpaca for `ticker` in 30-day chunks."""
     symbol = ALPACA_SYMBOL_MAP.get(ticker, ticker)
-    log.info(f"  Fetching {symbol} 1m  {FETCH_START.date()} → {FETCH_END.date()}")
+    log.info(f"  Fetching {symbol} 1m  {FETCH_START.date()} -> {FETCH_END.date()}")
 
     chunks, cursor = [], FETCH_START
     while cursor < FETCH_END:
@@ -154,7 +154,7 @@ def fetch_1min(ticker: str) -> pd.DataFrame:
                     df = df.droplevel(0)
                 chunks.append(df)
         except Exception as exc:
-            log.warning(f"    {cursor.date()} → {end.date()}: {exc}")
+            log.warning(f"    {cursor.date()} -> {end.date()}: {exc}")
         cursor = end
 
     if not chunks:
@@ -174,7 +174,7 @@ def fetch_1min(ticker: str) -> pd.DataFrame:
 def fetch_tf_direct(ticker: str, alpaca_tf, start: datetime, chunk_days: int = 365) -> pd.DataFrame:
     """Fetch OHLCV at a coarser timeframe directly from Alpaca (longer history than 1m)."""
     symbol = ALPACA_SYMBOL_MAP.get(ticker, ticker)
-    log.info(f"  Fetching {symbol} direct {alpaca_tf} {start.date()} → {FETCH_END.date()}")
+    log.info(f"  Fetching {symbol} direct {alpaca_tf} {start.date()} -> {FETCH_END.date()}")
 
     chunks, cursor = [], start
     while cursor < FETCH_END:
@@ -188,7 +188,7 @@ def fetch_tf_direct(ticker: str, alpaca_tf, start: datetime, chunk_days: int = 3
                     df = df.droplevel(0)
                 chunks.append(df)
         except Exception as exc:
-            log.warning(f"    {cursor.date()} → {end.date()}: {exc}")
+            log.warning(f"    {cursor.date()} -> {end.date()}: {exc}")
         cursor = end
 
     if not chunks:
@@ -488,7 +488,7 @@ def _make_target(df: pd.DataFrame, lookahead: int) -> pd.Series:
 
 
 def _model_suffix(tf: str) -> str:
-    """Match predictor.py convention: 1d → '', others → '_{tf}'."""
+    """Match predictor.py convention: 1d -> '', others -> '_{tf}'."""
     return "" if tf == "1d" else f"_{tf}"
 
 
@@ -614,7 +614,7 @@ def main():
     log.info(f"  Tickers    : {', '.join(tickers)}")
     log.info(f"  Timeframes : {', '.join(timeframes)}")
     log.info(f"  XGBoost    : {'available' if XGB_OK else 'NOT installed'}")
-    log.info(f"  Date range : {FETCH_START.date()} → {FETCH_END.date()}")
+    log.info(f"  Date range : {FETCH_START.date()} -> {FETCH_END.date()}")
     log.info(f"  Models dir : {MODELS_DIR}")
     log.info("=" * 70)
 
@@ -634,7 +634,7 @@ def main():
             log.error(f"  {ticker}: fetch failed, {exc}")
             continue
 
-        # 2. Resample 1m → short timeframes
+        # 2. Resample 1m -> short timeframes
         tf_dfs: dict[str, pd.DataFrame] = {"1m": df_1m.copy()}
         for tf, (rule, _, _) in TF_CONFIG.items():
             if tf in ("1m", "1h", "4h", "1d"):
@@ -740,7 +740,7 @@ def main():
         with open(metrics_path, "w") as _mf:
             json.dump({"trained_at": datetime.now().isoformat(), "results": all_results},
                       _mf, indent=2, default=str)
-        log.info(f"  Metrics saved → {metrics_path}")
+        log.info(f"  Metrics saved -> {metrics_path}")
     except Exception as _e:
         log.warning(f"  Could not save metrics JSON: {_e}")
 

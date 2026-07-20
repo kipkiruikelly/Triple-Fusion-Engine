@@ -31,7 +31,8 @@ from datetime import datetime, timedelta
 log = logging.getLogger(__name__)
 
 SIM_CURRENCY = "KES"
-STRATEGIES = ("ml_ensemble", "alpha_rules")
+# Built-in strategies
+BUILTIN_STRATEGIES = ("ml_ensemble", "alpha_rules")
 MIN_TRADES = 10            # below this, metrics honestly say insufficient data
 
 # Every value here is visible on the public Strategy Rules page.
@@ -657,6 +658,16 @@ def ml_signals(cfg: dict) -> dict:
         except Exception as e:
             log.warning("ml signal failed for %s: %s", t, e)
     return out
+def get_active_strategies(db):
+    strategies = list(BUILTIN_STRATEGIES)
+    try:
+        from models import TradingBot
+        bots = db.session.query(TradingBot).filter_by(is_active=True).all()
+        for b in bots:
+            strategies.append(b.slug)
+    except Exception:
+        pass
+    return strategies
 
 
 # ── Cycle runner (called from the ops thread) ─────────────────────────────────
@@ -672,7 +683,11 @@ def _run_owner_cycle(db, cfg, quotes, sig_ml, sig_alpha, user_id=None):
 
     # 1) exits
     for p in owned:
-        sig = (sig_ml if p.strategy == "ml_ensemble" else sig_alpha).get(p.ticker) or {}
+        if p.strategy == "alpha_rules":
+            sig = sig_alpha.get(p.ticker) or {}
+        else:
+            sig = sig_ml.get(p.ticker) or {}
+            
         # only act on exits while that market trades (stops use live quotes)
         if not market_open(p.asset_class):
             continue
@@ -682,20 +697,29 @@ def _run_owner_cycle(db, cfg, quotes, sig_ml, sig_alpha, user_id=None):
             result["closed"] += 1
 
     # 2) entries
-    for strategy, sigs in (("ml_ensemble", sig_ml), ("alpha_rules", sig_alpha)):
-        if not strategy_enabled(db, strategy):
+    # Create an iterator over strategies and their designated signals
+    strategy_iter = []
+    for s in get_active_strategies(db):
+        if not strategy_enabled(db, s):
             continue
+        # built-in alpha rules uses sig_alpha, everything else (ml_ensemble & bots) uses sig_ml
+        strategy_iter.append((s, sig_alpha if s == "alpha_rules" else sig_ml))
+        
+    for strategy, sigs in strategy_iter:
         for t, s in sigs.items():
             action = s.get("action")
             if action not in ("BUY", "SELL"):
                 continue
-            if strategy == "ml_ensemble":
+            if strategy != "alpha_rules":
                 conf = s.get("confidence") or 0
                 if conf < cfg["min_confidence"]:
                     continue
                 model = "lr+rf" + ("+xgb" if s.get("has_xgb") else "")
                 rationale = (f"ML ensemble {action} conf={conf}% "
                              f"lr={s.get('lr_pred')} rf_ret={s.get('rf_ret')}")
+                # Append bot tag if it's a bot
+                if strategy not in BUILTIN_STRATEGIES:
+                    rationale = f"[{strategy}] " + rationale
                 atr = s.get("atr") or 0
             else:
                 conf = min(99.0, abs(s.get("score", 0)) * 100)
@@ -712,7 +736,7 @@ def _run_owner_cycle(db, cfg, quotes, sig_ml, sig_alpha, user_id=None):
                 result["opened"] += 1
 
     # 3) snapshots
-    for s in STRATEGIES:
+    for s in get_active_strategies(db):
         snapshot_equity(db, s, cfg, quotes, user_id=user_id)
 
     return result

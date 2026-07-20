@@ -16,12 +16,7 @@ def register_notification_routes(app):
 
     # ── Price alerts ───────────────────────────────────────────────────────────
 
-    @app.route("/alerts")
-    @login_required
-    def alerts_page():
-        user_alerts = PriceAlert.query.filter_by(user_id=current_user.id)\
-                                      .order_by(PriceAlert.created_at.desc()).all()
-        return render_template("alerts.html", alerts=user_alerts)
+
 
     @app.route("/api/alerts", methods=["GET"])
     @login_required

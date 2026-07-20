@@ -15,10 +15,7 @@ def register_portfolio_routes(app):
 
     # ── Portfolio tracker ──────────────────────────────────────────────────────
 
-    @app.route("/portfolio")
-    @login_required
-    def portfolio():
-        return render_template("portfolio.html")
+
 
     @app.route("/api/portfolio/positions", methods=["GET"])
     @login_required
@@ -115,10 +112,7 @@ def register_portfolio_routes(app):
 
     # ── Trade journal ──────────────────────────────────────────────────────────
 
-    @app.route("/journal")
-    @login_required
-    def journal_page():
-        return render_template("journal.html", user=current_user)
+
 
     @app.route("/api/journal")
     @login_required
@@ -225,10 +219,7 @@ def register_portfolio_routes(app):
 
     # ── Risk / position size calculator ───────────────────────────────────────
 
-    @app.route("/risk")
-    @login_required
-    def risk_calculator():
-        return render_template("risk.html")
+
 
     @app.route("/api/risk/calculate", methods=["POST"])
     @login_required

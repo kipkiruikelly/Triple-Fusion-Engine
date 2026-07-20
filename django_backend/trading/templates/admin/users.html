@@ -1,0 +1,87 @@
+{% extends 'admin/base.html' %}
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<h1 class="mt-4">User Management</h1>
+<ol class="breadcrumb mb-4">
+    <li class="breadcrumb-item"><a href="{% url 'admin-dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item active">Users</li>
+</ol>
+
+<div class="card mb-4">
+    <div class="card-header bg-dark text-white">
+        <i class="fas fa-table me-1"></i>
+        All Platform Accounts
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped" id="datatablesSimple">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Username</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Plan</th>
+                        <th>Status</th>
+                        <th>Uptime / Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in users %}
+                    <tr>
+                        <td>{{ u.id }}</td>
+                        <td><strong>{{ u.username }}</strong></td>
+                        <td>{{ u.email }}</td>
+                        <td><span class="badge bg-info text-dark">{{ u.role|upper }}</span></td>
+                        <td>
+                            <form action="{% url 'admin-user-update-plan' u.id %}" method="POST" class="d-inline">
+                                {% csrf_token %}
+                                <select name="plan" onchange="this.form.submit()" class="form-select form-select-sm d-inline-block w-auto">
+                                    <option value="free" {% if u.plan == 'free' %}selected{% endif %}>Free</option>
+                                    <option value="plus" {% if u.plan == 'plus' %}selected{% endif %}>Plus</option>
+                                    <option value="pro" {% if u.plan == 'pro' %}selected{% endif %}>Pro</option>
+                                    <option value="enterprise" {% if u.plan == 'enterprise' %}selected{% endif %}>Enterprise</option>
+                                </select>
+                            </form>
+                        </td>
+                        <td>
+                            {% if u.status == 'active' %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">{{ u.status|upper }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form action="{% url 'admin-user-toggle-status' u.id %}" method="POST" class="d-inline">
+                                {% csrf_token %}
+                                {% if u.status == 'active' %}
+                                    <button type="submit" class="btn btn-outline-danger btn-sm"><i class="fas fa-ban"></i> Ban</button>
+                                {% else %}
+                                    <button type="submit" class="btn btn-outline-success btn-sm"><i class="fas fa-check"></i> Activate</button>
+                                {% endif %}
+                            </form>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">No users found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    window.addEventListener('DOMContentLoaded', event => {
+        const datatablesSimple = document.getElementById('datatablesSimple');
+        if (datatablesSimple) {
+            new simpleDatatables.SimpleDataTable(datatablesSimple);
+        }
+    });
+</script>
+{% endblock %}

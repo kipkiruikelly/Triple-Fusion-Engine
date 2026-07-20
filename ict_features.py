@@ -24,6 +24,44 @@ import pandas as pd
 import ta
 
 
+# ── Higher Timeframe (HTF) Confluence Filter ────────────────────────────────
+
+def add_htf_bias(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculates Daily/H4 trend filters from intraday data via resampling."""
+    if not isinstance(df.index, pd.DatetimeIndex) or len(df) < 50:
+        df["HTF_Bullish_Bias"] = 1
+        return df
+
+    try:
+        # Check median time difference
+        time_diffs = pd.Series(df.index).diff().median()
+        is_intraday = time_diffs < pd.Timedelta(days=1)
+
+        if is_intraday:
+            # Resample to Daily
+            resampled = df[["Open", "High", "Low", "Close"]].resample("D").agg({
+                "Open": "first",
+                "High": "max",
+                "Low": "min",
+                "Close": "last"
+            }).ffill()
+
+            # 50-period SMA on resampled Daily
+            daily_sma = resampled["Close"].rolling(min(50, len(resampled)), min_periods=1).mean()
+            daily_bullish = (resampled["Close"] > daily_sma).astype(int)
+
+            # Reindex back to original timeframe with forward-fill
+            df["HTF_Bullish_Bias"] = daily_bullish.reindex(df.index, method="ffill").fillna(1)
+        else:
+            daily_sma = df["Close"].rolling(min(50, len(df)), min_periods=1).mean()
+            df["HTF_Bullish_Bias"] = (df["Close"] > daily_sma).astype(int)
+    except Exception as e:
+        df["HTF_Bullish_Bias"] = 1
+        print(f"[ICT FEATURE WARNING] HTF Resampling failed: {e}")
+
+    return df
+
+
 # ── Base TA + ICT (any timeframe) ───────────────────────────────────────────
 
 def add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
@@ -75,33 +113,110 @@ def add_base_ta(df: pd.DataFrame) -> pd.DataFrame:
     sl20 = low.rolling(20).min()
     df["Dist_to_SH"]        = ((sh20 - close) / (atr14 + 1e-8)).clip(-10, 10)
     df["Dist_to_SL"]        = ((close - sl20)  / (atr14 + 1e-8)).clip(-10, 10)
-    df["Structure_Bullish"] = (sh20 > high.rolling(60).max().shift(20)).astype(int)
+    
+    # Apply Higher Timeframe Confluence to structure bias
+    df = add_htf_bias(df)
+    base_structure = (sh20 > high.rolling(60).max().shift(20)).astype(int)
+    df["Structure_Bullish"] = (base_structure & df["HTF_Bullish_Bias"]).astype(int)
 
     rh = high.rolling(60).max()
     rl = low.rolling(60).min()
     df["PD_Position"] = ((close - rl) / (rh - rl).replace(0, np.nan)).fillna(0.5).clip(0, 1)
 
-    bull_fvg = (low > high.shift(2)).astype(int)
-    bear_fvg = (high < low.shift(2)).astype(int)
-    df["Bull_FVG_Count"] = bull_fvg.rolling(10, min_periods=1).sum()
-    df["Bear_FVG_Count"] = bear_fvg.rolling(10, min_periods=1).sum()
-    # FVG zone bounds (for IFVG / Unicorn below): gap between bar i-2's high/low and bar i's low/high
-    bull_fvg_lo = high.shift(2).where(bull_fvg.astype(bool))
-    bull_fvg_hi = low.where(bull_fvg.astype(bool))
-    bear_fvg_lo = high.where(bear_fvg.astype(bool))
-    bear_fvg_hi = low.shift(2).where(bear_fvg.astype(bool))
+    # Refined Fair Value Gap (FVG) detection: Multi-candle series of upclose/downclose candles leaving a price gap
+    bull_fvg = pd.Series(False, index=df.index)
+    bear_fvg = pd.Series(False, index=df.index)
+    bull_fvg_lo = pd.Series(np.nan, index=df.index)
+    bull_fvg_hi = pd.Series(np.nan, index=df.index)
+    bear_fvg_lo = pd.Series(np.nan, index=df.index)
+    bear_fvg_hi = pd.Series(np.nan, index=df.index)
 
+    close_val = close.values
+    open_val = open_.values
+    high_val = high.values
+    low_val = low.values
+
+    for i in range(3, len(df)):
+        # Bullish FVG check: Series of upclose (bullish) candles where high of candle before series does not reach low of candle after series
+        if close_val[i-1] > open_val[i-1]:
+            n = 0
+            while i - 1 - n >= 1 and close_val[i - 1 - n] > open_val[i - 1 - n]:
+                n += 1
+            if n >= 1:
+                k = i - n
+                before_high = high_val[k - 1]
+                after_low = low_val[i]
+                if after_low > before_high:
+                    bull_fvg.iloc[i] = True
+                    bull_fvg_lo.iloc[i] = before_high
+                    bull_fvg_hi.iloc[i] = after_low
+
+        # Bearish FVG check: Series of downclose (bearish) candles where low of candle before series does not reach high of candle after series
+        if close_val[i-1] < open_val[i-1]:
+            n = 0
+            while i - 1 - n >= 1 and close_val[i - 1 - n] < open_val[i - 1 - n]:
+                n += 1
+            if n >= 1:
+                k = i - n
+                before_low = low_val[k - 1]
+                after_high = high_val[i]
+                if after_high < before_low:
+                    bear_fvg.iloc[i] = True
+                    bear_fvg_lo.iloc[i] = after_high
+                    bear_fvg_hi.iloc[i] = before_low
+
+    df["Bull_FVG_Count"] = bull_fvg.astype(int).rolling(10, min_periods=1).sum()
+    df["Bear_FVG_Count"] = bear_fvg.astype(int).rolling(10, min_periods=1).sum()
     bearish = (close < open_)
     bullish = (close > open_)
-    bull_ob = (bearish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bullish
-    bear_ob = (bullish.shift(1).fillna(False)) & (df["Displacement"] == 1) & bearish
+
+    # Refined Order Block detection: Change in state of delivery (multi-candle downclose/upclose series engulfed by displacement)
+    bull_ob = pd.Series(False, index=df.index)
+    bear_ob = pd.Series(False, index=df.index)
+    bull_ob_lo = pd.Series(np.nan, index=df.index)
+    bull_ob_hi = pd.Series(np.nan, index=df.index)
+    bear_ob_lo = pd.Series(np.nan, index=df.index)
+    bear_ob_hi = pd.Series(np.nan, index=df.index)
+
+    close_val = close.values
+    open_val = open_.values
+    high_val = high.values
+    low_val = low.values
+    disp_val = df["Displacement"].values
+
+    for i in range(3, len(df)):
+        # Bullish OB: Series of downclose (bearish) candles engulfed by a displacement bullish candle
+        if close_val[i] > open_val[i] and disp_val[i] == 1:
+            n = 0
+            while i - 1 - n >= 0 and close_val[i - 1 - n] < open_val[i - 1 - n]:
+                n += 1
+            if n >= 1:
+                k = i - n
+                first_open = open_val[k]
+                if close_val[i] >= first_open:
+                    bull_ob.iloc[i] = True
+                    # Key level of OB is the Open of the first bearish candle
+                    bull_ob_hi.iloc[i] = first_open
+                    # Low bound of OB is the lowest low of the bearish series
+                    bull_ob_lo.iloc[i] = np.min(low_val[k:i])
+
+        # Bearish OB: Series of upclose (bullish) candles engulfed by a displacement bearish candle
+        if close_val[i] < open_val[i] and disp_val[i] == 1:
+            n = 0
+            while i - 1 - n >= 0 and close_val[i - 1 - n] > open_val[i - 1 - n]:
+                n += 1
+            if n >= 1:
+                k = i - n
+                first_open = open_val[k]
+                if close_val[i] <= first_open:
+                    bear_ob.iloc[i] = True
+                    # Key level of OB is the Open of the first bullish candle
+                    bear_ob_lo.iloc[i] = first_open
+                    # High bound of OB is the highest high of the bullish series
+                    bear_ob_hi.iloc[i] = np.max(high_val[k:i])
+
     df["Bull_OB_Count"] = bull_ob.astype(int).rolling(10, min_periods=1).sum()
     df["Bear_OB_Count"] = bear_ob.astype(int).rolling(10, min_periods=1).sum()
-    # OB zone bounds: the opposing candle immediately before the displacement bar
-    bull_ob_lo = low.shift(1).where(bull_ob)
-    bull_ob_hi = high.shift(1).where(bull_ob)
-    bear_ob_lo = low.shift(1).where(bear_ob)
-    bear_ob_hi = high.shift(1).where(bear_ob)
 
     pwh = high.rolling(5).max().shift(1)
     pwl = low.rolling(5).min().shift(1)

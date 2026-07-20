@@ -50,12 +50,7 @@ def register_admin_power_routes(app):
     _page = admin["page"]
 
     # ══ Pages (server-rendered, admin only) ════════════════════════════════════
-    _page("/admin/database", "admin_database_page", "admin/database.html", min_role="admin")
-    _page("/admin/sql",      "admin_sql_page",      "admin/sql.html",      min_role="admin")
-    _page("/admin/jobs",     "admin_jobs_page",     "admin/jobs.html",     min_role="admin")
-    _page("/admin/flags",    "admin_flags_page",    "admin/flags.html",    min_role="admin")
-    _page("/admin/promos",   "admin_promos_page",   "admin/promos.html",   min_role="admin")
-    _page("/admin/security", "admin_security_page", "admin/security.html", min_role="admin")
+    
 
     # ══ SQL Console ════════════════════════════════════════════════════════════
 

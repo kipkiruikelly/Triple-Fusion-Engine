@@ -32,6 +32,8 @@ YF_SYMBOL_MAP = {
     # ── Indices ───────────────────────────────────────────────────────────────
     "NDX":      "^NDX",
     "SPX":      "^GSPC",
+    "SPXUSD":   "^GSPC",
+    "SPX500":   "^GSPC",
     "DJI":      "^DJI",
     "VIX":      "^VIX",
     "RUT":      "^RUT",
@@ -729,7 +731,10 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     min_bars = {"1d": 70, "1h": 100, "4h": 30, "30m": 50,
                 "15m": 80, "5m": 80, "1m": 50}.get(interval, 70)
 
-    df = _fetch_df(ticker, interval)
+    from ml_framework.orchestrator import PipelineOrchestrator
+    orchestrator = PipelineOrchestrator("pipeline_config.json")
+    df = orchestrator.run_ingestion(ticker, interval)
+
     if df.empty or len(df) < min_bars:
         raise ValueError(
             f"Not enough data for '{ticker}' on {interval} interval. "
@@ -738,12 +743,6 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
 
     # Load models - now includes lgb, stacking, lstm (Phase 1)
     lr_model, rf_model, scaler, feature_cols, xgb_model, lgb_model, stacking, lstm_model = _load_models(ticker, interval)
-
-    if _is_professional_model(feature_cols):
-        df = _build_pro_features(df, ticker, interval)
-    else:
-        aux = _fetch_aux(ticker, interval)
-        df  = build_features(df, interval, ticker, aux)
 
     if df.empty:
         raise ValueError("Feature engineering failed, insufficient data history.")
@@ -1012,6 +1011,36 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
             as_of = str(last_idx)
         horizon = _horizon_label.get(interval, "Next Bar")
 
+    # ── Explainable AI (XAI) / Alpha Signals ────────────────────────────────
+    alpha_signals = []
+    if rf_model is not None and hasattr(rf_model, "feature_importances_"):
+        importances = rf_model.feature_importances_
+        if len(importances) == len(feature_cols):
+            # Get indices of top 3 features
+            top_idx = np.argsort(importances)[-3:][::-1]
+            for i in top_idx:
+                fname = feature_cols[i]
+                fname_clean = fname.replace("_", " ")
+                alpha_signals.append(fname_clean)
+            
+    if not alpha_signals:
+        if ict_bias != "Neutral": alpha_signals.append(f"{ict_bias} Market Structure")
+        alpha_signals.append(f"RSI: {rsi}")
+        alpha_signals.append(f"Trend Alignment")
+
+    # ── AI Score (1-10) ─────────────────────────────────────────────────────
+    ai_score = 5 # Default hold
+    if direction == "Up":
+        if confidence >= 80: ai_score = 9 + int(confidence >= 90)
+        elif confidence >= 70: ai_score = 8
+        elif confidence >= 60: ai_score = 7
+        else: ai_score = 6 # Weak up is hold
+    else:
+        if confidence >= 80: ai_score = 2 - int(confidence >= 90)
+        elif confidence >= 70: ai_score = 3
+        elif confidence >= 60: ai_score = 4
+        else: ai_score = 5 # Weak down is hold
+
     return {
         "ticker"       : ticker,
         "interval"     : interval,
@@ -1025,6 +1054,8 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
         "change_pct"   : round(change_pct, 2),
         "direction"    : direction,
         "confidence"   : round(confidence, 1),
+        "ai_score"     : ai_score,
+        "alpha_signals": alpha_signals,
         "chart_dates"  : json.dumps(chart_dates),
         "chart_prices" : json.dumps(chart_prices),
         "chart_sma7"   : json.dumps(chart_sma7),
@@ -1064,6 +1095,46 @@ def run_prediction(ticker: str, interval: str = "1d") -> dict:
     }
 
 
+def get_news_sentiment(ticker: str) -> float:
+    """Fetches yfinance news headlines and scores aggregate sentiment (-1.0 to 1.0)."""
+    import yfinance as yf
+    try:
+        from predictor import YF_SYMBOL_MAP
+        yf_sym = YF_SYMBOL_MAP.get(ticker.upper(), ticker.replace(".", "-"))
+    except Exception:
+        yf_sym = ticker.upper()
+
+    try:
+        t = yf.Ticker(yf_sym)
+        news = t.news
+        if not news:
+            return 0.0
+
+        positive_words = {"bullish", "upgrade", "outperform", "buy", "growth", "profit", "surpass", "gain", "higher", "record", "beat", "rally", "success", "positive"}
+        negative_words = {"bearish", "downgrade", "underperform", "sell", "loss", "decline", "fall", "lower", "drop", "deficit", "warn", "slump", "negative", "risk", "crash"}
+
+        scores = []
+        for item in news:
+            title = item.get("title", "").lower()
+            words = set(title.replace(".", "").replace(",", "").split())
+            pos_matches = len(words.intersection(positive_words))
+            neg_matches = len(words.intersection(negative_words))
+
+            if pos_matches > neg_matches:
+                scores.append(1.0)
+            elif neg_matches > pos_matches:
+                scores.append(-1.0)
+            else:
+                scores.append(0.0)
+
+        if not scores:
+            return 0.0
+        return float(np.mean(scores))
+    except Exception as e:
+        print(f"[SENTIMENT WARNING] news sentiment failed for {ticker}: {e}")
+        return 0.0
+
+
 def ml_signal(ticker: str, interval: str = "1d") -> dict:
     """
     Trading signal for the MT5 auto-trade loop.
@@ -1076,17 +1147,13 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
         ticker   = ticker.upper()
         min_bars = {"1d": 70, "1h": 100, "4h": 30, "30m": 50,
                     "15m": 80, "5m": 80, "1m": 50}.get(interval, 70)
-        df = _fetch_df(ticker, interval)
+        from ml_framework.orchestrator import PipelineOrchestrator
+        orchestrator = PipelineOrchestrator("pipeline_config.json")
+        df = orchestrator.run_ingestion(ticker, interval)
         if df.empty or len(df) < min_bars:
             return {"action": "HOLD", "error": "Insufficient data", "confidence": 0}
 
         lr_model, rf_model, scaler, feature_cols, xgb_model, lgb_model, stacking, lstm_model = _load_models(ticker, interval)
-
-        if _is_professional_model(feature_cols):
-            df = _build_pro_features(df, ticker, interval)
-        else:
-            aux = _fetch_aux(ticker, interval)
-            df  = build_features(df, interval, ticker, aux)
 
         if df.empty:
             return {"action": "HOLD", "error": "Feature build failed", "confidence": 0}
@@ -1157,6 +1224,43 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
         macd_hist = float(df["MACD_Hist"].iloc[-1])
         atr       = float(df["ATR_14"].iloc[-1]) if "ATR_14" in df.columns else current_price * 0.01
 
+        # ── Explainable AI (XAI) / Alpha Signals ────────────────────────────────
+        alpha_signals = []
+        if rf_model is not None and hasattr(rf_model, "feature_importances_"):
+            importances = rf_model.feature_importances_
+            if len(importances) == len(feature_cols):
+                top_idx = np.argsort(importances)[-3:][::-1]
+                for i in top_idx:
+                    alpha_signals.append(feature_cols[i].replace("_", " "))
+                
+        if not alpha_signals:
+            alpha_signals.append(f"RSI: {round(rsi, 1)}")
+            alpha_signals.append(f"Trend Alignment")
+
+        # Fetch news sentiment
+        sentiment = get_news_sentiment(ticker)
+
+        # Sentiment confluence overlay: override action if strongly opposite
+        if action == "BUY" and sentiment < -0.30:
+            action = "HOLD"
+            alpha_signals.append("News Sentiment Conflict (Bearish)")
+        elif action == "SELL" and sentiment > 0.30:
+            action = "HOLD"
+            alpha_signals.append("News Sentiment Conflict (Bullish)")
+
+        # ── AI Score (1-10) ─────────────────────────────────────────────────────
+        ai_score = 5 # Default hold
+        if action == "BUY":
+            if confidence >= 80: ai_score = 9 + int(confidence >= 90)
+            elif confidence >= 70: ai_score = 8
+            elif confidence >= 60: ai_score = 7
+            else: ai_score = 6
+        elif action == "SELL":
+            if confidence >= 80: ai_score = 2 - int(confidence >= 90)
+            elif confidence >= 70: ai_score = 3
+            elif confidence >= 60: ai_score = 4
+            else: ai_score = 5
+
         return {
             "action"       : action,
             "interval"     : interval,
@@ -1165,9 +1269,12 @@ def ml_signal(ticker: str, interval: str = "1d") -> dict:
             "rf_pred"      : round(rf_pred, 5),
             "rf_ret"       : round(rf_ret, 4),
             "confidence"   : round(confidence, 1),
+            "ai_score"     : ai_score,
+            "alpha_signals": alpha_signals,
             "rsi"          : round(rsi, 2),
             "macd_hist"    : round(macd_hist, 6),
             "atr"          : round(atr, 6),
+            "news_sentiment": round(sentiment, 2),
         }
 
     except Exception as e:

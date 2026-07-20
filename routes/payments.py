@@ -122,20 +122,22 @@ def _fail_mpesa_payment(payment, result_code):
 
 def register_payment_routes(app):
 
-    @app.route("/pricing")
-    def pricing():
-        return render_template("pricing.html",
-                               stripe_pub_key=STRIPE_PUB_KEY,
-                               stripe_enabled=_STRIPE_OK,
-                               mpesa_enabled=MPESA_OK,
-                               pro_monthly_kes=PRO_MONTHLY_KES,
-                               pro_annual_kes=PRO_ANNUAL_KES,
-                               plus_monthly_kes=PLUS_MONTHLY_KES,
-                               plus_annual_kes=PLUS_ANNUAL_KES,
-                               stripe_price_monthly=STRIPE_PRICE_MONTHLY,
-                               stripe_price_annual=STRIPE_PRICE_ANNUAL,
-                               stripe_price_plus_monthly=STRIPE_PRICE_PLUS_MONTHLY,
-                               stripe_price_plus_annual=STRIPE_PRICE_PLUS_ANNUAL)
+    @app.route("/api/pricing")
+    def api_pricing():
+        return jsonify({
+            "ok": True,
+            "stripe_pub_key": STRIPE_PUB_KEY,
+            "stripe_enabled": _STRIPE_OK,
+            "mpesa_enabled": MPESA_OK,
+            "pro_monthly_kes": PRO_MONTHLY_KES,
+            "pro_annual_kes": PRO_ANNUAL_KES,
+            "plus_monthly_kes": PLUS_MONTHLY_KES,
+            "plus_annual_kes": PLUS_ANNUAL_KES,
+            "stripe_price_monthly": STRIPE_PRICE_MONTHLY,
+            "stripe_price_annual": STRIPE_PRICE_ANNUAL,
+            "stripe_price_plus_monthly": STRIPE_PRICE_PLUS_MONTHLY,
+            "stripe_price_plus_annual": STRIPE_PRICE_PLUS_ANNUAL
+        })
 
     # ── Stripe ─────────────────────────────────────────────────────────────────
 
@@ -153,7 +155,7 @@ def register_payment_routes(app):
         price_id = request.form.get("price_id", STRIPE_PRICE_MONTHLY)
         tier     = _tier_for_price_id(price_id)
         if not price_id or tier is None:
-            return redirect(url_for('pricing'))
+            return redirect(url_for('home'))
         base_url = request.host_url.rstrip("/")
         session  = _stripe.checkout.Session.create(
             customer_email=current_user.email,
@@ -189,11 +191,11 @@ def register_payment_routes(app):
                 db.session.commit()
             except Exception:
                 pass
-        return render_template("stripe_success.html")
+        return redirect(url_for('home'))
 
     @app.route("/stripe/cancel")
     def stripe_cancel():
-        return redirect(url_for('pricing'))
+        return redirect(url_for('home'))
 
     @app.route("/stripe/portal", methods=["POST"])
     @login_required

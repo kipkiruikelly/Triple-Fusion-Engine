@@ -191,110 +191,81 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
 
     # ══ Auth ══════════════════════════════════════════════════════════════════
 
-    def _complete_admin_login(user, ip):
-        login_user(user)
-        session["admin_auth_at"] = time.time()
-        session["csrf_token"] = secrets.token_hex(16)
-        db.session.add(AdminAuditLog(admin_id=user.id, action="login",
-                                     ip=ip, detail=(request.user_agent.string or "")[:200]))
-        db.session.commit()
-        return redirect(request.args.get("next") or url_for("admin_dashboard"))
-
-    @app.route("/admin/login", methods=["GET", "POST"])
+    @app.route("/api/admin/login", methods=["POST"])
     def admin_login():
-        error = None
-        need_2fa = False
-        if request.method == "POST":
-            ip = request.remote_addr or "?"
-            if _rate_limited(ip):
-                error = "Too many failed attempts. Try again in 15 minutes."
-            else:
-                pending_uid = session.get("admin_2fa_pending_uid")
-                pending_at  = session.get("admin_2fa_pending_at", 0)
-                # Second round trip of a 2FA-gated login: only a code was submitted.
-                if pending_uid and time.time() - pending_at <= PENDING_2FA_MAX_S:
-                    user = db.session.get(User, pending_uid)
-                    rec  = TwoFactorAuth.query.filter_by(
-                        user_id=pending_uid, enabled=True).first()
-                    code = request.form.get("code", "").strip()
-                    if (user and rec and _PYOTP_OK and code
-                            and _pyotp.TOTP(rec.secret).verify(code, valid_window=1)):
-                        session.pop("admin_2fa_pending_uid", None)
-                        session.pop("admin_2fa_pending_at", None)
-                        return _complete_admin_login(user, ip)
-                    _record_fail(ip)
-                    if user:
-                        db.session.add(AdminAuditLog(admin_id=user.id, action="login.failed",
-                                                     ip=ip, detail="2FA code invalid or missing"))
-                        db.session.commit()
-                    need_2fa = True
-                    error = "Invalid or missing 2FA code."
+        ip = request.remote_addr or "?"
+        if _rate_limited(ip):
+            return jsonify({"ok": False, "error": "Too many failed attempts. Try again in 15 minutes."}), 429
+            
+        data = request.get_json() or {}
+        pending_uid = session.get("admin_2fa_pending_uid")
+        pending_at  = session.get("admin_2fa_pending_at", 0)
+        
+        if pending_uid and time.time() - pending_at <= PENDING_2FA_MAX_S:
+            user = db.session.get(User, pending_uid)
+            rec  = TwoFactorAuth.query.filter_by(user_id=pending_uid, enabled=True).first()
+            code = data.get("code", "").strip()
+            if (user and rec and _PYOTP_OK and code
+                    and _pyotp.TOTP(rec.secret).verify(code, valid_window=1)):
+                session.pop("admin_2fa_pending_uid", None)
+                session.pop("admin_2fa_pending_at", None)
+                login_user(user)
+                session["admin_auth_at"] = time.time()
+                session["csrf_token"] = secrets.token_hex(16)
+                db.session.add(AdminAuditLog(admin_id=user.id, action="login",
+                                             ip=ip, detail=(request.user_agent.string or "")[:200]))
+                db.session.commit()
+                return jsonify({"ok": True})
+            _record_fail(ip)
+            if user:
+                db.session.add(AdminAuditLog(admin_id=user.id, action="login.failed",
+                                             ip=ip, detail="2FA code invalid or missing"))
+                db.session.commit()
+            return jsonify({"ok": False, "error": "Invalid or missing 2FA code.", "need_2fa": True}), 401
+        else:
+            session.pop("admin_2fa_pending_uid", None)
+            session.pop("admin_2fa_pending_at", None)
+            identifier = data.get("identifier", "").strip()
+            password   = data.get("password", "")
+            user = User.query.filter(
+                (User.username == identifier) | (User.email == identifier)).first()
+            if (user and user.check_password(password)
+                    and user.role_level >= ROLE_LEVELS["viewer"]
+                    and user.status == "active"):
+                rec = TwoFactorAuth.query.filter_by(
+                    user_id=user.id, enabled=True).first()
+                if user.role_level >= ROLE_LEVELS["admin"] and _PYOTP_OK and rec:
+                    session["admin_2fa_pending_uid"] = user.id
+                    session["admin_2fa_pending_at"] = time.time()
+                    return jsonify({"ok": False, "need_2fa": True})
                 else:
-                    session.pop("admin_2fa_pending_uid", None)
-                    session.pop("admin_2fa_pending_at", None)
-                    identifier = request.form.get("identifier", "").strip()
-                    password   = request.form.get("password", "")
-                    user = User.query.filter(
-                        (User.username == identifier) | (User.email == identifier)).first()
-                    if (user and user.check_password(password)
-                            and user.role_level >= ROLE_LEVELS["viewer"]
-                            and user.status == "active"):
-                        rec = TwoFactorAuth.query.filter_by(
-                            user_id=user.id, enabled=True).first()
-                        # Admin-only 2FA: required for admin-role accounts
-                        # that have enrolled via /api/2fa/enable.
-                        if user.role_level >= ROLE_LEVELS["admin"] and _PYOTP_OK and rec:
-                            session["admin_2fa_pending_uid"] = user.id
-                            session["admin_2fa_pending_at"] = time.time()
-                            need_2fa = True
-                        else:
-                            return _complete_admin_login(user, ip)
-                    else:
-                        _record_fail(ip)
-                        if user and user.role_level >= 1:
-                            db.session.add(AdminAuditLog(admin_id=user.id,
-                                                         action="login.failed", ip=ip))
-                            db.session.commit()
-                        error = "Invalid credentials or no admin access."
-        return render_template("admin/login.html", error=error, need_2fa=need_2fa)
+                    login_user(user)
+                    session["admin_auth_at"] = time.time()
+                    session["csrf_token"] = secrets.token_hex(16)
+                    db.session.add(AdminAuditLog(admin_id=user.id, action="login",
+                                                 ip=ip, detail=(request.user_agent.string or "")[:200]))
+                    db.session.commit()
+                    return jsonify({"ok": True})
+            else:
+                _record_fail(ip)
+                if user and user.role_level >= 1:
+                    db.session.add(AdminAuditLog(admin_id=user.id,
+                                                 action="login.failed", ip=ip))
+                    db.session.commit()
+                return jsonify({"ok": False, "error": "Invalid credentials or no admin access."}), 401
 
-    @app.route("/admin/logout")
+    @app.route("/api/admin/logout", methods=["POST"])
     def admin_logout():
         if current_user.is_authenticated and current_user.role_level >= 1:
             _audit("logout")
         session.pop("admin_auth_at", None)
         session.pop("csrf_token", None)
         logout_user()
-        return redirect(url_for("admin_login"))
+        return jsonify({"ok": True})
 
     # ══ Pages ═════════════════════════════════════════════════════════════════
 
-    def _page(rule, endpoint, template, min_role="viewer", **extra):
-        @app.route(rule, endpoint=endpoint)
-        @admin_required(min_role)
-        def _view(**kwargs):
-            return render_template(template, **{**extra, **kwargs})
-        return _view
 
-    @app.route("/admin")
-    @admin_required("viewer")
-    def admin_dashboard():
-        return render_template("admin/dashboard.html")
-
-    _page("/admin/users",      "admin_users_page",      "admin/users.html")
-    _page("/admin/content",    "admin_content_page",    "admin/content.html")
-    _page("/admin/payments",   "admin_payments_page",   "admin/payments.html")
-    _page("/admin/analytics",  "admin_analytics_page",  "admin/analytics.html")
-    _page("/admin/system",     "admin_system_page",     "admin/system.html")
-    _page("/admin/broadcasts", "admin_broadcasts_page", "admin/broadcasts.html")
-    _page("/admin/settings",   "admin_settings_page",   "admin/settings.html", min_role="admin")
-    _page("/admin/audit",      "admin_audit_page",      "admin/audit.html")
-    _page("/admin/mt5",        "admin_mt5_page",        "admin/mt5.html", min_role="admin")
-
-    @app.route("/admin/users/<int:user_id>")
-    @admin_required("viewer")
-    def admin_user_detail_page(user_id):
-        return render_template("admin/user_detail.html", user_id=user_id)
 
     # ══ API: overview ═════════════════════════════════════════════════════════
 
@@ -1509,6 +1480,9 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
     # ── Power tools + extended capabilities (routes/admin_power.py) ────────────
     # Shared here so that module reuses the exact same guard, audit sink and
     # CSRF check rather than reimplementing them.
+    def _page(template, **kwargs):
+        return render_template(template, **kwargs)
+
     app.extensions.setdefault("bulllogic", {})
     app.extensions["bulllogic"]["admin"] = {
         "admin_required": admin_required,

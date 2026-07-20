@@ -537,3 +537,60 @@ class ModelVersion(db.Model):
     is_active     = db.Column(db.Boolean, default=True)
 
     __table_args__ = (db.UniqueConstraint('ticker', 'model_type', 'version', name='uq_model_version'),)
+
+# ── AI Robots (Trading Bots) ───────────────────────────────────────────────────
+
+class TradingBot(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    slug        = db.Column(db.String(32), unique=True, nullable=False)
+    name        = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(300), nullable=True)
+    asset_class = db.Column(db.String(20), nullable=True) # "Stocks", "Crypto", etc
+    interval    = db.Column(db.String(10), nullable=True) # "1d", "1h"
+    is_active   = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+class UserBotSubscription(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    bot_id      = db.Column(db.Integer, db.ForeignKey('trading_bot.id'), nullable=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+class UserPaperAccount(db.Model):
+    id               = db.Column(db.Integer, primary_key=True)
+    user_id          = db.Column(db.Integer, db.ForeignKey('user.id'), unique=True, nullable=False)
+    starting_balance = db.Column(db.Float, nullable=False, default=10000.0)
+    balance          = db.Column(db.Float, nullable=False, default=10000.0)
+    equity           = db.Column(db.Float, nullable=False, default=10000.0)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class UserPaperOrder(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    account_id   = db.Column(db.Integer, db.ForeignKey('user_paper_account.id'), nullable=False)
+    ticker       = db.Column(db.String(12), nullable=False)
+    order_type   = db.Column(db.String(10), nullable=False) # 'market', 'limit', 'stop'
+    side         = db.Column(db.String(5), nullable=False)  # 'buy', 'sell'
+    quantity     = db.Column(db.Float, nullable=False)
+    target_price = db.Column(db.Float, nullable=True) # for limit/stop orders
+    sl           = db.Column(db.Float, nullable=True)
+    tp           = db.Column(db.Float, nullable=True)
+    status       = db.Column(db.String(15), default='pending') # 'pending', 'filled', 'canceled'
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    filled_at    = db.Column(db.DateTime, nullable=True)
+
+class UserPaperPosition(db.Model):
+    id           = db.Column(db.Integer, primary_key=True)
+    account_id   = db.Column(db.Integer, db.ForeignKey('user_paper_account.id'), nullable=False)
+    ticker       = db.Column(db.String(12), nullable=False)
+    side         = db.Column(db.String(5), nullable=False) # 'buy', 'sell'
+    quantity     = db.Column(db.Float, nullable=False)
+    entry_price  = db.Column(db.Float, nullable=False)
+    current_price= db.Column(db.Float, nullable=False)
+    sl           = db.Column(db.Float, nullable=True)
+    tp           = db.Column(db.Float, nullable=True)
+    realized_pnl = db.Column(db.Float, default=0.0)
+    status       = db.Column(db.String(10), default='open') # 'open', 'closed'
+    opened_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    closed_at    = db.Column(db.DateTime, nullable=True)
+

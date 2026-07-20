@@ -206,3 +206,58 @@ def event_volatility_warning(days_ahead: int = 3) -> dict:
             "Trade with caution, use tighter stops"
         ),
     }
+
+
+def check_high_impact_news(symbol: str, buffer_min: int = 15) -> bool:
+    """Returns True if a High Impact economic event for the symbol's currency is near (in UTC)."""
+    # Resolve currency
+    symbol_upper = symbol.upper()
+    currency = "USD"
+    if "EUR" in symbol_upper:
+        currency = "EUR"
+    elif "GBP" in symbol_upper:
+        currency = "GBP"
+    elif "JPY" in symbol_upper:
+        currency = "JPY"
+    elif "AUD" in symbol_upper:
+        currency = "AUD"
+    elif "CAD" in symbol_upper:
+        currency = "CAD"
+    elif "CHF" in symbol_upper:
+        currency = "CHF"
+
+    now = datetime.utcnow()
+    today_str = now.strftime("%Y-%m-%d")
+
+    # Check if there is an event today
+    has_event = False
+    event_type = ""
+    for event in _MAJOR_EVENTS:
+        if event["date"] == today_str and event["currency"] == currency and event["impact"] >= 8:
+            has_event = True
+            event_type = event["type"]
+            break
+
+    if not has_event:
+        return False
+
+    # Typical news release times (hour, minute) in UTC:
+    # 13:30 (8:30 AM EST for CPI/NFP) or 18:00/19:00 (2:00 PM EST for FOMC)
+    release_times = []
+    if event_type in ("NFP", "CPI", "GDP", "PPI"):
+        release_times = [(12, 30), (13, 30), (14, 30)]  # DST bounds
+    elif event_type in ("FOMC", "RATE_DECISION"):
+        release_times = [(18, 0), (19, 0), (20, 0)]
+    else:
+        release_times = [(13, 30), (18, 0), (19, 0)]
+
+    current_minutes = now.hour * 60 + now.minute
+
+    for r_hour, r_min in release_times:
+        release_minutes = r_hour * 60 + r_min
+        if abs(current_minutes - release_minutes) <= buffer_min:
+            logger.warning(f"[NEWS CIRCUIT BREAKER] High-impact event {event_type} is near (UTC {r_hour:02d}:{r_min:02d}).")
+            return True
+
+    return False
+

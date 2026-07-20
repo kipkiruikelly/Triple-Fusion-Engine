@@ -212,11 +212,19 @@ def _yf_symbol(symbol):
     """Friendly symbols (BTC, EURUSD, GOLD) to real Yahoo tickers
     (BTC-USD, EURUSD=X, GC=F). Without this, yfinance quietly returns a
     tiny equity trust that happens to trade under the ticker BTC."""
+    symbol_upper = symbol.upper()
+    overrides = {
+        "SPXUSD": "^GSPC",
+        "SPX500": "^GSPC",
+    }
+    if symbol_upper in overrides:
+        return overrides[symbol_upper]
+
     try:
         from predictor import YF_SYMBOL_MAP
-        return YF_SYMBOL_MAP.get(symbol.upper(), symbol.upper())
+        return YF_SYMBOL_MAP.get(symbol_upper, symbol_upper)
     except Exception:
-        return symbol.upper()
+        return symbol_upper
 
 
 def get_history(symbol, period="1y", interval="1d"):

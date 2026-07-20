@@ -222,6 +222,64 @@ def watchlist_get():
         return _json_error(str(e), 500)
 
 
+# ── AI Robots ───────────────────────────────────────────────────────────────────
+
+@api_bp.route("/bots", methods=["GET"])
+@login_required
+def get_bots():
+    """Return all active bots and current user's subscriptions."""
+    try:
+        from models import TradingBot, UserBotSubscription
+        bots = TradingBot.query.filter_by(is_active=True).all()
+        subs = {s.bot_id for s in UserBotSubscription.query.filter_by(user_id=current_user.id).all()}
+        
+        return _json_ok({
+            "bots": [
+                {
+                    "id": b.id,
+                    "name": b.name,
+                    "description": b.description,
+                    "asset_class": b.asset_class,
+                    "is_subscribed": b.id in subs
+                }
+                for b in bots
+            ]
+        })
+    except Exception as e:
+        logger.exception("Bots API error")
+        return _json_error(str(e), 500)
+
+@api_bp.route("/bots/subscribe", methods=["POST"])
+@login_required
+def toggle_bot_subscription():
+    """Toggle subscription to a bot."""
+    try:
+        from models import TradingBot, UserBotSubscription
+        from extensions import db
+        bot_id = request.form.get("bot_id", type=int)
+        if not bot_id:
+            return _json_error("Missing bot_id", 400)
+            
+        bot = TradingBot.query.get(bot_id)
+        if not bot:
+            return _json_error("Bot not found", 404)
+            
+        sub = UserBotSubscription.query.filter_by(user_id=current_user.id, bot_id=bot_id).first()
+        if sub:
+            db.session.delete(sub)
+            is_subscribed = False
+        else:
+            new_sub = UserBotSubscription(user_id=current_user.id, bot_id=bot_id)
+            db.session.add(new_sub)
+            is_subscribed = True
+            
+        db.session.commit()
+        return _json_ok({"is_subscribed": is_subscribed})
+    except Exception as e:
+        logger.exception("Bot subscription toggle error")
+        db.session.rollback()
+        return _json_error(str(e), 500)
+
 # ── Leaderboard ─────────────────────────────────────────────────────────────────
 
 def _trader_leaderboard(limit=10):

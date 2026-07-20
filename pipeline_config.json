@@ -1,0 +1,26 @@
+{
+  "connector": "yfinance",
+  "connector_params": {
+    "period": "18mo"
+  },
+  "features": [
+    "technical_analysis",
+    "ict_indicators",
+    "auxiliary_market_features"
+  ],
+  "feature_params": {},
+  "models": [
+    "linear_regression",
+    "random_forest"
+  ],
+  "model_params": {
+    "linear_regression": {},
+    "random_forest": {
+      "n_estimators": 100,
+      "max_depth": 10,
+      "random_state": 42
+    }
+  },
+  "serving": {},
+  "evaluation": {}
+}

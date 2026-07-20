@@ -447,13 +447,150 @@ class PaperAccount:
         }
 
 
+# ── Remote Execution Proxy ───────────────────────────────────────────────────
+
+class RemoteMT5Proxy:
+    def __init__(self, host="127.0.0.1", port=8765):
+        self.host = host
+        self.port = port
+        self.last_err = None
+
+    def _send(self, payload):
+        import socket
+        import json
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(5.0)
+            s.connect((self.host, self.port))
+            s.sendall(json.dumps(payload).encode("utf-8"))
+            data = s.recv(4096)
+            s.close()
+            if data:
+                return json.loads(data.decode("utf-8"))
+        except Exception as e:
+            self.last_err = str(e)
+            print(f"[PROXY ERROR] Daemon unreachable at {self.host}:{self.port} - {e}")
+        return {"ok": False, "error": "Daemon unreachable"}
+
+    def initialize(self, *args, **kwargs):
+        res = self._send({"action": "STATUS"})
+        return res.get("ok", False)
+
+    def shutdown(self):
+        pass
+
+    def last_error(self):
+        return self.last_err or "Unknown error"
+
+    def account_info(self):
+        res = self._send({"action": "STATUS"})
+        if res.get("ok"):
+            class Info:
+                login = 101010
+                name = "Remote Daemon MT5"
+                server = "DaemonServer"
+                currency = "USD"
+                balance = 10000.0
+                equity = 10000.0
+                margin = 0.0
+                margin_free = 10000.0
+            return Info()
+        return None
+
+    def login(self, account, password, server):
+        return True
+
+    def symbol_info(self, symbol):
+        class Info:
+            name = symbol
+        return Info()
+
+    def symbol_select(self, symbol, select):
+        return True
+
+    def order_send(self, request):
+        action = "BUY" if request.get("type") == 0 else "SELL"
+        if request.get("position"):
+            payload = {
+                "action": "CLOSE",
+                "symbol": request.get("symbol"),
+                "ticket": request.get("position")
+            }
+        else:
+            payload = {
+                "action": action,
+                "symbol": request.get("symbol"),
+                "volume": request.get("volume"),
+                "sl": request.get("sl"),
+                "tp": request.get("tp")
+            }
+        
+        res = self._send(payload)
+        
+        class Result:
+            retcode = 10009 if res.get("ok") else 10014 # 10009 = TRADE_RETCODE_DONE
+            order = res.get("ticket", 0)
+            price = res.get("price", 0.0)
+            comment = res.get("error", "")
+        return Result()
+
+    def positions_get(self, *args, **kwargs):
+        return []
+
+    def copy_rates_from_pos(self, symbol, timeframe, start_pos, count):
+        import yfinance as yf
+        try:
+            from predictor import YF_SYMBOL_MAP
+            yf_sym = YF_SYMBOL_MAP.get(symbol.upper(), symbol.replace(".", "-"))
+            ticker = yf.Ticker(yf_sym)
+            
+            tf_map = {
+                0: "1m",
+                5: "5m",
+                15: "15m",
+                30: "30m",
+                16385: "1h",
+                16388: "4h",
+                16408: "1d"
+            }
+            tf_str = tf_map.get(timeframe, "5m")
+            
+            df = ticker.history(period="5d", interval=tf_str)
+            if not df.empty:
+                df = df.tail(count)
+                rates = []
+                for idx, row in df.iterrows():
+                    rates.append((
+                        int(idx.timestamp()),
+                        float(row["Open"]),
+                        float(row["High"]),
+                        float(row["Low"]),
+                        float(row["Close"]),
+                        int(row["Volume"]),
+                        0,
+                        0
+                    ))
+                return np.array(rates, dtype=[
+                    ("time", "<i8"), ("open", "<f8"), ("high", "<f8"), 
+                    ("low", "<f8"), ("close", "<f8"), ("tick_volume", "<i8"),
+                    ("spread", "<i4"), ("real_volume", "<i8")
+                ])
+        except Exception as e:
+            print(f"[PROXY ERROR] copy_rates_from_pos failed: {e}")
+        return None
+
+
 # ── Main trader class ────────────────────────────────────────────────────────
 
 class MT5Trader:
 
     def __init__(self):
         self.mt5           = _MT5
-        self.backend       = MT5_BACKEND
+        if self.mt5 is None:
+            self.mt5       = RemoteMT5Proxy
+            self.backend   = "remote"
+        else:
+            self.backend   = MT5_BACKEND
         self.connected     = False
         self.trading       = False
         self.use_ml        = True
@@ -1302,6 +1439,17 @@ class MT5Trader:
                     self._log("INFO", f"Max positions ({cfg['max_positions']}) held, waiting")
                     time.sleep(interval)
                     continue
+
+                # News Circuit Breaker Guard
+                try:
+                    from economic_calendar import check_high_impact_news
+                    if check_high_impact_news(symbol, buffer_min=15):
+                        self._log("NEWS_HALT", f"Trading paused on {symbol} due to upcoming high-impact economic news.")
+                        self.status_msg = f"News Halt on {symbol}"
+                        time.sleep(interval)
+                        continue
+                except Exception as e:
+                    self._log("ERROR", f"News check failed: {e}")
 
                 signal = (self.generate_signal_ml(symbol, tf)
                           if self.use_ml and _ML_AVAILABLE

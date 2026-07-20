@@ -1,0 +1,1 @@
+# bulllogic Django project package

@@ -41,10 +41,7 @@ def register_analytics_routes(app):
 
     # ── Screener ───────────────────────────────────────────────────────────────
 
-    @app.route("/screener")
-    @login_required
-    def screener():
-        return render_template("screener.html")
+
 
     @app.route("/api/screener")
     @login_required
@@ -62,6 +59,8 @@ def register_analytics_routes(app):
                     "ticker":     ticker,
                     "action":     sig.get("action", "HOLD"),
                     "price":      sig.get("current_price", 0),
+                    "ai_score":   sig.get("ai_score", 5),
+                    "alpha_signals": sig.get("alpha_signals", []),
                     "lr_pred":    sig.get("lr_pred", 0),
                     "confidence": sig.get("confidence", 0),
                     "rsi":        sig.get("rsi", 50),
@@ -69,7 +68,7 @@ def register_analytics_routes(app):
                     "atr":        sig.get("atr", 0),
                 }
             except Exception:
-                return ticker, {"ticker": ticker, "action": "HOLD", "price": 0,
+                return ticker, {"ticker": ticker, "action": "HOLD", "price": 0, "ai_score": 5, "alpha_signals": [],
                                 "lr_pred": 0, "confidence": 0, "rsi": 50,
                                 "macd_hist": 0, "atr": 0}
 
@@ -78,12 +77,30 @@ def register_analytics_routes(app):
         rows = sorted(results.values(), key=lambda x: x["confidence"], reverse=True)
         return jsonify({"ok": True, "interval": interval, "rows": rows})
 
+    # ── AI Robots ──────────────────────────────────────────────────────────────
+
+    @app.route("/api/bots")
+    @login_required
+    def api_bots():
+        from models import TradingBot, UserBotSubscription
+        bots = TradingBot.query.filter_by(is_active=True).all()
+        subs = {s.bot_id for s in UserBotSubscription.query.filter_by(user_id=current_user.id).all()}
+        out = []
+        for b in bots:
+            out.append({
+                "id": b.id,
+                "name": b.name,
+                "strategy_type": b.strategy_type,
+                "target_assets": b.target_assets,
+                "win_rate": b.win_rate,
+                "total_trades": b.total_trades,
+                "is_subscribed": b.id in subs
+            })
+        return jsonify({"ok": True, "bots": out})
+
     # ── Scanner ────────────────────────────────────────────────────────────────
 
-    @app.route("/scanner")
-    @login_required
-    def scanner_page():
-        return render_template("scanner.html", user=current_user)
+
 
     @app.route("/api/scanner/volume")
     @login_required
@@ -179,10 +196,7 @@ def register_analytics_routes(app):
 
     # ── Calendar ───────────────────────────────────────────────────────────────
 
-    @app.route("/calendar")
-    @login_required
-    def calendar_page():
-        return render_template("calendar.html")
+
 
     @app.route("/api/calendar/earnings")
     @login_required

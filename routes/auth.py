@@ -123,9 +123,8 @@ def register_auth_routes(app):
         try:
             token = oauth.google.authorize_access_token()
             info  = token.get("userinfo") or {}
-        except Exception:
-            return render_template("login.html",
-                                   error="Google sign-in failed. Try again or use your password."), 400
+        except Exception as e:
+            return redirect("/?error=Google sign-in failed. Try again or use your password.")
         return _finish_google_login(info)
 
     def _finish_google_login(info):
@@ -139,8 +138,7 @@ def register_auth_routes(app):
         sub   = str(info.get("sub") or "")
         email = (info.get("email") or "").strip().lower()
         if not sub or not email:
-            return render_template(login_page,
-                                   error="Google did not return a usable account."), 400
+            return redirect(f"/?error=Google did not return a usable account.")
 
         user = User.query.filter_by(google_sub=sub).first()
         if not user:
@@ -160,8 +158,7 @@ def register_auth_routes(app):
             db.session.commit()
 
         if (user.status or "active") != "active":
-            return render_template(login_page,
-                                   error="This account has been suspended."), 403
+            return redirect(f"/?error=This account has been suspended.")
 
         if admin_intent:
             # Google verified the identity; the console still requires a
@@ -174,9 +171,7 @@ def register_auth_routes(app):
                     ip=request.remote_addr or "?",
                     detail="Google sign-in without admin role"))
                 db.session.commit()
-                return render_template(
-                    "admin/login.html",
-                    error="This Google account has no admin access."), 403
+                return redirect(f"/admin/login?error=This Google account has no admin access.")
             # Admin-only 2FA applies the same way here as on the password
             # form: Google only verifies identity, it does not satisfy the
             # second factor. Hand off to the shared /admin/login code-entry
@@ -190,7 +185,7 @@ def register_auth_routes(app):
                     ip=request.remote_addr or "?",
                     detail="Google verified; awaiting 2FA code"))
                 db.session.commit()
-                return render_template("admin/login.html", need_2fa=True)
+                return redirect("/admin/login?need_2fa=true")
             login_user(user, remember=True)
             session["admin_auth_at"] = time.time()
             session["csrf_token"] = secrets.token_hex(16)
@@ -210,213 +205,115 @@ def register_auth_routes(app):
 
     # ── Login / Register / Logout ──────────────────────────────────────────────
 
-    @app.route("/login", methods=["GET", "POST"])
-    def login():
-        if current_user.is_authenticated:
-            logout_user()
-        error = None
-        if request.method == "POST":
-            from utils import rate_limited
-            if rate_limited(f"login:{request.remote_addr}", 10, 900):
-                return render_template("login.html",
-                                       error="Too many attempts. Try again in 15 minutes."), 429
-            identifier = request.form.get("identifier", "").strip()
-            password   = request.form.get("password", "")
-            user = User.query.filter(
-                (User.username == identifier) | (User.email == identifier)
-            ).first()
-            if user and user.check_password(password):
-                if (user.status or "active") != "active":
-                    error = ("This account has been suspended."
-                             if user.status == "banned"
-                             else "This account is deactivated. Contact support.")
-                    return render_template("login.html", error=error)
-                login_user(user, remember=True)
-                _log_activity(user.id, "login")
-                next_page = request.args.get('next')
-                return redirect(next_page or url_for('home'))
-            error = "Invalid username / email or password."
-        return render_template("login.html", error=error)
 
-    @app.route("/register", methods=["GET", "POST"])
-    def register():
-        if current_user.is_authenticated:
-            logout_user()
-        error = None
-        try:
-            from models import AppSetting
-            closed = (row := db.session.get(AppSetting, "registration_open")) and row.value == "0"
-        except Exception:
-            closed = False
-        if closed:
-            return render_template("register.html",
-                                   error="Registration is temporarily closed."), 403
-        if request.method == "POST":
-            from utils import rate_limited
-            if rate_limited(f"register:{request.remote_addr}", 5, 3600):
-                return render_template("register.html",
-                                       error="Too many signups from this network. Try later."), 429
-            username = request.form.get("username", "").strip()
-            raw_email = request.form.get("email", "")
-            password = request.form.get("password", "")
-            confirm  = request.form.get("confirm", "")
-            agreed   = request.form.get("agree_terms")
-            email, email_err = _clean_email(raw_email)
-            if not username or not raw_email or not password:
-                error = "All fields are required."
-            elif not agreed:
-                error = "You must agree to the Terms of Service and Privacy Policy."
-            elif len(username) < 3:
-                error = "Username must be at least 3 characters."
-            elif email_err:
-                error = "Enter a valid email address."
-            elif len(password) < 8:
-                error = "Password must be at least 8 characters."
-            elif password != confirm:
-                error = "Passwords do not match."
-            elif User.query.filter_by(username=username).first():
-                error = "That username is already taken."
-            elif User.query.filter_by(email=email).first():
-                error = "An account with that email already exists."
-            else:
-                user = User(username=username, email=email, email_verified=False)
-                user.set_password(password)
-                db.session.add(user)
-                db.session.commit()
-                login_user(user, remember=True)
-                _send_verification_email(user)
-                return redirect(url_for("verify_notice"))
-        return render_template("register.html", error=error)
+
+
 
     # ── Email verification ─────────────────────────────────────────────────────
 
-    @app.route("/verify-notice")
-    @login_required
-    def verify_notice():
-        if current_user.email_verified:
-            return redirect(url_for("home"))
-        return render_template("verify_notice.html", email=current_user.email)
-
-    @app.route("/verify-email/<token>")
-    def verify_email(token):
+    @app.route("/api/verify-email", methods=["POST"])
+    def api_verify_email():
+        data = request.get_json() or {}
+        token = data.get("token")
         payload, err = _load_verify_token(token)
         if err:
-            return render_template("verify_notice.html",
-                                   email=current_user.email if current_user.is_authenticated else "",
-                                   token_error=("This link has expired. Request a new one below."
-                                                if err == "expired" else
-                                                "This verification link is not valid.")), 400
+            return jsonify({"ok": False, "error": "This link has expired." if err == "expired" else "Invalid verification link."})
         user = db.session.get(User, payload.get("uid", 0))
         if not user or user.email != payload.get("email"):
-            return render_template("verify_notice.html", email="",
-                                   token_error="This verification link is not valid."), 400
+            return jsonify({"ok": False, "error": "Invalid verification link."})
         if not user.email_verified:
             user.email_verified = True
             db.session.commit()
             _log_activity(user.id, "email.verified")
         if not current_user.is_authenticated:
             login_user(user, remember=True)
-        return redirect(url_for("home"))
+        return jsonify({"ok": True})
 
-    @app.route("/verify/resend", methods=["POST"])
+    @app.route("/api/verify/resend", methods=["POST"])
     @login_required
-    def verify_resend():
+    def api_verify_resend():
         from utils import rate_limited
         if current_user.email_verified:
-            return redirect(url_for("home"))
+            return jsonify({"ok": False, "error": "Email already verified"})
         if rate_limited(f"resend:{current_user.id}", 3, 3600):
-            return render_template("verify_notice.html", email=current_user.email,
-                                   token_error="Resend limit reached. Try again in an hour."), 429
+            return jsonify({"ok": False, "error": "Resend limit reached. Try again in an hour."}), 429
         sent = _send_verification_email(current_user)
-        return render_template("verify_notice.html", email=current_user.email,
-                               resent=sent,
-                               token_error=None if sent else
-                               "Email is not configured on the server. Contact support.")
+        if sent:
+            return jsonify({"ok": True})
+        return jsonify({"ok": False, "error": "Email is not configured on the server. Contact support."})
 
-    @app.route("/logout")
-    @login_required
-    def logout():
-        logout_user()
-        return redirect(url_for('login'))
+
 
     # ── Password reset ─────────────────────────────────────────────────────────
 
-    @app.route("/forgot-password", methods=["GET", "POST"])
-    def forgot_password():
+    @app.route("/api/forgot-password", methods=["POST"])
+    def api_forgot_password():
         if current_user.is_authenticated:
-            return redirect(url_for("home"))
-        sent = False
-        if request.method == "POST":
-            from utils import rate_limited
-            if rate_limited(f"forgot:{request.remote_addr}", 5, 3600):
-                return render_template("forgot_password.html", sent=False,
-                                       error="Too many requests. Try again later."), 429
-            email, _ = _clean_email(request.form.get("email", ""))
-            user = User.query.filter_by(email=email).first() if email else None
-            if user:
-                token   = secrets.token_urlsafe(32)
-                expires = datetime.utcnow() + timedelta(hours=1)
-                db.session.add(PasswordResetToken(user_id=user.id, token=token,
-                                                  expires_at=expires))
-                db.session.commit()
-                import emails
-                reset_url = request.host_url.rstrip("/") + url_for(
-                    "reset_password", token=token)
-                emails.send_password_reset(app, user, reset_url)
-            # Same response whether or not the address exists.
-            sent = True
-        return render_template("forgot_password.html", sent=sent, error=None)
+            return jsonify({"ok": False, "error": "Already logged in"})
+        from utils import rate_limited
+        if rate_limited(f"forgot:{request.remote_addr}", 5, 3600):
+            return jsonify({"ok": False, "error": "Too many requests. Try again later."}), 429
+        data = request.get_json() or {}
+        email, _ = _clean_email(data.get("email", ""))
+        user = User.query.filter_by(email=email).first() if email else None
+        if user:
+            token   = secrets.token_urlsafe(32)
+            expires = datetime.utcnow() + timedelta(hours=1)
+            db.session.add(PasswordResetToken(user_id=user.id, token=token,
+                                              expires_at=expires))
+            db.session.commit()
+            import emails
+            # Adjust reset_url to point to React frontend
+            reset_url = request.host_url.rstrip("/") + "/reset-password?token=" + token
+            emails.send_password_reset(app, user, reset_url)
+        # Same response whether or not the address exists.
+        return jsonify({"ok": True})
 
-    @app.route("/reset-password/<token>", methods=["GET", "POST"])
-    def reset_password(token):
+    @app.route("/api/reset-password", methods=["POST"])
+    def api_reset_password():
+        data = request.get_json() or {}
+        token = data.get("token")
+        pw = data.get("password", "")
+        confirm = data.get("confirm", "")
+        
         rt = PasswordResetToken.query.filter_by(token=token, used=False).first()
         if not rt or rt.expires_at < datetime.utcnow():
-            return render_template("reset_password.html", invalid=True)
-        error = None
-        if request.method == "POST":
-            pw      = request.form.get("password", "")
-            confirm = request.form.get("confirm", "")
-            if len(pw) < 8:
-                error = "Password must be at least 8 characters."
-            elif pw != confirm:
-                error = "Passwords do not match."
-            else:
-                user = db.session.get(User, rt.user_id)
-                if user:
-                    user.set_password(pw)
-                    # Rotate the session token: every existing session for
-                    # this user is invalidated immediately.
-                    user.session_token = secrets.token_hex(16)
-                    PasswordResetToken.query.filter_by(user_id=user.id,
-                                                       used=False).update({"used": True})
-                rt.used = True
-                db.session.commit()
-                return redirect(url_for("login"))
-        return render_template("reset_password.html", token=token, error=error, invalid=False)
+            return jsonify({"ok": False, "error": "Invalid or expired token"})
+            
+        if len(pw) < 8:
+            return jsonify({"ok": False, "error": "Password must be at least 8 characters."})
+        elif pw != confirm:
+            return jsonify({"ok": False, "error": "Passwords do not match."})
+        else:
+            user = db.session.get(User, rt.user_id)
+            if user:
+                user.set_password(pw)
+                user.session_token = secrets.token_hex(16)
+                PasswordResetToken.query.filter_by(user_id=user.id, used=False).update({"used": True})
+            rt.used = True
+            db.session.commit()
+            return jsonify({"ok": True})
 
     # ── Profile ────────────────────────────────────────────────────────────────
 
-    @app.route("/profile/change-password", methods=["POST"])
+    @app.route("/api/profile/change-password", methods=["POST"])
     @login_required
-    def change_password():
-        from models import PredictionHistory
-        current_pw = request.form.get("current_password", "")
-        new_pw     = request.form.get("new_password", "")
-        confirm_pw = request.form.get("confirm_password", "")
-        total      = PredictionHistory.query.filter_by(user_id=current_user.id).count()
+    def api_change_password():
+        data = request.get_json() or {}
+        current_pw = data.get("current_password", "")
+        new_pw     = data.get("new_password", "")
+        confirm_pw = data.get("confirm_password", "")
+        
         if not current_user.check_password(current_pw):
-            return render_template("profile.html", total_predictions=total,
-                                   pw_error="Current password is incorrect.")
+            return jsonify({"ok": False, "error": "Current password is incorrect."})
         if len(new_pw) < 8:
-            return render_template("profile.html", total_predictions=total,
-                                   pw_error="New password must be at least 8 characters.")
+            return jsonify({"ok": False, "error": "New password must be at least 8 characters."})
         if new_pw != confirm_pw:
-            return render_template("profile.html", total_predictions=total,
-                                   pw_error="Passwords do not match.")
+            return jsonify({"ok": False, "error": "Passwords do not match."})
+            
         current_user.set_password(new_pw)
         db.session.commit()
-        return render_template("profile.html", total_predictions=total,
-                               pw_success="Password updated successfully.")
+        return jsonify({"ok": True})
 
     @app.route("/profile/alerts", methods=["POST"])
     @login_required
@@ -662,3 +559,111 @@ def register_auth_routes(app):
             "ua":         (e.ua or "")[:60],
             "created_at": e.created_at.strftime("%Y-%m-%d %H:%M"),
         } for e in entries]})
+
+    # ── JSON Auth APIs for React SPA ──────────────────────────────────────────
+
+    @app.route("/api/login", methods=["POST"])
+    def api_login():
+        if current_user.is_authenticated:
+            logout_user()
+        data = request.get_json() or {}
+        identifier = (data.get("identifier") or "").strip()
+        password = data.get("password") or ""
+        
+        from utils import rate_limited
+        if rate_limited(f"login:{request.remote_addr}", 10, 900):
+            return jsonify({"ok": False, "error": "Too many attempts. Try again in 15 minutes."}), 429
+            
+        user = User.query.filter(
+            (User.username == identifier) | (User.email == identifier)
+        ).first()
+        
+        if user and user.check_password(password):
+            if (user.status or "active") != "active":
+                return jsonify({"ok": False, "error": "This account is suspended or deactivated."}), 403
+            login_user(user, remember=True)
+            _log_activity(user.id, "login.api")
+            return jsonify({
+                "ok": True, 
+                "user": {
+                    "id": user.id, 
+                    "username": user.username, 
+                    "email": user.email,
+                    "role_level": user.role_level
+                }
+            })
+        return jsonify({"ok": False, "error": "Invalid credentials"}), 401
+
+    @app.route("/api/register", methods=["POST"])
+    def api_register():
+        if current_user.is_authenticated:
+            logout_user()
+        data = request.get_json() or {}
+        username = (data.get("username") or "").strip()
+        email_raw = data.get("email")
+        password = data.get("password") or ""
+        
+        try:
+            from models import AppSetting
+            closed = (row := db.session.get(AppSetting, "registration_open")) and row.value == "0"
+        except Exception:
+            closed = False
+        if closed:
+            return jsonify({"ok": False, "error": "Registration is currently closed."}), 403
+            
+        if not username or not password or not email_raw:
+            return jsonify({"ok": False, "error": "All fields are required."}), 400
+            
+        email, err = _clean_email(email_raw)
+        if err:
+            return jsonify({"ok": False, "error": f"Invalid email: {err}"}), 400
+            
+        if User.query.filter_by(username=username).first():
+            return jsonify({"ok": False, "error": "Username already taken."}), 400
+        if User.query.filter_by(email=email).first():
+            return jsonify({"ok": False, "error": "Email already registered."}), 400
+            
+        user = User(username=username, email=email)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        login_user(user, remember=True)
+        _log_activity(user.id, "register.api")
+        return jsonify({
+            "ok": True, 
+            "user": {
+                "id": user.id, 
+                "username": user.username, 
+                "email": user.email,
+                "role_level": user.role_level
+            }
+        })
+
+    @app.route("/api/logout", methods=["POST"])
+    def api_logout():
+        if current_user.is_authenticated:
+            logout_user()
+        return jsonify({"ok": True})
+
+    @app.route("/api/me", methods=["GET"])
+    def api_me():
+        if not current_user.is_authenticated:
+            return jsonify({"ok": False, "error": "Not authenticated"}), 401
+            
+        import secrets
+        from flask import session
+        if "csrf_token" not in session:
+            session["csrf_token"] = secrets.token_hex(16)
+            
+        return jsonify({
+            "ok": True,
+            "csrf_token": session["csrf_token"],
+            "user": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": current_user.email,
+                "role_level": getattr(current_user, 'role_level', 0),
+                "theme_preference": current_user.theme_preference
+            }
+        })

@@ -1,0 +1,280 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <title>{% block title %}Admin Console{% endblock %} - BullLogic</title>
+        <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
+        <link href="{% static 'admin_theme/css/styles.css' %}" rel="stylesheet" />
+        <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+        <style>
+            :root {
+              --horizon-bg: #08080f;
+              --horizon-card: #16162a;
+              --horizon-primary: #8b5cf6;
+              --horizon-text: #f0f0ff;
+              --horizon-muted: #a8a8c8;
+              --horizon-border: rgba(255, 255, 255, 0.07);
+              --horizon-grad: linear-gradient(135deg, #8b5cf6, #3b82f6);
+            }
+
+            body.sb-nav-fixed {
+              background-color: var(--horizon-bg) !important;
+              color: var(--horizon-text) !important;
+              font-family: 'Space Grotesk', sans-serif !important;
+            }
+
+            /* Gradient Text utility */
+            .gt {
+              background: var(--horizon-grad);
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+              background-clip: text;
+            }
+
+            /* Navbar */
+            .sb-topnav.navbar-dark.bg-dark {
+              background-color: var(--horizon-bg) !important;
+              border-bottom: 1px solid var(--horizon-border) !important;
+            }
+            .navbar-brand {
+              font-weight: 800 !important;
+              color: var(--horizon-text) !important;
+              letter-spacing: -0.5px;
+            }
+
+            /* Sidebar */
+            #layoutSidenav_nav {
+              border-right: 1px solid var(--horizon-border);
+            }
+            .sb-sidenav-dark {
+              background-color: var(--horizon-bg) !important;
+            }
+            .sb-sidenav-dark .sb-sidenav-menu .nav-link {
+              color: var(--horizon-muted) !important;
+              font-weight: 700 !important;
+              padding: 16px 24px !important;
+              transition: all 0.2s ease;
+            }
+            .sb-sidenav-dark .sb-sidenav-menu .nav-link:hover {
+              color: var(--horizon-text) !important;
+              background-color: rgba(255, 255, 255, 0.02) !important;
+            }
+            .sb-sidenav-dark .sb-sidenav-menu .nav-link.active,
+            .sb-sidenav-dark .sb-sidenav-menu .nav-link:focus {
+              color: var(--horizon-text) !important;
+              border-right: 4px solid var(--horizon-primary);
+            }
+            .sb-sidenav-dark .sb-sidenav-menu-heading {
+              color: var(--horizon-muted) !important;
+              font-size: 11px !important;
+              letter-spacing: 1px !important;
+              padding-left: 24px !important;
+            }
+            .sb-sidenav-footer {
+              background-color: var(--horizon-card) !important;
+              color: var(--horizon-muted) !important;
+              border-top: 1px solid var(--horizon-border) !important;
+            }
+
+            /* Cards */
+            .card {
+              background-color: var(--horizon-card) !important;
+              border: 1px solid var(--horizon-border) !important;
+              border-radius: 20px !important;
+              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+              color: var(--horizon-text) !important;
+              overflow: hidden;
+            }
+            .card-header {
+              background-color: transparent !important;
+              border-bottom: 1px solid var(--horizon-border) !important;
+              font-weight: 700 !important;
+              color: var(--horizon-text) !important;
+              font-size: 16px !important;
+              padding: 16px 24px !important;
+            }
+
+            /* Horizon Metric Card Layout */
+            .horizon-metric-card {
+              padding: 24px !important;
+              display: flex !important;
+              align-items: center !important;
+              gap: 18px !important;
+            }
+            .horizon-icon-wrapper {
+              width: 56px;
+              height: 56px;
+              border-radius: 50%;
+              background-color: rgba(139, 92, 246, 0.1);
+              color: var(--horizon-primary);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 20px;
+            }
+            .horizon-metric-info {
+              display: flex;
+              flex-direction: column;
+            }
+            .horizon-metric-label {
+              font-size: 14px;
+              color: var(--horizon-muted);
+              font-weight: 500;
+              margin-bottom: 2px;
+            }
+            .horizon-metric-val {
+              font-size: 26px;
+              color: var(--horizon-text);
+              font-weight: 800;
+              line-height: 1.1;
+            }
+
+            /* Tables */
+            .table {
+              color: var(--horizon-text) !important;
+            }
+            .table-striped>tbody>tr:nth-of-type(odd)>* {
+              background-color: rgba(255, 255, 255, 0.01) !important;
+              color: var(--horizon-text) !important;
+            }
+            .table-hover>tbody>tr:hover>* {
+              background-color: rgba(255, 255, 255, 0.03) !important;
+              color: var(--horizon-text) !important;
+            }
+            .table th, .table td {
+              border-color: var(--horizon-border) !important;
+              vertical-align: middle !important;
+              padding: 14px 16px !important;
+            }
+            .table th {
+              color: var(--horizon-muted) !important;
+              font-size: 12px !important;
+              font-weight: 700 !important;
+              text-transform: uppercase;
+            }
+
+            /* Forms */
+            .form-select, .form-control {
+              background-color: var(--horizon-bg) !important;
+              border: 1px solid var(--horizon-border) !important;
+              color: var(--horizon-text) !important;
+              border-radius: 8px !important;
+            }
+            .form-select:focus, .form-control:focus {
+              border-color: var(--horizon-primary) !important;
+              box-shadow: 0 0 0 0.25rem rgba(139, 92, 246, 0.25) !important;
+            }
+
+            /* Buttons */
+            .btn-bgrd {
+              background: var(--horizon-grad) !important;
+              border: none !important;
+              color: #fff !important;
+              font-weight: 600 !important;
+              border-radius: 12px !important;
+              transition: 0.25s !important;
+              cursor: pointer !important;
+            }
+            .btn-bgrd:hover {
+              transform: translateY(-1px) !important;
+              box-shadow: 0 8px 24px rgba(139, 92, 246, 0.3) !important;
+            }
+
+            /* Custom details */
+            .breadcrumb-item.active {
+              color: var(--horizon-muted) !important;
+            }
+            .breadcrumb-item a {
+              color: var(--horizon-primary) !important;
+              text-decoration: none;
+            }
+        </style>
+        {% block extra_css %}{% endblock %}
+    </head>
+    <body class="sb-nav-fixed">
+        <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
+            <!-- Navbar Brand-->
+            <a class="navbar-brand ps-3" href="{% url 'admin-dashboard' %}"><span class="gt">BullLogic</span> Admin</a>
+            <!-- Sidebar Toggle-->
+            <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i class="fas fa-bars"></i></button>
+            
+            <div class="d-none d-md-inline-block ms-auto me-0 me-md-3 my-2 my-md-0 text-white-50 small">
+                Uptime: 100% · Status: Normal
+            </div>
+
+            <!-- Navbar-->
+            <ul class="navbar-nav ms-auto ms-md-0 me-3 me-lg-4">
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user fa-fw"></i></a>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                        <li><a class="dropdown-item" href="/settings">Profile Settings</a></li>
+                        <li><hr class="dropdown-divider" /></li>
+                        <li>
+                            <form action="/api/logout" method="POST" id="logout-form" style="display:none;">
+                                {% csrf_token %}
+                            </form>
+                            <a class="dropdown-item" href="#" onclick="document.getElementById('logout-form').submit();">Logout</a>
+                        </li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+        <div id="layoutSidenav">
+            <div id="layoutSidenav_nav">
+                <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
+                    <div class="sb-sidenav-menu">
+                        <div class="nav">
+                            <div class="sb-sidenav-menu-heading">Main Console</div>
+                            <a class="nav-link" href="{% url 'admin-dashboard' %}">
+                                <div class="sb-nav-link-icon"><i class="fas fa-tachometer-alt"></i></div>
+                                Dashboard
+                            </a>
+                            <a class="nav-link" href="{% url 'admin-users' %}">
+                                <div class="sb-nav-link-icon"><i class="fas fa-users"></i></div>
+                                User Management
+                            </a>
+
+                            <div class="sb-sidenav-menu-heading">External</div>
+                            <a class="nav-link" href="/portfolio">
+                                <div class="sb-nav-link-icon"><i class="fas fa-arrow-left"></i></div>
+                                Back to Platform
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sb-sidenav-footer">
+                        <div class="small">Logged in as:</div>
+                        {{ request.user.username }} ({% firstof request.user.plan 'Free' %})
+                    </div>
+                </nav>
+            </div>
+            <div id="layoutSidenav_content">
+                <main>
+                    <div class="container-fluid px-4">
+                        {% block content %}{% endblock %}
+                    </div>
+                </main>
+                <footer class="py-4 bg-light mt-auto">
+                    <div class="container-fluid px-4">
+                        <div class="d-flex align-items-center justify-content-between small">
+                            <div class="text-muted">Copyright &copy; BullLogic 2026</div>
+                            <div>
+                                <a href="#">Privacy Policy</a>
+                                &middot;
+                                <a href="#">Terms &amp; Conditions</a>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+        <script src="{% static 'admin_theme/js/scripts.js' %}"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.8.0/Chart.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js" crossorigin="anonymous"></script>
+        {% block extra_js %}{% endblock %}
+    </body>
+</html>

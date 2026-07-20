@@ -27,172 +27,15 @@ def register_prediction_routes(app, metrics):
 
     from predictor import run_prediction, ml_signal
 
-    @app.route("/", methods=["GET"])
-    def home():
-        """Logged-in: the dashboard. Logged-out: the marketing landing page.
-        The Predict workstation lives at GET /predict."""
-        if not current_user.is_authenticated:
-            return render_template("landing.html")
-        from models import PaperTrade, PaperEquitySnapshot
-        recent_predictions = (PredictionHistory.query
-                              .filter_by(user_id=current_user.id)
-                              .order_by(PredictionHistory.predicted_at.desc())
-                              .limit(5).all())
-        total_predictions = PredictionHistory.query.filter_by(
-            user_id=current_user.id).count()
-        predictions_today = (current_user.predictions_today or 0
-                             if current_user.last_prediction_date == date.today()
-                             else 0)
-        watchlist_items = (WatchlistItem.query
-                           .filter_by(user_id=current_user.id)
-                           .order_by(WatchlistItem.added_at).all())
-        paper_open = PaperTrade.query.filter_by(
-            user_id=current_user.id, status="open").count()
-        paper_closed = PaperTrade.query.filter_by(
-            user_id=current_user.id, status="closed").count()
-        paper_pnl = None
-        if paper_closed:
-            paper_pnl = round(db.session.query(
-                db.func.coalesce(db.func.sum(PaperTrade.pnl), 0.0))
-                .filter(PaperTrade.user_id == current_user.id,
-                        PaperTrade.status == "closed").scalar() or 0.0, 2)
-        # Virtual paper balance: the latest mark-to-market equity snapshot
-        # per strategy, summed. None until the engine has snapshotted.
-        paper_balance = None
-        latest = (db.session.query(
-                      PaperEquitySnapshot.strategy,
-                      db.func.max(PaperEquitySnapshot.taken_at))
-                  .filter(PaperEquitySnapshot.user_id == current_user.id)
-                  .group_by(PaperEquitySnapshot.strategy).all())
-        if latest:
-            total_equity = 0.0
-            for strategy, taken_at in latest:
-                snap = (PaperEquitySnapshot.query
-                        .filter_by(user_id=current_user.id, strategy=strategy,
-                                   taken_at=taken_at).first())
-                if snap:
-                    total_equity += snap.equity
-            paper_balance = round(total_equity, 2)
-        from paper_engine import SIM_CURRENCY
-        return render_template(
-            "home.html",
-            recent_predictions=recent_predictions,
-            total_predictions=total_predictions,
-            predictions_today=predictions_today,
-            watchlist_tickers=[i.ticker for i in watchlist_items],
-            paper_open=paper_open,
-            paper_closed=paper_closed,
-            paper_pnl=paper_pnl,
-            paper_balance=paper_balance,
-            paper_currency=SIM_CURRENCY,
-        )
 
-    @app.route("/dashboard", methods=["GET"])
-    @login_required
-    def dashboard():
-        """Stable alias for the authenticated homepage at /."""
-        return home()
 
-    @app.route("/predict", methods=["GET", "POST"])
-    @login_required
-    def predict():
-        if request.method == "GET":
-            last_ticker = request.cookies.get("bl-last-ticker", "")
-            last_interval = request.cookies.get("bl-last-interval", "1d")
-            return render_template("index.html", ticker=last_ticker,
-                                   interval=last_interval)
-        ticker   = request.form.get("ticker", "").upper().strip()
-        interval = request.form.get("interval", "1d").strip()
-        if interval not in VALID_INTERVALS:
-            interval = "1d"
-        if not getattr(current_user, "email_verified", True):
-            return redirect(url_for("verify_notice"))
-        from models import UserPreferences
-        pref = UserPreferences.query.filter_by(user_id=current_user.id).first()
-        if not pref or not pref.risk_intro_seen:
-            return redirect(url_for("risk_basics"))
-        if not ticker:
-            return render_template("index.html", error="Please enter a stock ticker symbol.",
-                                   interval=interval)
-        if len(ticker) > 10 or not ticker.replace(".", "").replace("-", "").isalpha():
-            return render_template("index.html",
-                                   error=f'"{ticker}" is not a valid ticker.',
-                                   interval=interval)
-        if not consume_quota(current_user):
-            return render_template("index.html",
-                                   error=f"You've used all {FREE_DAILY_LIMIT} free predictions for today. "
-                                         "Upgrade to Pro for unlimited access.",
-                                   show_upgrade=True, interval=interval)
-        try:
-            _try_azure_download(ticker, interval)
-            result = run_prediction(ticker, interval)
-            src_source = src_conf = src_div = None
-            vq = None
-            try:
-                from market_data import get_quotes_verified
-                vq = get_quotes_verified([ticker]).get(ticker)
-            except Exception:
-                vq = None
-            result["live_quote"] = vq
-            try:
-                # Capture data-quality context so accuracy can later be
-                # analyzed against source confidence and divergence.
-                if vq:
-                    src_source = vq["source"]
-                    src_conf   = vq["conf_pct"]
-                    src_div    = vq["divergence_pct"]
-                ph = PredictionHistory(
-                    user_id=current_user.id, ticker=ticker, interval=interval,
-                    current_price=result["current_price"],
-                    lr_pred=result["lr_pred"], rf_pred=result["rf_pred"],
-                    direction=result["direction"], confidence=result["confidence"],
-                    src_source=src_source, src_conf_pct=src_conf,
-                    src_divergence=src_div,
-                )
-                db.session.add(ph)
-                db.session.commit()
-                award_xp(current_user, 5)
-            except Exception:
-                db.session.rollback()
-            # Honest track record for this exact model, shown on the result.
-            try:
-                from ops import ticker_stats
-                result["track_record"] = ticker_stats(db, ticker, interval)
-            except Exception:
-                result["track_record"] = None
-            from flask import make_response
-            resp = make_response(render_template("result.html", **result))
-            resp.set_cookie("bl-last-ticker", ticker, max_age=30*24*60*60, samesite="Lax")
-            resp.set_cookie("bl-last-interval", interval, max_age=30*24*60*60, samesite="Lax")
-            return resp
-        except ValueError as e:
-            refund_quota(current_user)
-            return render_template("index.html", error=str(e), interval=interval)
-        except FileNotFoundError:
-            refund_quota(current_user)
-            return render_template("index.html",
-                                   error=f'No trained model for "{ticker}". '
-                                         'Supported: AAPL, MSFT, TSLA, NVDA, GOOGL, AMZN, META, QQQ, DIA, NDX.',
-                                   interval=interval)
-        except Exception:
-            refund_quota(current_user)
-            return render_template("index.html",
-                                   error=f'Could not fetch data for "{ticker}". '
-                                         'Please check the symbol and try again, this attempt '
-                                         'was not deducted from your quota.',
-                                   interval=interval)
 
-    @app.route("/market")
-    @login_required
-    def market():
-        return render_template("market.html")
 
-    @app.route("/watchlist")
+    @app.route("/api/watchlist")
     @login_required
-    def watchlist():
-        items = WatchlistItem.query.filter_by(user_id=current_user.id).order_by(
-            WatchlistItem.added_at).all()
-        return render_template("watchlist.html", watchlist=[i.ticker for i in items])
+    def api_watchlist():
+        items = WatchlistItem.query.filter_by(user_id=current_user.id).order_by(WatchlistItem.added_at).all()
+        return jsonify({"ok": True, "watchlist": [i.ticker for i in items]})
 
     @app.route("/api/watchlist/add", methods=["POST"])
     @login_required
@@ -234,14 +77,28 @@ def register_prediction_routes(app, metrics):
             results = dict(ex.map(lambda t: _get(t), tickers))
         return jsonify(results)
 
-    @app.route("/history")
+    @app.route("/api/history")
     @login_required
-    def history():
+    def api_history():
         records = (PredictionHistory.query
                    .filter_by(user_id=current_user.id)
                    .order_by(PredictionHistory.predicted_at.desc())
                    .limit(100).all())
-        return render_template("history.html", records=records)
+        out = []
+        for r in records:
+            out.append({
+                "id": r.id,
+                "ticker": r.ticker,
+                "interval": r.interval,
+                "predicted_at": r.predicted_at.isoformat() if r.predicted_at else None,
+                "current_price": r.current_price,
+                "lr_pred": r.lr_pred,
+                "rf_pred": r.rf_pred,
+                "direction": r.direction,
+                "confidence": r.confidence,
+                "status": getattr(r, "status", "pending")
+            })
+        return jsonify({"ok": True, "history": out})
 
     @app.route("/history/export")
     @login_required
@@ -262,11 +119,11 @@ def register_prediction_routes(app, metrics):
         return Response(output.getvalue(), mimetype="text/csv",
                         headers={"Content-Disposition": "attachment; filename=bulllogic_history.csv"})
 
-    @app.route("/profile")
+    @app.route("/api/profile")
     @login_required
-    def profile():
+    def api_profile():
         total = PredictionHistory.query.filter_by(user_id=current_user.id).count()
-        return render_template("profile.html", total_predictions=total)
+        return jsonify({"ok": True, "total_predictions": total})
 
     # ── API predict ────────────────────────────────────────────────────────────
 
@@ -509,21 +366,17 @@ def register_prediction_routes(app, metrics):
 
     # ── Risk basics interstitial (shown once before first prediction) ──────────
 
-    @app.route("/risk-basics", methods=["GET", "POST"])
+    @app.route("/api/risk-basics", methods=["POST"])
     @login_required
-    def risk_basics():
+    def api_risk_basics():
         from models import UserPreferences
         pref = UserPreferences.query.filter_by(user_id=current_user.id).first()
-        if request.method == "POST":
-            if not pref:
-                pref = UserPreferences(user_id=current_user.id)
-                db.session.add(pref)
-            pref.risk_intro_seen = True
-            db.session.commit()
-            return redirect(url_for("predict"))
-        if pref and pref.risk_intro_seen:
-            return redirect(url_for("predict"))
-        return render_template("risk_basics.html")
+        if not pref:
+            pref = UserPreferences(user_id=current_user.id)
+            db.session.add(pref)
+        pref.risk_intro_seen = True
+        db.session.commit()
+        return jsonify({"ok": True})
 
     # ── Account data export and deletion (easy exit, no dark patterns) ─────────
 
@@ -591,10 +444,6 @@ def register_prediction_routes(app, metrics):
         return jsonify({"ok": True, "message": "Your account and data were deleted. Kwaheri."})
 
     # ── Track record (public, the trust page) ─────────────────────────────────
-
-    @app.route("/track-record")
-    def track_record_page():
-        return render_template("track_record.html")
 
     @app.route("/api/track-record")
     def api_track_record():
@@ -669,11 +518,6 @@ def register_prediction_routes(app, metrics):
 
     # ── Signal leaderboard ─────────────────────────────────────────────────────
 
-    @app.route("/leaderboard")
-    @login_required
-    def leaderboard():
-        return render_template("leaderboard.html")
-
     @app.route("/api/leaderboard")
     @login_required
     def api_leaderboard():
@@ -714,11 +558,6 @@ def register_prediction_routes(app, metrics):
         return jsonify({"ok": True, "rows": rows})
 
     # ── Deep research page ─────────────────────────────────────────────────────
-
-    @app.route("/research/<ticker>")
-    @login_required
-    def research_page(ticker):
-        return render_template("research.html", ticker=ticker.upper())
 
     @app.route("/api/research/<ticker>")
     @login_required
@@ -803,11 +642,6 @@ def register_prediction_routes(app, metrics):
                         "news": news_d,  "prediction": pred_d})
 
     # ── Pipeline page ──────────────────────────────────────────────────────────
-
-    @app.route("/pipeline")
-    @login_required
-    def pipeline():
-        return render_template("pipeline.html")
 
     @app.route("/api/pipeline/retrain", methods=["POST"])
     @login_required

@@ -133,20 +133,32 @@ def create_app():
     from routes.admin         import register_admin_routes
     from routes.notifications import register_notification_routes
     from routes.paper         import register_paper_routes
+    from routes.paper_manual import register_manual_paper_routes
     from routes.macro         import register_macro_routes
     from routes.api           import api_bp
+    from routes.content        import register_content_routes
 
-    register_auth_routes(app)
-    register_payment_routes(app)
-    register_prediction_routes(app, _metrics)
-    register_trading_routes(app)
-    register_portfolio_routes(app)
-    register_analytics_routes(app)
-    register_admin_routes(app, _endpoint_stats, _APP_START)
-    register_notification_routes(app)
-    register_paper_routes(app)
-    register_macro_routes(app)
-    app.register_blueprint(api_bp)
+    from routes.react_spa import register_react_routes
+    
+    with app.app_context():
+        # Models and db
+        import models
+        db.create_all()
+
+        register_auth_routes(app)
+        register_payment_routes(app)
+        register_prediction_routes(app, _metrics)
+        register_trading_routes(app)
+        register_portfolio_routes(app)
+        register_analytics_routes(app)
+        register_admin_routes(app, _endpoint_stats, _APP_START)
+        register_notification_routes(app)
+        register_paper_routes(app)
+        register_manual_paper_routes(app)
+        register_macro_routes(app)
+        register_content_routes(app)
+        app.register_blueprint(api_bp)
+        register_react_routes(app)
 
     # ── Theme (account-backed dark/light/system) ──────────────────────────────
     # Every template renders <html {{ theme_attr }}> so logged-in users get the
@@ -175,17 +187,11 @@ def create_app():
 
     @app.errorhandler(404)
     def _not_found(e):
-        from flask import render_template, request
-        if request.path.startswith("/api/"):
-            return jsonify({"ok": False, "error": "Not found"}), 404
-        return render_template("404.html"), 404
+        return jsonify({"ok": False, "error": "Not found"}), 404
 
     @app.errorhandler(500)
     def _server_error(e):
-        from flask import render_template, request
-        if request.path.startswith("/api/"):
-            return jsonify({"ok": False, "error": "Internal server error"}), 500
-        return render_template("500.html"), 500
+        return jsonify({"ok": False, "error": "Internal server error"}), 500
 
     # ── Infrastructure routes (health, metrics, sw.js, model-metrics) ─────────
 
@@ -193,37 +199,7 @@ def create_app():
     def service_worker():
         return app.send_static_file("sw.js"), 200, {"Content-Type": "application/javascript"}
 
-    @app.route("/offline")
-    def offline_page():
-        from flask import render_template
-        return render_template("offline.html")
-
     # ── Public info pages ─────────────────────────────────────────────────────
-
-    @app.route("/faq")
-    def faq_page():
-        from flask import render_template
-        return render_template("faq.html")
-
-    @app.route("/disclosures")
-    def disclosures_page():
-        from flask import render_template
-        return render_template("disclosures.html")
-
-    @app.route("/privacy-policy")
-    def privacy_page():
-        from flask import render_template
-        return render_template("privacy.html")
-
-    @app.route("/terms")
-    def terms_page():
-        from flask import render_template
-        return render_template("terms.html")
-
-    @app.route("/resources")
-    def resources_page():
-        from flask import render_template
-        return render_template("resources.html")
 
     @app.route("/api/resources")
     def api_resources_public():
@@ -241,16 +217,6 @@ def create_app():
                    + [c for c in cats if c not in order])
         return jsonify({"ok": True, "categories": [
             {"name": c, "links": cats[c]} for c in ordered]})
-
-    @app.route("/methodology")
-    def methodology_page():
-        from flask import render_template
-        return render_template("methodology.html")
-
-    @app.route("/data-sources")
-    def data_sources_page():
-        from flask import render_template
-        return render_template("data_sources.html")
 
     @app.route("/health")
     def health():
@@ -270,17 +236,11 @@ def create_app():
             "azure_enabled":     azure_enabled(),
         })
 
-    @app.route("/model-metrics")
-    def model_metrics_page():
-        from flask_login import login_required
-        from flask import render_template
-        from functools import wraps
-        return render_template("model_metrics.html")
+
 
     @app.route("/api/model-metrics")
     def api_model_metrics():
         from flask_login import current_user
-        from flask import render_template
         if not current_user.is_authenticated:
             return jsonify({"ok": False, "error": "Login required"}), 401
         path = os.path.join(BASE_DIR, "Data", "model_metrics.json")
@@ -312,7 +272,7 @@ def create_app():
             is_admin = (current_user.is_authenticated
                         and getattr(current_user, "role_level", 0) >= 1)
             if not exempt and not is_admin:
-                return render_template("maintenance.html"), 503
+                return jsonify({"ok": False, "error": "Maintenance in progress", "maintenance": True}), 503
 
         # Throttled last-seen tracking for active-user metrics.
         if current_user.is_authenticated:
@@ -350,11 +310,13 @@ def create_app():
 
         # Browser Cache-Control configuration
         from flask import request
+        from flask_login import current_user
         if response.status_code < 400 and (request.path.startswith("/static/") or request.path == "/sw.js"):
             response.headers["Cache-Control"] = "public, max-age=2592000, immutable"
-        elif request.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        elif request.path.startswith("/api/") or current_user.is_authenticated:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "-1"
 
         return response
 

@@ -33,20 +33,7 @@ def register_paper_routes(app):
 
     # ── Public pages ──────────────────────────────────────────────────────────
 
-    @app.route("/paper")
-    def paper_page():
-        return render_template("paper_trading.html")
 
-    @app.route("/paper/rules")
-    def paper_rules_page():
-        return render_template("paper_rules.html")
-
-    @app.route("/traders")
-    @login_required
-    def traders_leaderboard_page():
-        # Matches the pre-existing login gate on /api/leaderboard/users,
-        # which this page calls - not gated by plan tier, see design note.
-        return render_template("traders.html")
 
     # ── Public APIs ───────────────────────────────────────────────────────────
 
@@ -140,10 +127,7 @@ def register_paper_routes(app):
 
     from routes.admin import admin_required, _audit
 
-    @app.route("/admin/paper")
-    @admin_required("viewer")
-    def admin_paper_page():
-        return render_template("admin/paper.html")
+
 
     @app.route("/admin/api/paper/state")
     @admin_required("viewer")
