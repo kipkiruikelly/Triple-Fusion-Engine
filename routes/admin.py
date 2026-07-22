@@ -192,7 +192,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
     # ══ Auth ══════════════════════════════════════════════════════════════════
 
     @app.route("/api/admin/login", methods=["POST"])
-    def admin_login():
+    def admin_login_api():
         ip = request.remote_addr or "?"
         if _rate_limited(ip):
             return jsonify({"ok": False, "error": "Too many failed attempts. Try again in 15 minutes."}), 429
@@ -266,7 +266,7 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
     # ══ Pages ═════════════════════════════════════════════════════════════════
 
     @app.route("/admin/login", methods=["GET", "POST"])
-    def admin_login_page():
+    def admin_login():
         if request.method == "GET":
             if current_user.is_authenticated and getattr(current_user, "role_level", 0) >= ROLE_LEVELS["viewer"]:
                 return redirect(url_for("admin_dashboard"))

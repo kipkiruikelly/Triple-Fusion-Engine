@@ -25,13 +25,140 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 def register_prediction_routes(app, metrics):
     """metrics: shared dict {"predictions": 0, "total_latency": 0.0}"""
 
-    from predictor import run_prediction, ml_signal
+    @app.route("/", methods=["GET"])
+    def home():
+        """Logged-in: the dashboard. Logged-out: the marketing landing page.
+        The Predict workstation lives at GET /predict."""
+        if not current_user.is_authenticated:
+            return render_template("landing.html")
+        from models import PaperTrade, PaperEquitySnapshot
+        recent_predictions = (PredictionHistory.query
+                              .filter_by(user_id=current_user.id)
+                              .order_by(PredictionHistory.predicted_at.desc())
+                              .limit(5).all())
+        total_predictions = PredictionHistory.query.filter_by(
+            user_id=current_user.id).count()
+        predictions_today = (current_user.predictions_today or 0
+                             if current_user.last_prediction_date == date.today()
+                             else 0)
+        watchlist_items = (WatchlistItem.query
+                           .filter_by(user_id=current_user.id)
+                           .order_by(WatchlistItem.added_at).all())
+        paper_open = PaperTrade.query.filter_by(
+            user_id=current_user.id, status="open").count()
+        paper_closed = PaperTrade.query.filter_by(
+            user_id=current_user.id, status="closed").count()
+        paper_pnl = None
+        if paper_closed:
+            paper_pnl = round(db.session.query(
+                db.func.coalesce(db.func.sum(PaperTrade.pnl), 0.0))
+                .filter(PaperTrade.user_id == current_user.id,
+                        PaperTrade.status == "closed").scalar() or 0.0, 2)
+        paper_balance = None
+        latest = (db.session.query(
+                      PaperEquitySnapshot.strategy,
+                      db.func.max(PaperEquitySnapshot.taken_at))
+                  .filter(PaperEquitySnapshot.user_id == current_user.id)
+                  .group_by(PaperEquitySnapshot.strategy).all())
+        if latest:
+            total_equity = 0.0
+            for strategy, taken_at in latest:
+                snap = (PaperEquitySnapshot.query
+                        .filter_by(user_id=current_user.id, strategy=strategy,
+                                   taken_at=taken_at).first())
+                if snap:
+                    total_equity += snap.equity
+            paper_balance = round(total_equity, 2)
+        from paper_engine import SIM_CURRENCY
+        return render_template(
+            "home.html",
+            recent_predictions=recent_predictions,
+            total_predictions=total_predictions,
+            predictions_today=predictions_today,
+            watchlist_tickers=[i.ticker for i in watchlist_items],
+            paper_open=paper_open,
+            paper_closed=paper_closed,
+            paper_pnl=paper_pnl,
+            paper_balance=paper_balance,
+            paper_currency=SIM_CURRENCY,
+        )
 
+    @app.route("/dashboard", methods=["GET"])
+    @login_required
+    def dashboard():
+        """Stable alias for the authenticated homepage at /."""
+        return home()
 
+    @app.route("/predict", methods=["GET", "POST"])
+    @login_required
+    def predict():
+        if request.method == "GET":
+            last_ticker = request.cookies.get("bl-last-ticker", "")
+            last_interval = request.cookies.get("bl-last-interval", "1d")
+            return render_template("index.html", ticker=last_ticker,
+                                   interval=last_interval)
+        ticker   = request.form.get("ticker", "").upper().strip()
+        interval = request.form.get("interval", "1d").strip()
+        if interval not in VALID_INTERVALS:
+            return render_template("index.html", error="Invalid interval selected."), 400
+        if not ticker:
+            return render_template("index.html", error="Please enter a valid symbol."), 400
+        allowed, err_msg = consume_quota(current_user)
+        if not allowed:
+            return render_template("index.html", error=err_msg), 429
+        try:
+            start_t = time.time()
+            res = run_prediction(ticker, interval=interval)
+            latency = time.time() - start_t
+            metrics["predictions"] += 1
+            metrics["total_latency"] += latency
+            ph = PredictionHistory(
+                user_id=current_user.id, ticker=ticker, interval=interval,
+                predicted_price=res.get("predicted_price", 0.0),
+                direction=res.get("direction", "NEUTRAL"),
+                confidence=res.get("confidence", 0.0),
+                current_price=res.get("current_price", 0.0)
+            )
+            db.session.add(ph)
+            db.session.commit()
+            award_xp(current_user, 5)
+            from flask import make_response
+            resp = make_response(render_template("index.html", result=res, ticker=ticker, interval=interval))
+            resp.set_cookie("bl-last-ticker", ticker, max_age=30*86400)
+            resp.set_cookie("bl-last-interval", interval, max_age=30*86400)
+            return resp
+        except Exception as e:
+            refund_quota(current_user)
+            return render_template("index.html", error=f"Prediction error: {e}"), 500
 
+    @app.route("/research/<ticker>")
+    @login_required
+    def research_page(ticker):
+        return render_template("research.html", ticker=ticker.upper())
 
+    @app.route("/pipeline")
+    @login_required
+    def pipeline():
+        return render_template("pipeline.html")
+
+    @app.route("/ethics/risk-basics", methods=["GET", "POST"])
+    @login_required
+    def risk_basics():
+        from models import UserPreferences
+        pref = UserPreferences.query.filter_by(user_id=current_user.id).first()
+        if request.method == "POST":
+            if not pref:
+                pref = UserPreferences(user_id=current_user.id)
+                db.session.add(pref)
+            pref.risk_intro_seen = True
+            db.session.commit()
+            return redirect(url_for("predict"))
+        if pref and pref.risk_intro_seen:
+            return redirect(url_for("predict"))
+        return render_template("risk_basics.html")
 
     @app.route("/api/watchlist")
+
     @login_required
     def api_watchlist():
         items = WatchlistItem.query.filter_by(user_id=current_user.id).order_by(WatchlistItem.added_at).all()

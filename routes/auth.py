@@ -35,12 +35,19 @@ VERIFY_TOKEN_MAX_AGE_S = 24 * 3600      # verification links live 24h
 
 def _clean_email(raw):
     """Validate, normalize and return an email address, or (None, error)."""
-    from email_validator import validate_email, EmailNotValidError
+    raw = (raw or "").strip()
     try:
-        result = validate_email((raw or "").strip(), check_deliverability=False)
+        from email_validator import validate_email, EmailNotValidError
+        result = validate_email(raw, check_deliverability=False)
         return result.normalized.lower(), None
-    except EmailNotValidError as e:
+    except ImportError:
+        import re
+        if re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", raw):
+            return raw.lower(), None
+        return None, "Please enter a valid email address."
+    except Exception as e:
         return None, str(e)
+
 
 
 def _unique_username(base):
@@ -138,7 +145,7 @@ def register_auth_routes(app):
         sub   = str(info.get("sub") or "")
         email = (info.get("email") or "").strip().lower()
         if not sub or not email:
-            return redirect(f"/?error=Google did not return a usable account.")
+            return render_template(login_page, error="Google did not return a usable account."), 400
 
         user = User.query.filter_by(google_sub=sub).first()
         if not user:
@@ -149,16 +156,13 @@ def register_auth_routes(app):
                 user.google_sub = sub
                 user.email_verified = True
             else:
-                user = User(username=_unique_username(
-                                (info.get("name") or email.split("@")[0]).replace(" ", "").lower()),
-                            email=email, auth_provider="google",
-                            google_sub=sub, email_verified=True)
-                user.set_password(secrets.token_urlsafe(24))  # unusable, OAuth-only
+                user = User(username=_unique_username(info.get("name") or email.split("@")[0]),
+                            email=email, google_sub=sub, email_verified=True)
                 db.session.add(user)
             db.session.commit()
 
         if (user.status or "active") != "active":
-            return redirect(f"/?error=This account has been suspended.")
+            return render_template(login_page, error="This account has been suspended."), 403
 
         if admin_intent:
             # Google verified the identity; the console still requires a
@@ -171,7 +175,9 @@ def register_auth_routes(app):
                     ip=request.remote_addr or "?",
                     detail="Google sign-in without admin role"))
                 db.session.commit()
-                return redirect(f"/admin/login?error=This Google account has no admin access.")
+                return render_template(
+                    "admin/login.html",
+                    error="This Google account has no admin access."), 403
             # Admin-only 2FA applies the same way here as on the password
             # form: Google only verifies identity, it does not satisfy the
             # second factor. Hand off to the shared /admin/login code-entry
@@ -185,7 +191,7 @@ def register_auth_routes(app):
                     ip=request.remote_addr or "?",
                     detail="Google verified; awaiting 2FA code"))
                 db.session.commit()
-                return redirect("/admin/login?need_2fa=true")
+                return render_template("admin/login.html", need_2fa=True)
             login_user(user, remember=True)
             session["admin_auth_at"] = time.time()
             session["csrf_token"] = secrets.token_hex(16)
@@ -274,19 +280,28 @@ def register_auth_routes(app):
             logout_user()
         return redirect(url_for("login"))
 
+    @app.route("/profile")
+    @login_required
+    def profile():
+        from models import PredictionHistory
+        total = PredictionHistory.query.filter_by(user_id=current_user.id).count()
+        return render_template("profile.html", total_predictions=total)
+
     @app.route("/verify-notice")
     def verify_notice():
         return render_template("verify_notice.html")
 
-    @app.route("/verify-email")
-    def verify_email():
-        token = request.args.get("token", "")
+    @app.route("/verify-email", methods=["GET"])
+    @app.route("/verify-email/<token>", methods=["GET"])
+    def verify_email(token=None):
+        if not token:
+            token = request.args.get("token", "")
         payload, err = _load_verify_token(token)
         if err:
-            return render_template("verify_notice.html", error="This link has expired." if err == "expired" else "Invalid verification link.")
+            return render_template("verify_notice.html", error="This link has expired." if err == "expired" else "Invalid verification link."), 400
         user = db.session.get(User, payload.get("uid", 0))
         if not user or user.email != payload.get("email"):
-            return render_template("verify_notice.html", error="Invalid verification link.")
+            return render_template("verify_notice.html", error="Invalid verification link."), 400
         if not user.email_verified:
             user.email_verified = True
             db.session.commit()
