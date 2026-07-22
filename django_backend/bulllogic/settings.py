@@ -100,7 +100,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-CORS_ALLOW_ALL_ORIGINS = False  # Must be False when using CORS_ALLOW_CREDENTIALS
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://localhost:5174',
@@ -110,6 +109,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:5175',
     'http://localhost:5000',
     'http://127.0.0.1:5000',
+    'http://localhost:5001',
+    'http://127.0.0.1:5001',
 ]
 CORS_ALLOW_CREDENTIALS = True  # Allows cookies/sessions to be sent cross-origin
 
@@ -127,6 +128,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:5174',
     'http://localhost:5000',
     'http://127.0.0.1:5000',
+    'http://localhost:5001',
+    'http://127.0.0.1:5001',
 ]
 
 # Email
