@@ -22,18 +22,63 @@ from users.models import (
     PLUS_BACKTEST_PERIODS, PLUS_BACKTEST_DAILY
 )
 
-# Helper mock alert senders
+# Helper alert senders
 def _send_telegram(chat_id, text):
-    # Mock Telegram notification sender
-    print(f"[Mock Telegram] To {chat_id}: {text}")
+    import requests
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        print(f"[Telegram Stub] (No Token) To {chat_id}: {text}")
+        return
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    try:
+        r = requests.post(url, json={
+            "chat_id": chat_id,
+            "text": text,
+            "parse_mode": "Markdown"
+        }, timeout=5)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[Telegram Error] Failed to send: {e}")
 
 def _send_whatsapp(phone, text):
-    # Mock WhatsApp notification sender
-    print(f"[Mock WhatsApp] To {phone}: {text}")
+    sid = os.environ.get("TWILIO_ACCOUNT_SID", "")
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "")
+    from_num = os.environ.get("TWILIO_WHATSAPP_NUMBER", "")
+    
+    if sid and token and from_num:
+        import requests
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        to_num = f"whatsapp:{phone}" if not phone.startswith("whatsapp:") else phone
+        whatsapp_from = f"whatsapp:{from_num}" if not from_num.startswith("whatsapp:") else from_num
+        try:
+            r = requests.post(
+                url,
+                data={"To": to_num, "From": whatsapp_from, "Body": text},
+                auth=(sid, token),
+                timeout=5
+            )
+            r.raise_for_status()
+            print(f"[Twilio WhatsApp] Sent to {phone}")
+            return
+        except Exception as e:
+            print(f"[Twilio WhatsApp Error] Failed to send: {e}")
+            
+    print(f"[WhatsApp Stub] To {phone}: {text}")
 
 def _send_discord(url, title, desc, color):
-    # Mock Discord notification sender
-    print(f"[Mock Discord] To {url}: [{title}] {desc}")
+    import requests
+    payload = {
+        "embeds": [{
+            "title": title,
+            "description": desc,
+            "color": color
+        }]
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=5)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[Discord Error] Failed to send: {e}")
 
 def _add_notification(user_id, channel, title, message):
     Notification.objects.create(
@@ -127,16 +172,46 @@ class CalendarEarningsView(APIView):
     authentication_classes = [SessionAuthentication]
 
     def get(self, request):
-        # Return mock upcoming earnings
-        return Response({
-            "ok": True,
-            "earnings": [
-                {"ticker": "AAPL", "date": "2026-07-28", "period": "Q3 2026", "eps_est": 1.45, "rev_est": "84.5B"},
-                {"ticker": "MSFT", "date": "2026-07-29", "period": "Q4 2026", "eps_est": 2.95, "rev_est": "64.2B"},
-                {"ticker": "TSLA", "date": "2026-07-23", "period": "Q2 2026", "eps_est": 0.62, "rev_est": "24.8B"},
-                {"ticker": "NVDA", "date": "2026-08-20", "period": "Q2 2026", "eps_est": 4.15, "rev_est": "20.1B"},
-            ]
-        })
+        import requests
+        from datetime import date, timedelta
+        key = os.environ.get("FINNHUB_API_KEY", "")
+        
+        default_earnings = [
+            {"ticker": "AAPL", "date": "2026-07-28", "period": "Q3 2026", "eps_est": 1.45, "rev_est": "84.5B"},
+            {"ticker": "MSFT", "date": "2026-07-29", "period": "Q4 2026", "eps_est": 2.95, "rev_est": "64.2B"},
+            {"ticker": "TSLA", "date": "2026-07-23", "period": "Q2 2026", "eps_est": 0.62, "rev_est": "24.8B"},
+            {"ticker": "NVDA", "date": "2026-08-20", "period": "Q2 2026", "eps_est": 4.15, "rev_est": "20.1B"},
+        ]
+        
+        if not key:
+            return Response({"ok": True, "earnings": default_earnings})
+            
+        try:
+            today = date.today().strftime("%Y-%m-%d")
+            future = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+            url = f"https://finnhub.io/api/v1/calendar/earnings?from={today}&to={future}&token={key}"
+            r = requests.get(url, timeout=5)
+            r.raise_for_status()
+            data = r.json().get("earningsCalendar", [])
+            
+            out = []
+            for item in data[:50]:
+                ticker = item.get("symbol", "")
+                if ticker in ("AAPL", "MSFT", "TSLA", "NVDA", "GOOGL", "AMZN", "META", "NFLX", "AMD", "INTC"):
+                    rev = item.get("revenueEstimate")
+                    rev_str = f"{round(rev / 1e9, 1)}B" if rev else "N/A"
+                    out.append({
+                        "ticker": ticker,
+                        "date": item.get("date", ""),
+                        "period": item.get("period", "Q2 2026"),
+                        "eps_est": item.get("epsEstimate"),
+                        "rev_est": rev_str
+                    })
+            if not out:
+                out = default_earnings
+            return Response({"ok": True, "earnings": out})
+        except Exception:
+            return Response({"ok": True, "earnings": default_earnings})
 
 
 class CalendarMacroView(APIView):
@@ -144,15 +219,45 @@ class CalendarMacroView(APIView):
     authentication_classes = [SessionAuthentication]
 
     def get(self, request):
-        # Return mock macro reports calendar
-        return Response({
-            "ok": True,
-            "events": [
-                {"event": "CPI Inflation Report", "date": "2026-07-12", "forecast": "3.1%", "previous": "3.2%", "importance": "HIGH"},
-                {"event": "FOMC Interest Rate Decision", "date": "2026-07-26", "forecast": "5.25%", "previous": "5.25%", "importance": "CRITICAL"},
-                {"event": "Non-Farm Payrolls (NFP)", "date": "2026-08-04", "forecast": "180k", "previous": "210k", "importance": "HIGH"},
-            ]
-        })
+        import requests
+        from datetime import date, timedelta
+        key = os.environ.get("FINNHUB_API_KEY", "")
+        
+        default_events = [
+            {"event": "CPI Inflation Report", "date": "2026-07-12", "forecast": "3.1%", "previous": "3.2%", "importance": "HIGH"},
+            {"event": "FOMC Interest Rate Decision", "date": "2026-07-26", "forecast": "5.25%", "previous": "5.25%", "importance": "CRITICAL"},
+            {"event": "Non-Farm Payrolls (NFP)", "date": "2026-08-04", "forecast": "180k", "previous": "210k", "importance": "HIGH"},
+        ]
+        
+        if not key:
+            return Response({"ok": True, "events": default_events})
+            
+        try:
+            today = date.today().strftime("%Y-%m-%d")
+            future = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
+            url = f"https://finnhub.io/api/v1/calendar/economic?from={today}&to={future}&token={key}"
+            r = requests.get(url, timeout=5)
+            r.raise_for_status()
+            data = r.json().get("economicCalendar", [])
+            
+            out = []
+            importance_map = {"high": "HIGH", "medium": "MEDIUM", "low": "LOW"}
+            for item in data[:30]:
+                impact = item.get("impact", "low")
+                if impact in ("high", "medium"):
+                    dt_str = item.get("time", "")[:10]
+                    out.append({
+                        "event": item.get("event", ""),
+                        "date": dt_str,
+                        "forecast": str(item.get("forecast")) if item.get("forecast") is not None else "N/A",
+                        "previous": str(item.get("prev")) if item.get("prev") is not None else "N/A",
+                        "importance": "CRITICAL" if "FOMC" in item.get("event", "") or "Interest Rate" in item.get("event", "") else importance_map.get(impact, "HIGH")
+                    })
+            if not out:
+                out = default_events
+            return Response({"ok": True, "events": out})
+        except Exception:
+            return Response({"ok": True, "events": default_events})
 
 
 class ResourcesPublicView(APIView):

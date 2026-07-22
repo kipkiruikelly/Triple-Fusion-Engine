@@ -111,8 +111,13 @@ class ManualPaperAccountView(APIView):
         positions = []
         total_pnl = 0.0
         for t in open_trades:
-            # Mock current price ±2% of entry
-            current_price = round(t.entry_price * random.uniform(0.98, 1.02), 4)
+            import market_data
+            try:
+                quote = market_data.get_quote(t.ticker)
+                current_price = float(quote.get('price')) if (quote and quote.get('price')) else t.entry_price
+            except Exception:
+                current_price = t.entry_price
+            
             if t.side == 'LONG':
                 pnl = (current_price - t.entry_price) * t.qty
             else:
@@ -665,7 +670,6 @@ class VerifyEmailView(APIView):
         except (BadSignature, User.DoesNotExist):
             return Response({'ok': False, 'error': 'Invalid verification link.'}, status=400)
 
-
 # ── Simulated Payments / Upgrade APIs ────────────────────────────────────────
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -675,12 +679,32 @@ class StripeCheckoutView(APIView):
 
     def post(self, request):
         tier = (request.data.get('tier') or '').strip().lower()
+        billing_mode = (request.data.get('billing_mode') or 'monthly').strip().lower()
         if tier not in ('free', 'plus', 'pro', 'enterprise'):
             return Response({'ok': False, 'error': f'Invalid tier "{tier}"'}, status=400)
 
         user = request.user
         user.plan = tier
         user.save(update_fields=['plan'])
+
+        from users.models import Payment
+        amount = 0.0
+        if tier == 'plus':
+            amount = 8.0 if billing_mode == 'annual' else 12.0
+        elif tier == 'pro':
+            amount = 19.0 if billing_mode == 'annual' else 29.0
+            
+        Payment.objects.create(
+            user=user,
+            provider='stripe',
+            plan=billing_mode,
+            tier=tier,
+            amount=amount,
+            currency='USD',
+            status='paid',
+            completed_at=datetime.utcnow()
+        )
+
         return Response({
             'ok': True,
             'message': f'Success! Upgraded to {tier.capitalize()} plan.',
@@ -694,20 +718,110 @@ class MpesaPayView(APIView):
     authentication_classes = [CsrfExemptSessionAuthentication]
 
     def post(self, request):
-        phone = (request.data.get('phone') or '').strip()
+        import mpesa
+        phone = (request.data.get('phone') or '').strip().replace(" ", "").replace("-", "")
         tier = (request.data.get('tier') or '').strip().lower()
+        billing_mode = (request.data.get('billing_mode') or 'monthly').strip().lower()
         
         if not phone:
             return Response({'ok': False, 'error': 'Phone number is required'}, status=400)
-        if tier not in ('free', 'plus', 'pro', 'enterprise'):
+        if tier not in ('plus', 'pro', 'enterprise'):
             return Response({'ok': False, 'error': f'Invalid tier "{tier}"'}, status=400)
 
-        user = request.user
-        user.plan = tier
-        user.save(update_fields=['plan'])
+        # Format phone to 254XXXXXXXXX
+        if phone.startswith("0"):
+            phone = "254" + phone[1:]
+        if not phone.startswith("254") or len(phone) != 12 or not phone.isdigit():
+            return Response({'ok': False, 'error': 'Enter a valid Safaricom number (07XXXXXXXX).'}, status=400)
+
+        # Determine amount
+        if tier == 'plus':
+            amount = mpesa.PLUS_ANNUAL_KES if billing_mode == "annual" else mpesa.PLUS_MONTHLY_KES
+        else:
+            amount = mpesa.PRO_ANNUAL_KES if billing_mode == "annual" else mpesa.PRO_MONTHLY_KES
+            
+        days = 365 if billing_mode == "annual" else 30
+        desc = f"BullLogic {tier.capitalize()} {'1 yr' if billing_mode == 'annual' else '30 days'}"
+
+        if not mpesa.MPESA_OK:
+            # Fallback for dev if credentials are not configured
+            user = request.user
+            user.plan = tier
+            user.save(update_fields=['plan'])
+            return Response({
+                'ok': True,
+                'message': f'Sandbox Mode: Upgrade to {tier.capitalize()} is complete!',
+                'plan': tier
+            })
+
+        try:
+            resp = mpesa.stk_push(phone, amount, f"BullLogic{tier.capitalize()[:4]}", desc)
+        except Exception as e:
+            return Response({'ok': False, 'error': str(e)}, status=500)
+
+        if resp.get("ResponseCode") != "0":
+            return Response({'ok': False, 'error': resp.get("ResponseDescription", "STK push failed")}, status=400)
+
+        checkout_id = resp["CheckoutRequestID"]
+        
+        # Save payment log
+        from users.models import Payment
+        Payment.objects.create(
+            user=request.user,
+            provider='mpesa',
+            plan=billing_mode,
+            tier=tier,
+            amount=float(amount),
+            currency='KES',
+            days=days,
+            phone=phone,
+            reference=checkout_id,
+            status='pending'
+        )
+
         return Response({
             'ok': True,
-            'message': f'STK push initiated on {phone}. Upgrade to {tier.capitalize()} is complete!',
-            'plan': tier
+            'message': f'STK push initiated on {phone}. Upgrade to {tier.capitalize()} will complete once payment is approved!',
+            'checkout_request_id': checkout_id
         })
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class MpesaCallbackView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        import mpesa
+        from users.models import Payment
+        data = request.data or {}
+        try:
+            body = data["Body"]["stkCallback"]
+            code = body.get("ResultCode", -1)
+            chk_id = body.get("CheckoutRequestID", "")
+            payment = Payment.objects.filter(reference=chk_id, provider='mpesa').first()
+            if payment:
+                if code == 0:
+                    receipt = None
+                    for item in (body.get("CallbackMetadata") or {}).get("Item", []):
+                        if item.get("Name") == "MpesaReceiptNumber":
+                            receipt = str(item.get("Value", ""))[:40]
+                    
+                    if payment.status != 'paid':
+                        payment.status = 'paid'
+                        payment.receipt = receipt
+                        payment.completed_at = datetime.utcnow()
+                        payment.save(update_fields=['status', 'receipt', 'completed_at'])
+                        
+                        user = payment.user
+                        if user:
+                            user.plan = payment.tier
+                            user.save(update_fields=['plan'])
+                elif payment.status == 'pending':
+                    payment.status = 'cancelled' if code == 1032 else 'failed'
+                    payment.completed_at = datetime.utcnow()
+                    payment.save(update_fields=['status', 'completed_at'])
+        except Exception:
+            pass
+        return Response({"ResultCode": 0, "ResultDesc": "Accepted"})
 

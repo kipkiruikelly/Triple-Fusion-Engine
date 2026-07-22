@@ -117,6 +117,7 @@ urlpatterns = [
     # ── Simulated Payments / Upgrade ──────────────────────────────
     path('stripe/checkout', extra_views.StripeCheckoutView.as_view(), name='api-stripe-checkout'),
     path('mpesa/pay', extra_views.MpesaPayView.as_view(), name='api-mpesa-pay'),
+    path('mpesa/callback', extra_views.MpesaCallbackView.as_view(), name='api-mpesa-callback'),
 
     # ── Live Portfolio Summary ───────────────────────────────────
     path('live/summary', mt5_views.LiveSummaryView.as_view(), name='api-live-summary'),
