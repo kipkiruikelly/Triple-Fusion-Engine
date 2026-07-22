@@ -569,8 +569,13 @@ class ContentView(APIView):
             return Response({'ok': False, 'error': f'Page "{page_id}" not found.'}, status=404)
         return Response({'ok': True, 'data': content})
 
+# ── Password reset / verify email (implementations) ───────────────────────────
 
-# ── Password reset / verify email (stubs) ────────────────────────────────────
+import secrets
+from datetime import datetime, timedelta
+from django.core.mail import send_mail
+from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+from users.models import User, PasswordResetToken
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ForgotPasswordView(APIView):
@@ -581,8 +586,28 @@ class ForgotPasswordView(APIView):
         email = (request.data.get('email') or '').strip().lower()
         if not email:
             return Response({'ok': False, 'error': 'Email is required.'}, status=400)
-        # In production: generate token and send email
-        # For dev: always succeed
+        
+        user = User.objects.filter(email__iexact=email).first()
+        if user:
+            token = secrets.token_urlsafe(32)
+            expires_at = datetime.utcnow() + timedelta(hours=1)
+            
+            PasswordResetToken.objects.create(
+                user=user,
+                token=token,
+                expires_at=expires_at,
+                used=False
+            )
+            
+            reset_url = f"http://localhost:5001/reset-password?token={token}"
+            send_mail(
+                subject="Reset Your BullLogic Password",
+                message=f"Hello,\n\nPlease reset your password using the link below:\n\n{reset_url}\n\nThis link will expire in 1 hour.",
+                from_email="noreply@bulllogic.ai",
+                recipient_list=[user.email],
+                fail_silently=True
+            )
+            
         return Response({'ok': True, 'message': 'If that email is registered, you will receive a reset link shortly.'})
 
 
@@ -596,7 +621,25 @@ class ResetPasswordView(APIView):
         password = request.data.get('password', '')
         if not token or not password:
             return Response({'ok': False, 'error': 'token and password are required.'}, status=400)
-        # Stub: in production validate token against DB
+        
+        if len(password) < 8:
+            return Response({'ok': False, 'error': 'Password must be at least 8 characters long.'}, status=400)
+
+        reset_token = PasswordResetToken.objects.filter(token=token, used=False).first()
+        if not reset_token:
+            return Response({'ok': False, 'error': 'Invalid or already used token.'}, status=400)
+            
+        if reset_token.expires_at < datetime.utcnow():
+            return Response({'ok': False, 'error': 'Token has expired.'}, status=400)
+            
+        user = reset_token.user
+        user.set_password(password)
+        user.session_token = secrets.token_hex(20)
+        user.save()
+        
+        reset_token.used = True
+        reset_token.save(update_fields=['used'])
+        
         return Response({'ok': True, 'message': 'Password reset successfully. Please log in.'})
 
 
@@ -605,11 +648,22 @@ class VerifyEmailView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
-    def get(self, request):
-        token = request.GET.get('token', '')
+    def post(self, request):
+        token = request.data.get('token', '')
         if not token:
             return Response({'ok': False, 'error': 'token is required.'}, status=400)
-        return Response({'ok': True, 'message': 'Email verified successfully!'})
+            
+        signer = TimestampSigner()
+        try:
+            username = signer.unsign(token, max_age=86400)
+            user = User.objects.get(username=username)
+            user.email_verified = True
+            user.save(update_fields=['email_verified'])
+            return Response({'ok': True, 'message': 'Email verified successfully!'})
+        except SignatureExpired:
+            return Response({'ok': False, 'error': 'Verification link has expired.'}, status=400)
+        except (BadSignature, User.DoesNotExist):
+            return Response({'ok': False, 'error': 'Invalid verification link.'}, status=400)
 
 
 # ── Simulated Payments / Upgrade APIs ────────────────────────────────────────
