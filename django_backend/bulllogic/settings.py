@@ -111,6 +111,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:5000',
     'http://localhost:5001',
     'http://127.0.0.1:5001',
+    'http://localhost:8002',
+    'http://127.0.0.1:8002',
 ]
 CORS_ALLOW_CREDENTIALS = True  # Allows cookies/sessions to be sent cross-origin
 
@@ -130,6 +132,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://127.0.0.1:5000',
     'http://localhost:5001',
     'http://127.0.0.1:5001',
+    'http://localhost:8002',
+    'http://127.0.0.1:8002',
 ]
 
 # Email
