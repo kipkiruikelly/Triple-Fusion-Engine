@@ -18,11 +18,11 @@ fi
 
 # Run Django database migrations
 echo "Verifying database migrations..."
-python django_backend/manage.py migrate
+./venv/bin/python django_backend/manage.py migrate
 
 # Start Django backend in the background on port 8001
 echo "Starting Django API backend on http://localhost:8001..."
-python django_backend/manage.py runserver 0.0.0.0:8001 &
+./venv/bin/python django_backend/manage.py runserver 0.0.0.0:8001 &
 
 # Start Vite React frontend on port 8002
 echo "Starting React Vite frontend on http://localhost:8002..."
