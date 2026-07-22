@@ -63,7 +63,10 @@ def _send_whatsapp(phone, text):
         except Exception as e:
             print(f"[Twilio WhatsApp Error] Failed to send: {e}")
             
-    print(f"[WhatsApp Stub] To {phone}: {text}")
+    try:
+        print(f"[WhatsApp Stub] To {phone}: {text}".encode('ascii', errors='replace').decode('ascii'))
+    except Exception:
+        pass
 
 def _send_discord(url, title, desc, color):
     import requests
@@ -396,7 +399,7 @@ class WhatsappConfigureView(APIView):
             user=request.user,
             defaults={"phone_number": phone_number, "enabled": enabled}
         )
-        _send_whatsapp(phone_number, f"✅ BullLogic connected for *{request.user.username}*. You'll receive price alerts and watchlist signals here on WhatsApp.")
+        _send_whatsapp(phone_number, f"[OK] BullLogic connected for {request.user.username}. You will receive price alerts and watchlist signals here on WhatsApp.")
         return Response({"ok": True})
 
 

@@ -43,6 +43,8 @@ COPY . .
 RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
 USER app
 
-# Default: Flask web service
-EXPOSE 5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "4", "--timeout", "120", "wsgi:app"]
+# Cloud Run injects PORT env var (default 8080). We honour it so the
+# health check passes. Locally you can override: -e PORT=5000
+EXPOSE 8080
+ENV PORT=8080
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 4 --timeout 120 wsgi:app"]
