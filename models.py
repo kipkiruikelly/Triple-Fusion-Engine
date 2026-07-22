@@ -72,7 +72,23 @@ class User(UserMixin, db.Model):
 
     @property
     def is_pro(self):
-        if self.plan == 'pro':
+        if self.plan in ('pro', 'enterprise'):
+            if self.pro_expires_at is None:
+                return True
+            return self.pro_expires_at >= date.today()
+        return False
+
+    @property
+    def is_plus(self):
+        if self.plan in ('plus', 'pro', 'enterprise'):
+            if self.pro_expires_at is None:
+                return True
+            return self.pro_expires_at >= date.today()
+        return False
+
+    @property
+    def is_enterprise(self):
+        if self.plan == 'enterprise':
             if self.pro_expires_at is None:
                 return True
             return self.pro_expires_at >= date.today()
@@ -80,7 +96,7 @@ class User(UserMixin, db.Model):
 
     @property
     def predictions_remaining(self):
-        if self.is_pro:
+        if self.is_plus:
             return None
         today = date.today()
         if self.last_prediction_date != today:
