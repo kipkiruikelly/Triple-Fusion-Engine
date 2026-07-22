@@ -598,14 +598,28 @@ class GoogleLoginView(APIView):
         state = secrets.token_hex(16)
         request.session['google_oauth_state'] = state
         
-        redirect_uri = "http://localhost:5000/auth/google/callback"
+        referer = request.META.get('HTTP_REFERER', '')
+        if 'localhost:5001' in referer:
+            redirect_uri = "http://localhost:5001/auth/google/callback"
+        elif 'localhost:5000' in referer:
+            redirect_uri = "http://localhost:5000/auth/google/callback"
+        else:
+            host = request.get_host()
+            if '8001' in host:
+                redirect_uri = "http://localhost:5001/auth/google/callback"
+            else:
+                redirect_uri = f"http://{host}/auth/google/callback"
+                
+        request.session['google_oauth_redirect_uri'] = redirect_uri
+        
         auth_url = (
             "https://accounts.google.com/o/oauth2/v2/auth?"
             f"client_id={client_id}&"
             f"redirect_uri={redirect_uri}&"
             "response_type=code&"
             "scope=openid%20email%20profile&"
-            f"state={state}"
+            f"state={state}&"
+            "prompt=select_account"
         )
         from django.shortcuts import redirect
         return redirect(auth_url)
@@ -632,7 +646,7 @@ class GoogleCallbackView(APIView):
 
         client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
         client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-        redirect_uri = "http://localhost:5000/auth/google/callback"
+        redirect_uri = request.session.pop('google_oauth_redirect_uri', 'http://localhost:5001/auth/google/callback')
         
         token_url = "https://oauth2.googleapis.com/token"
         data = {
