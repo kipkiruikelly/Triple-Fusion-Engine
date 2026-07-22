@@ -205,6 +205,138 @@ def register_auth_routes(app):
 
     # ── Login / Register / Logout ──────────────────────────────────────────────
 
+    @app.route("/login", methods=["GET", "POST"])
+    def login():
+        if current_user.is_authenticated:
+            return redirect(url_for("home"))
+        if request.method == "POST":
+            from utils import rate_limited
+            if rate_limited(f"login:{request.remote_addr}", 10, 900):
+                return render_template("login.html", error="Too many attempts. Try again in 15 minutes."), 429
+            identifier = request.form.get("identifier", "").strip()
+            password = request.form.get("password", "")
+            user = User.query.filter(
+                (User.username == identifier) | (User.email == identifier)
+            ).first()
+            if user and user.check_password(password):
+                if (user.status or "active") != "active":
+                    return render_template("login.html", error="This account is suspended or deactivated."), 403
+                login_user(user, remember=True)
+                _log_activity(user.id, "login")
+                next_page = request.args.get("next")
+                return redirect(next_page or url_for("home"))
+            return render_template("login.html", error="Invalid username / email or password."), 400
+        return render_template("login.html")
+
+    @app.route("/register", methods=["GET", "POST"])
+    def register():
+        if current_user.is_authenticated:
+            return redirect(url_for("home"))
+        if request.method == "POST":
+            from utils import rate_limited
+            if rate_limited(f"register:{request.remote_addr}", 5, 3600):
+                return render_template("register.html", error="Too many registration attempts."), 429
+            username = request.form.get("username", "").strip()
+            email_raw = request.form.get("email", "").strip()
+            password = request.form.get("password", "")
+            confirm = request.form.get("confirm", "")
+            agree_terms = request.form.get("agree_terms")
+
+            if not agree_terms:
+                return render_template("register.html", error="You must agree to the Terms of Service."), 400
+            if len(password) < 8:
+                return render_template("register.html", error="Password must be at least 8 characters."), 400
+            if password != confirm:
+                return render_template("register.html", error="Passwords do not match."), 400
+
+            email, err = _clean_email(email_raw)
+            if err:
+                return render_template("register.html", error="Please enter a valid email address."), 400
+
+            if User.query.filter_by(username=username).first():
+                return render_template("register.html", error="Username already taken."), 400
+            if User.query.filter_by(email=email).first():
+                return render_template("register.html", error="Email already registered."), 400
+
+            user = User(username=username, email=email)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+            _send_verification_email(user)
+            login_user(user, remember=True)
+            _log_activity(user.id, "register")
+            return redirect(url_for("verify_notice"))
+        return render_template("register.html")
+
+    @app.route("/logout")
+    def logout():
+        if current_user.is_authenticated:
+            logout_user()
+        return redirect(url_for("login"))
+
+    @app.route("/verify-notice")
+    def verify_notice():
+        return render_template("verify_notice.html")
+
+    @app.route("/verify-email")
+    def verify_email():
+        token = request.args.get("token", "")
+        payload, err = _load_verify_token(token)
+        if err:
+            return render_template("verify_notice.html", error="This link has expired." if err == "expired" else "Invalid verification link.")
+        user = db.session.get(User, payload.get("uid", 0))
+        if not user or user.email != payload.get("email"):
+            return render_template("verify_notice.html", error="Invalid verification link.")
+        if not user.email_verified:
+            user.email_verified = True
+            db.session.commit()
+            _log_activity(user.id, "email.verified")
+        if not current_user.is_authenticated:
+            login_user(user, remember=True)
+        return redirect(url_for("home"))
+
+    @app.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        if request.method == "POST":
+            from utils import rate_limited
+            if rate_limited(f"forgot:{request.remote_addr}", 5, 3600):
+                return render_template("forgot_password.html", error="Too many requests. Try again later."), 429
+            email, _ = _clean_email(request.form.get("email", ""))
+            user = User.query.filter_by(email=email).first() if email else None
+            if user:
+                token = secrets.token_urlsafe(32)
+                expires_at = datetime.utcnow() + timedelta(hours=1)
+                db.session.add(PasswordResetToken(user_id=user.id, token=token, expires_at=expires_at))
+                db.session.commit()
+                import emails
+                url = request.host_url.rstrip("/") + url_for("reset_password", token=token)
+                emails.send_password_reset(app, user, url)
+            return render_template("forgot_password.html", sent=True)
+        return render_template("forgot_password.html")
+
+    @app.route("/reset-password/<token>", methods=["GET", "POST"])
+    def reset_password(token):
+        rt = PasswordResetToken.query.filter_by(token=token, used=False).first()
+        if not rt or rt.expires_at < datetime.utcnow():
+            return render_template("reset_password.html", error="Invalid or expired reset token.", invalid=True)
+        if request.method == "POST":
+            pw = request.form.get("password", "")
+            confirm = request.form.get("confirm", "")
+            if len(pw) < 8:
+                return render_template("reset_password.html", token=token, error="Password must be at least 8 characters.")
+            if pw != confirm:
+                return render_template("reset_password.html", token=token, error="Passwords do not match.")
+            user = db.session.get(User, rt.user_id)
+            if user:
+                user.set_password(pw)
+                user.session_token = secrets.token_hex(16)
+                PasswordResetToken.query.filter_by(user_id=user.id, used=False).update({"used": True})
+            rt.used = True
+            db.session.commit()
+            return redirect(url_for("login"))
+        return render_template("reset_password.html", token=token)
+
+
 
 
 

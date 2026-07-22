@@ -265,6 +265,79 @@ def register_admin_routes(app, endpoint_stats=None, app_start=None):
 
     # ══ Pages ═════════════════════════════════════════════════════════════════
 
+    @app.route("/admin/login", methods=["GET", "POST"])
+    def admin_login_page():
+        if request.method == "GET":
+            if current_user.is_authenticated and getattr(current_user, "role_level", 0) >= ROLE_LEVELS["viewer"]:
+                return redirect(url_for("admin_dashboard"))
+            return render_template("admin/login.html")
+
+        ip = request.remote_addr or "?"
+        if _rate_limited(ip):
+            return render_template("admin/login.html", error="Too many failed attempts. Try again in 15 minutes."), 429
+
+        pending_uid = session.get("admin_2fa_pending_uid")
+        pending_at  = session.get("admin_2fa_pending_at", 0)
+
+        if pending_uid and time.time() - pending_at <= PENDING_2FA_MAX_S:
+            user = db.session.get(User, pending_uid)
+            rec  = TwoFactorAuth.query.filter_by(user_id=pending_uid, enabled=True).first()
+            code = request.form.get("code", "").strip()
+            if (user and rec and _PYOTP_OK and code
+                    and _pyotp.TOTP(rec.secret).verify(code, valid_window=1)):
+                session.pop("admin_2fa_pending_uid", None)
+                session.pop("admin_2fa_pending_at", None)
+                login_user(user, remember=True)
+                session["admin_auth_at"] = time.time()
+                session["csrf_token"] = secrets.token_hex(16)
+                db.session.add(AdminAuditLog(admin_id=user.id, action="login",
+                                             ip=ip, detail=(request.user_agent.string or "")[:200]))
+                db.session.commit()
+                return redirect(url_for("admin_dashboard"))
+            _record_fail(ip)
+            if user:
+                db.session.add(AdminAuditLog(admin_id=user.id, action="login.failed",
+                                             ip=ip, detail="2FA code invalid or missing"))
+                db.session.commit()
+            return render_template("admin/login.html", error="Invalid or missing 2FA code.", need_2fa=True), 401
+        else:
+            session.pop("admin_2fa_pending_uid", None)
+            session.pop("admin_2fa_pending_at", None)
+            identifier = request.form.get("identifier", "").strip()
+            password   = request.form.get("password", "")
+            user = User.query.filter(
+                (User.username == identifier) | (User.email == identifier)).first()
+            if (user and user.check_password(password)
+                    and user.role_level >= ROLE_LEVELS["viewer"]
+                    and user.status == "active"):
+                rec = TwoFactorAuth.query.filter_by(
+                    user_id=user.id, enabled=True).first()
+                if user.role_level >= ROLE_LEVELS["admin"] and _PYOTP_OK and rec:
+                    session["admin_2fa_pending_uid"] = user.id
+                    session["admin_2fa_pending_at"] = time.time()
+                    return render_template("admin/login.html", need_2fa=True)
+                else:
+                    login_user(user, remember=True)
+                    session["admin_auth_at"] = time.time()
+                    session["csrf_token"] = secrets.token_hex(16)
+                    db.session.add(AdminAuditLog(admin_id=user.id, action="login",
+                                                 ip=ip, detail=(request.user_agent.string or "")[:200]))
+                    db.session.commit()
+                    return redirect(url_for("admin_dashboard"))
+            else:
+                _record_fail(ip)
+                if user and user.role_level >= 1:
+                    db.session.add(AdminAuditLog(admin_id=user.id, action="login.failed", ip=ip))
+                    db.session.commit()
+                return render_template("admin/login.html", error="Invalid credentials or no admin access."), 401
+
+    @app.route("/admin")
+    @app.route("/admin/dashboard")
+    @admin_required("viewer")
+    def admin_dashboard():
+        return render_template("admin/dashboard.html")
+
+
 
 
     # ══ API: overview ═════════════════════════════════════════════════════════

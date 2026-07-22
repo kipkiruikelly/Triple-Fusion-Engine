@@ -86,7 +86,7 @@ export const LandingDashboard: React.FC = () => {
 
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] text-white">
           Institutional-Grade<br />
-          <span className="gt">Trading Predictions</span>
+          <span className="gt">Trading analytics</span>
         </h1>
 
         <p className="text-gray-400 mt-6 max-w-2xl text-base md:text-lg lg:text-xl font-normal leading-relaxed">
