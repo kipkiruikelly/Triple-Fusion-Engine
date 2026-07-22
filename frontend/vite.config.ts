@@ -10,7 +10,7 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    port: 8002,
+    port: 5000,
     proxy: {
       // All API routes → Django
       '/api': {
