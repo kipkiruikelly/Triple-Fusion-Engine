@@ -14,7 +14,7 @@ _PARENT_DIR = str(Path(__file__).resolve().parent.parent.parent)
 if _PARENT_DIR not in sys.path:
     sys.path.insert(0, _PARENT_DIR)
 
-from utils import SCREENER_TICKERS, _SECTOR_ETFS
+from core.utils import SCREENER_TICKERS, _SECTOR_ETFS
 from market_data import get_history
 
 

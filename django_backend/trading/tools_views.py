@@ -140,7 +140,7 @@ class BacktestView(APIView):
             
             # Award XP best-effort
             try:
-                from utils import award_xp
+                from core.utils import award_xp
                 award_xp(request.user, 10)
             except Exception:
                 pass

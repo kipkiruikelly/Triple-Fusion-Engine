@@ -30,3 +30,35 @@ def get_client_ip(request) -> str:
     if xff:
         return xff.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR', '')
+
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+
+SCREENER_TICKERS = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+    "QQQ", "NDX", "NFLX", "AMD", "V", "JPM", "ADBE", "CRM",
+]
+
+_SECTOR_ETFS = {
+    "Technology":       "XLK",
+    "Healthcare":       "XLV",
+    "Financials":       "XLF",
+    "Consumer Disc":    "XLY",
+    "Industrials":      "XLI",
+    "Energy":           "XLE",
+    "Consumer Staples": "XLP",
+    "Real Estate":      "XLRE",
+    "Materials":        "XLB",
+    "Utilities":        "XLU",
+    "Communication":    "XLC",
+}
+
+
+# ── Activity & Gamification helpers ───────────────────────────────────────────
+
+def award_xp(user, amount: int):
+    """Increment user's XP and persist the change."""
+    if not amount:
+        return
+    user.xp = (user.xp or 0) + amount
+    user.save(update_fields=['xp'])
