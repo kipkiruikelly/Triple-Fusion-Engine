@@ -648,7 +648,7 @@ class GoogleCallbackView(APIView):
 
         client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
         client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-        redirect_uri = request.session.pop('google_oauth_redirect_uri', 'http://localhost:5001/auth/google/callback')
+        redirect_uri = request.session.pop('google_oauth_redirect_uri', 'http://localhost:8002/auth/google/callback')
         
         token_url = "https://oauth2.googleapis.com/token"
         data = {
