@@ -6,9 +6,8 @@ try:
 except ImportError:
     dj_database_url = None
 
-load_dotenv()
-
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(dotenv_path=BASE_DIR.parent / '.env')
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production-now'))
 DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 't')
