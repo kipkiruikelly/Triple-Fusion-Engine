@@ -27,4 +27,4 @@ echo "Starting Django API backend on http://localhost:8001..."
 # Start Vite React frontend on port 8002
 echo "Starting React Vite frontend on http://localhost:8002..."
 cd frontend
-npm run dev
+npm run dev -- --port 8002
