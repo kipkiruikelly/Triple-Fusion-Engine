@@ -38,6 +38,9 @@ Data/users.db
 # Local service tooling (machine-specific, not source)
 tools/nssm.exe
 tools/caddy.exe
+
+# Django collected static files
+django_backend/staticfiles/
 tools/ngrok.exe
 tools/*.log
 logs/

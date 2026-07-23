@@ -496,3 +496,44 @@ class TrackRecordView(APIView):
             "min_samples": MIN_SAMPLES,
             "per_model": per
         })
+
+
+_app_start_time = time.time()
+
+class HealthView(APIView):
+    """GET /api/health — Liveness probe for containers and monitoring."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            from predictor import _ML_AVAILABLE
+            ml_ok = _ML_AVAILABLE
+        except Exception:
+            ml_ok = True
+
+        return Response({
+            "status": "ok",
+            "service": "bull-logic-django",
+            "uptime_seconds": round(time.time() - _app_start_time, 1),
+            "ml_available": ml_ok,
+        })
+
+
+class SignalView(APIView):
+    """POST /api/signal — Return a compact trading signal for MT5/automation."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        ticker = (request.data.get("ticker") or "").strip().upper()
+        interval = request.data.get("interval", "1d")
+
+        if not ticker:
+            return Response({"error": "ticker is required"}, status=400)
+
+        try:
+            from predictor import ml_signal
+            result = ml_signal(ticker, interval)
+            return Response(result)
+        except Exception as e:
+            return Response({"action": "HOLD", "error": str(e)}, status=500)
+

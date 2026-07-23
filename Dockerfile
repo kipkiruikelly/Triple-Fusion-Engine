@@ -1,50 +1,58 @@
-# ── Triple-Fusion-Engine Base Image ──────────────────────────────────────────────
-# Multi-stage build: builder stage compiles dependencies, runtime is minimal.
-#
-# Build:
-#   docker build -t triple-fusion-engine .
-#
-# Run:
-#   docker run -p 5000:5000 --env-file .env triple-fusion-engine
-#
-# Services (override CMD per service):
-#   docker run ... triple-fusion-engine python data_pipeline.py
-#   docker run ... triple-fusion-engine python app.py
+# ── Stage 1: Build React Frontend ──────────────────────────────────────────────
+FROM node:20-alpine AS frontend-builder
 
-FROM python:3.11-slim-bookworm AS builder
+WORKDIR /app/frontend
+
+COPY frontend/package*.json ./
+RUN npm ci --silent || npm install
+
+COPY frontend/ ./
+RUN npm run build
+
+# ── Stage 2: Build Python Virtual Environment ──────────────────────────────────
+FROM python:3.11-slim-bookworm AS python-builder
 
 WORKDIR /app
 
-# System deps for TA-Lib / numpy / TensorFlow
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ make libffi-dev libssl-dev \
+    gcc g++ make libffi-dev libssl-dev libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps in a venv
 COPY requirements.txt .
 RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-# ── Runtime Stage ────────────────────────────────────────────────────────────────
-
+# ── Stage 3: Minimal Production Runtime ─────────────────────────────────────────
 FROM python:3.11-slim-bookworm AS runtime
 
 WORKDIR /app
 
-# Copy venv from builder
-COPY --from=builder /opt/venv /opt/venv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python dependencies
+COPY --from=python-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy application code
+# Copy built React frontend assets into /app/frontend/dist
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+# Copy application source code
 COPY . .
 
-# Create non-root user
+# Create non-root user for security
 RUN useradd --create-home --shell /bin/bash app && chown -R app:app /app
 USER app
 
-# Cloud Run injects PORT env var (default 8080). We honour it so the
-# health check passes. Locally you can override: -e PORT=5000
+WORKDIR /app/django_backend
+
+# Collect static files for Django + Whitenoise
+RUN python manage.py collectstatic --noinput --clear 2>/dev/null || true
+
 EXPOSE 8080
 ENV PORT=8080
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT} --workers 4 --timeout 120 wsgi:app"]
+ENV PYTHONPATH="/app:/app/django_backend"
+
+CMD ["sh", "-c", "python manage.py migrate --noinput 2>/dev/null || true && gunicorn --bind 0.0.0.0:${PORT} --workers 4 --timeout 120 bulllogic.wsgi:application"]

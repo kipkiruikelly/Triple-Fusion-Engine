@@ -36,6 +36,8 @@ urlpatterns = [
     path('risk/calculate', portfolio_views.RiskCalculateView.as_view(), name='api-risk-calculate'),
 
     # ── Predictions & Accuracy ────────────────────────────────────
+    path('health', prediction_views.HealthView.as_view(), name='api-health'),
+    path('signal', prediction_views.SignalView.as_view(), name='api-signal'),
     path('predict', prediction_views.PredictionView.as_view(), name='api-predict'),
     path('predict/history', prediction_views.PredictionHistoryView.as_view(), name='api-predict-history'),
     path('accuracy', prediction_views.PredictionAccuracyView.as_view(), name='api-accuracy'),
