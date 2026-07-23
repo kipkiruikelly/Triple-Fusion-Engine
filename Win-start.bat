@@ -8,6 +8,11 @@ echo   Backend   : http://localhost:8001
 echo  ============================================================
 echo.
 
+if not exist .env (
+    echo [0/4] Initializing .env configuration file from .env.example...
+    copy .env.example .env >nul
+)
+
 echo [1/4] Stopping any existing processes on ports 8002, 8001...
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8002') do taskkill /f /pid %%a 2>nul
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8001') do taskkill /f /pid %%a 2>nul

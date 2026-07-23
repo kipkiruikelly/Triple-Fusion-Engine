@@ -3,6 +3,12 @@
 # Change directory to the directory where this script is located
 cd "$(dirname "$0")"
 
+# Initialize .env configuration file if missing
+if [ ! -f ".env" ]; then
+    echo "Initializing .env configuration file from .env.example..."
+    cp .env.example .env
+fi
+
 # Kill any existing server processes on ports 8001 and 8002 to avoid conflicts
 echo "Stopping any existing processes on ports 8001 and 8002..."
 lsof -ti :8001 | xargs kill -9 2>/dev/null

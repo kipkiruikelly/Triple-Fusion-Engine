@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate, Link, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
 export const RegisterDashboard: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,6 +14,14 @@ export const RegisterDashboard: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const { checkAuth, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const err = searchParams.get('error');
+    if (err) {
+      setErrorMsg(err);
+      toast.error(err);
+    }
+  }, [searchParams]);
 
   if (user) {
     return <Navigate to="/portfolio" replace />;
