@@ -11,7 +11,7 @@
 ## 📜 License & Intellectual Property Protection
 **Proprietary and Closed-Source. All Rights Reserved.**
 
-Copyright © 2026 Kipkirui Kelly & Triple Fusion Engine.
+Copyright © 2026 Triple Fusion Engine.
 
 This codebase, software, algorithms, machine learning models, and proprietary indicators are strictly closed-source and confidential. Unauthorized copying, distribution, modification, reverse engineering, or public deployment of any part of this software is strictly prohibited without prior written consent. See [LICENSE](LICENSE) for full legal terms.
 
@@ -197,4 +197,4 @@ npm run dev
 ## 📜 License & Intellectual Property Protection
 **Proprietary and Closed-Source. All Rights Reserved.**
 
-Copyright © 2026 Kipkirui Kelly & Triple Fusion Engine. See [LICENSE](LICENSE) for full legal terms.
+Copyright © 2026 Triple Fusion Engine. See [LICENSE](LICENSE) for full legal terms.
